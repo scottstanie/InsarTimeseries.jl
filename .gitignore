@@ -1,5 +1,16 @@
-*.jl.cov
-*.jl.*.cov
-*.jl.mem
-/deps/deps.jl
-/docs/build
+*.swp
+
+
+# Don't add huge DEM data files
+*.hgt
+*.dem
+*.dem.rsc
+
+# SAR files
+*.rsc
+*.geo
+*.int
+*.unw
+*.unwflat
+*.npy
+
