@@ -11,7 +11,6 @@ function day_diffs(geolist::Array{Date, 1})
 	[difference.value for difference in diff(geolist)]
 end
 
-Array
 
 """
 	matrixA(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}) -> Array{Int, 2}
