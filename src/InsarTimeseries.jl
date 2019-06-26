@@ -1,22 +1,28 @@
+"""Module InsarTimeseries
+
+Testing docstring
+"""
 module InsarTimeseries
 
-# import Pkg; Pkg.add("Dates")
 using Dates
 
+"""Finds the number of days between successive .geo files"""
+function day_diffs(geolist::Array{Date, 1})
+	[difference.value for difference in diff(geolist)]
+end
 
+Array
+
+"""
+	matrixA(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}) -> Array{Int, 2}
+
+Takes the list of igram dates and builds the SBAS A matrix
+
+Returns the incident-like matrix from the SBAS paper: A*phi = dphi
+	Each row corresponds to an igram, each column to a .geo
+	value will be -1 on the early (slave) igrams, +1 on later (master)
+"""
 function matrixA(geolist, intlist)
-    """Takes the list of igram dates and builds the SBAS A matrix
-
-    Args:
-	geolist (Array{Date}, 1): datetimes of the .geo acquisitions
-	intlist (Array{Tuple{Date, Date}, 1}
-
-    Returns:
-		Array{Int, 2}
-        np.array 2D: the incident-like matrix from the SBAS paper: A*phi = dphi
-            Each row corresponds to an igram, each column to a .geo
-            value will be -1 on the early (slave) igrams, +1 on later (master)
-    """
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
 	geolist = geolist[2:end]
@@ -35,8 +41,28 @@ function matrixA(geolist, intlist)
 
 	end
 	A
-end # matrixA
+end
 
+"""Takes SBAS velocity output and finds phases
+
+Arguments:
+	velocities come from invert_sbas
+	timediffs are the days between each SAR acquisitions
+		length will be 1 less than num SAR acquisitions
+"""
+function integrate_velocities(velocities::Array{Float64, 1}, timediffs::Array{Int, 1})
+    # multiply each column of vel array: each col is a separate solution
+    phi_diffs = velocities .* td_ints
+
+    # Now the final phase results are the cumulative sum of delta phis
+	# This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
+	phi_arr = cumsum(coalesce.(phi_diffs, 0))
+
+    # Add 0 as first entry of phase array to match geolist length on each col
+	pushfirst!(phi_arr, 0)
+
+    phi_arr
+end
 
 
 end # module
