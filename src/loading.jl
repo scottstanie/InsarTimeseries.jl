@@ -108,7 +108,7 @@ function load_stack(; file_list::Union{Array{String}, Nothing}=nothing,
 					directory::Union{String, Nothing}=nothing,
 					file_ext::Union{String, Nothing}=nothing)
 	if isnothing(file_list)
-		file_list = Glob.glob("*$file_ext", directory)
+		file_list = sort(Glob.glob("*$file_ext", directory))
 	end
 
 
@@ -123,7 +123,7 @@ function load_stack(; file_list::Union{Array{String}, Nothing}=nothing,
  	   	stack[:, :, idx] = buffer
     end
 
-	return _permute(stack)
+	return _permute(stack, cols)
 	# throw(ArgumentError(file_ext, "cant make stack from $file_ext"))
 	# end
 end
@@ -141,12 +141,14 @@ function _return_array(T::Type{Float32}, rows::Int, cols::Int, file_len::Int)
 	stack, buffer
 end
 
-function _permute(stack::Array{ComplexF32, 3})
-	return permutedims(stack[cols+1:end, :, :], (2, 1, 3))
+# For normal .int, .geo complex, just transpose stack
+function _permute(stack::Array{ComplexF32, 3}, cols::Int)
+	return permutedims(stack, (2, 1, 3))
 end
 
-function _permute(stack::Array{Float32, 3})
-	return permutedims(stack, (2, 1, 3))
+# For normal weird stacked types, pick just the right half
+function _permute(stack::Array{Float32, 3}, cols::Int)
+	return permutedims(stack[cols+1:end, :, :], (2, 1, 3))
 end
 
 
