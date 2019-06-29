@@ -1,5 +1,6 @@
 using Dates
 using Statistics
+using Debugger
 
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
@@ -12,7 +13,7 @@ end
 
 
 """
-	build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}) -> Array{Int, 2}
+	build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}) -> Array{Int8, 2}
 
 Takes the list of igram dates and builds the SBAS A matrix
 
@@ -52,7 +53,7 @@ function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date
     timediffs = day_diffs(geolist)
 
     A = build_A_matrix(geolist, intlist)
-	B = zeros(size(A))
+	B = zeros(Float32, size(A))
 
 	for i in 1:size(B, 1)
 		row = A[i, :]
@@ -81,9 +82,10 @@ Arguments:
 	timediffs are the days between each SAR acquisitions
 		length will be 1 less than num SAR acquisitions
 """
-function integrate_velocities(velocities::Array{Float64, 1}, timediffs::Array{Int, 1})
+function integrate_velocities(velocities::Array{Float32, 1}, timediffs::Array{Int, 1})
     # multiply each column of vel array: each col is a separate solution
-    phi_diffs = velocities .* td_ints
+	phi_diffs = similar(velocities)
+    phi_diffs .= velocities .* timediffs
 
     # Now the final phase results are the cumulative sum of delta phis
 	# This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
@@ -107,18 +109,73 @@ function shift_stack(stack::Array{Float32, 3}, ref_row::Int, ref_col::Int; windo
 	for k = 1:size(stack, 3)
 		layer = view(stack, :, :, k)
 		
-		lil = layer[ref_row - half_win:ref_row + half_win, 
-								ref_col - half_win:ref_col + half_win]
-		layer_mean = mean(lil)
-		if k == 1
-			@show lil, layer_mean
-		end
-		stack[:, :, k] .-= layer_mean
+		patch = layer[ref_row - half_win:ref_row + half_win, 
+					  ref_col - half_win:ref_col + half_win]
+		stack[:, :, k] .-= mean(patch)
 
 	end
     return stack
 end
 
 
+"""Runs SBAS inversion on all unwrapped igrams
+
+Returns:
+	geolist (list[datetime]): dates of each SAR acquisition from read_geolist
+	phi_arr (ndarray): absolute phases of every pixel at each time
+	deformation (ndarray): matrix of deformations at each pixel and time
+"""
+function run_inversion(igram_path::String, reference::Tuple{Int, Int})
+
+    intlist = sario.read_intlist(filepath=igram_path)
+    geolist = sario.read_geolist(filepath=igram_path)
+
+    # Prepare B matrix and timediffs used for each pixel inversion
+    B = build_B_matrix(geolist, intlist)
+    timediffs = day_diffs(geolist)
+	if size(B, 2) != length(timediffs)
+		println("Shapes of B $(size(B)) and timediffs $(size(timediffs)) not compatible")
+	end
+
+    println("Reading unw stack")
+	unw_stack = load_stack(directory=igram_path, file_ext=".unwflat")
+
+	ref_row, ref_col = reference
+
+    println("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+    @time unw_stack = shift_stack(unw_stack, ref_row, ref_col)
+    println("Shifting stack complete")
+
+	phi_arr = invert_sbas(unw_stack, B, timediffs)
+		# geo_mask_columns=geo_mask_patch,
+		# constant_vel=constant_vel,
+		# alpha=alpha,
+		# difference=difference,
+	# )
+	# phi_arr_list.append(integrate_velocities(varr, timediffs))
+
+    # Multiple by wavelength ratio to go from phase to cm
+    deformation = PHASE_TO_CM .* phi_arr
+
+    # Now reshape all outputs that should be in stack form
+    return (geolist, phi_arr, deformation)
+end
 
 
+"""Solve the problem Bv = d for each pixel in the stack"""
+function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timediffs::Array{Int, 1})
+	rows, cols, layers = size(unw_stack)
+	num_geos = length(timediffs) + 1
+	out_phi = Array{Float32, 3}(undef, (rows, cols, num_geos))
+	v = Array{Float32, 1}(undef, size(unw_stack, 3))
+
+	for j in 1:size(unw_stack, 2)
+		for i in 1:size(unw_stack, 1)
+			pixel_diffs = unw_stack[i, j, :]
+			v = B \ pixel_diffs
+			out_phi[i, j, :] = integrate_velocities(v, timediffs)
+		end
+	end
+
+	return out_phi
+end

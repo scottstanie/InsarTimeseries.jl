@@ -1,5 +1,4 @@
 import Glob
-using PyCall
 
 
 const SENTINEL_EXTS = [".geo", ".cc", ".int", ".amp", ".unw", ".unwflat"]
@@ -13,11 +12,6 @@ const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 
 const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
 
-const sario = PyNULL()
-
-function __init__()
-	copy!(sario, pyimport("apertools.sario"))
-end
 
 """Examines file type for real/complex and runs appropriate load
 
