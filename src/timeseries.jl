@@ -1,6 +1,7 @@
 using Dates
 using Statistics
 using Debugger
+using LinearAlgebra
 
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
@@ -94,7 +95,19 @@ function integrate_velocities(velocities::Array{Float32, 1}, timediffs::Array{In
     # Add 0 as first entry of phase array to match geolist length on each col
 	pushfirst!(phi_arr, 0)
 
-    phi_arr
+    return phi_arr
+end
+
+# Separate one for 2D velocities array
+function integrate_velocities(velocities::Array{Float32, 2}, timediffs::Array{Int, 1})
+	nrows, ncols = size(velocities)
+	phi_arr = Array{Float32, 2}(undef, (nrows + 1, ncols))	
+	col = Array{Float32, 1}(undef, (nrows,))
+	for j in 1:ncols
+		col .= velocities[:, j]
+		phi_arr[:, j] .= integrate_velocities(col, timediffs)
+	end
+    return phi_arr
 end
 
 
@@ -142,7 +155,7 @@ function run_inversion(igram_path::String, reference::Tuple{Int, Int})
 
 	ref_row, ref_col = reference
 
-    println("Starting shift_stack: using %s, %s as ref_row, ref_col", ref_row, ref_col)
+	println("Starting shift_stack: using $ref_row, $ref_col as ref_row, ref_col")
     @time unw_stack = shift_stack(unw_stack, ref_row, ref_col)
     println("Shifting stack complete")
 
@@ -164,18 +177,46 @@ end
 
 """Solve the problem Bv = d for each pixel in the stack"""
 function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timediffs::Array{Int, 1})
-	rows, cols, layers = size(unw_stack)
+	nrows, ncols, nlayers = size(unw_stack)
 	num_geos = length(timediffs) + 1
-	out_phi = Array{Float32, 3}(undef, (rows, cols, num_geos))
-	v = Array{Float32, 1}(undef, size(unw_stack, 3))
 
-	for j in 1:size(unw_stack, 2)
-		for i in 1:size(unw_stack, 1)
+
+	# Speeds up inversion to QR factorize
+	qB = qr(B)
+
+	# One way: invert all columns as chunk (wont work with masking)
+	# unw_cols = stack_to_cols(unw_stack)
+	# velos = qB \ unw_cols
+	# phi_cols = integrate_velocities(velos, timediffs)
+	# phi_arr = cols_to_stack(phi_cols, nrows, ncols)
+	
+
+	# Pixel looping method:
+	phi_arr = Array{Float32, 3}(undef, (nrows, ncols, num_geos))
+	v = Array{Float32, 1}(undef, length(timediffs))
+	pixel_diffs = Array{Float32, 1}(undef, size(unw_stack, 3))
+	# unw_cols = stack_to_cols(unw_stack)
+
+	@inbounds for j in 1:ncols
+		@inbounds for i in 1:nrows
 			pixel_diffs = unw_stack[i, j, :]
-			v = B \ pixel_diffs
-			out_phi[i, j, :] = integrate_velocities(v, timediffs)
+			# pixel_diffs = view(unw_stack, i, j, :)
+			v = qB \ pixel_diffs
+			phi_arr[i, j, :] = integrate_velocities(v, timediffs)
 		end
 	end
 
-	return out_phi
+	return phi_arr
 end
+
+
+function stack_to_cols(stack::Array{<:Number, 3})
+	nrows, ncols, nlayers = size(stack)
+	return reshape(permutedims(stack, (3, 2, 1)), (nlayers, :))
+end
+
+function cols_to_stack(columns::Array{<:Number, 2}, nrows::Int, ncols::Int)
+	nlayers = size(columns, 1)
+	return permutedims(reshape(columns, (nlayers, ncols, nrows)), (3, 2, 1))
+end
+
