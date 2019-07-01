@@ -138,7 +138,7 @@ Returns:
 	phi_arr (ndarray): absolute phases of every pixel at each time
 	deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(igram_path::String, reference::Tuple{Int, Int})
+function run_inversion(igram_path::String, reference::Tuple{Int, Int}; window::Int=3, unw_ext::String=".unwflat")
 
     intlist = sario.read_intlist(filepath=igram_path)
     geolist = sario.read_geolist(filepath=igram_path)
@@ -151,12 +151,12 @@ function run_inversion(igram_path::String, reference::Tuple{Int, Int})
 	end
 
     println("Reading unw stack")
-	unw_stack = load_stack(directory=igram_path, file_ext=".unwflat")
+	unw_stack = load_stack(directory=igram_path, file_ext=unw_ext)
 
 	ref_row, ref_col = reference
 
 	println("Starting shift_stack: using $ref_row, $ref_col as ref_row, ref_col")
-    @time unw_stack = shift_stack(unw_stack, ref_row, ref_col)
+    @time unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
     println("Shifting stack complete")
 
 	phi_arr = invert_sbas(unw_stack, B, timediffs)
@@ -165,10 +165,10 @@ function run_inversion(igram_path::String, reference::Tuple{Int, Int})
 		# alpha=alpha,
 		# difference=difference,
 	# )
-	# phi_arr_list.append(integrate_velocities(varr, timediffs))
 
     # Multiple by wavelength ratio to go from phase to cm
-    deformation = PHASE_TO_CM .* phi_arr
+	deformation = similar(phi_arr)
+    @. deformation = PHASE_TO_CM * phi_arr
 
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)
