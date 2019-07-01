@@ -25,9 +25,9 @@ Returns the incident-like matrix from the SBAS paper: A*phi = dphi
 function build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1})
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
-	geolist = geolist[2:end]
+    geolist = geolist[2:end]
 
-	M = length(intlist)  # Number of igrams, 
+    M = length(intlist)  # Number of igrams, 
 	N = length(geolist)
 	A = zeros(Int8, M, N)
 	for i in 1:M
