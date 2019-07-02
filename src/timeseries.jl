@@ -82,7 +82,7 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
 
 
     # @inbounds Threads.@threads for j in 1:size(unw_cols, 2)
-    println("Using $(Threads.nthreads()) nubmer of threads")
+    println("Using $(Threads.nthreads()) threads for invert_sbas loop")
     @inbounds Threads.@threads for j in 1:ncols
         @inbounds for i in 1:nrows
             # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
