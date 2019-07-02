@@ -1,6 +1,7 @@
 using InsarTimeseries
 # igram_dir = "data/mask-test/"; ext=".unwflat"
-igram_dir = "insar/tests/data/sbas_test/"; ext=".unw"
+# igram_dir = "insar/tests/data/sbas_test/"; ext=".unw"
+igram_dir = "."; ext=".unwflat"
 
 intlist = InsarTimeseries.sario.read_intlist(igram_dir);
 geolist = InsarTimeseries.sario.read_geolist(igram_dir);

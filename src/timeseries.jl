@@ -58,38 +58,58 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
 
 
     # Speeds up inversion to QR factorize
-    qB = qr(B)
+    # qB = qr(B)
+    # Speeds up inversion to precompute pseudo inverse
+    pB = pinv(B)
 
-    # One way: invert all columns as chunk (wont work with masking)
+    # # One way: invert all columns as chunk (wont work with masking)
     # unw_cols = stack_to_cols(unw_stack)
     # velos = qB \ unw_cols
+    # velos = pB * unw_cols
     # phi_cols = integrate_velocities(velos, timediffs)
     # phi_arr = cols_to_stack(phi_cols, nrows, ncols)
     
 
     # Pixel looping method:
     phi_arr = Array{Float32, 3}(undef, (nrows, ncols, num_geos))
-    v = Array{Float32, 1}(undef, length(timediffs))
-    pixel_diffs = Array{Float32, 1}(undef, size(unw_stack, 3))
-    # unw_cols = stack_to_cols(unw_stack)
+    # v = Array{Float32, 1}(undef, length(timediffs))
+    vstack = Array{Float32, 3}(undef, (nrows, ncols, length(timediffs)))
+    # pixel_diffs = Array{Float32, 1}(undef, size(unw_stack, 3))
 
-    # println("Using $(Threads.nthreads()) nubmer of threads")
-    # @inbounds Threads.@threads for j in 1:ncols
-        # @inbounds Threads.@threads for i in 1:nrows
-    @inbounds for j in 1:ncols
+    # # Column format:
+    # unw_cols = copy(stack_to_cols(unw_stack))
+    # vcols = Array{Float32, 2}(undef, (length(timediffs), nrows * ncols ))
+
+
+    # @inbounds Threads.@threads for j in 1:size(unw_cols, 2)
+    println("Using $(Threads.nthreads()) nubmer of threads")
+    @inbounds Threads.@threads for j in 1:ncols
         @inbounds for i in 1:nrows
-            v = invert_column(unw_stack[i, j, :], qB, timediffs)
-            phi_arr[i, j, :] = integrate_velocities(v, timediffs)
+            # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
+            vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
+            # vcols[:, j] .= pB * unw_cols[:, j]
+            
+            # phi_arr[i, j, :] .= phi_out
         end
     end
+    # Go from velocities to phases in stack format
+    phi_arr = integrate_velocities(vstack, timediffs)
+    # # Below: for column format
+    # phi_cols = integrate_velocities(vcols, timediffs)
+    # phi_arr = cols_to_stack(phi_cols, nrows, ncols)
 
     return phi_arr
 end
 
-function invert_column(pixel_diffs::Array{Float32, 1}, qB, timediffs::Array{Int, 1})
-    # pixel_diffs = view(unw_stack, i, j, :)
-    v = qB \ pixel_diffs
-end
+# function invert_column(unw_stack, pB, i::Int, j::Int)
+#     c = view(unw_stack, i, j, :)
+#     v = pB * c
+# end
+
+# function invert_column(pixel_diffs, qB)
+#     v = qB \ pixel_diffs
+# end
+
 
 function stack_to_cols(stack::Array{<:Number, 3})
     nrows, ncols, nlayers = size(stack)
@@ -144,7 +164,7 @@ Each row corresponds to an igram, each column to a .geo
 Values will be t_k+1 - t_k for columns after the -1 in A,
 up to and including the +1 entry
 """
-function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}; timediffs::Union{Array{Int, Nothing}}=nothing)
+function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1})
 
     A = build_A_matrix(geolist, intlist)
     timediffs = day_diffs(geolist)
@@ -198,6 +218,35 @@ function integrate_velocities(velocities::Array{Float32, 1}, timediffs::Array{In
     pushfirst!(phi_arr, 0)
 
     return phi_arr
+end
+
+function integrate_velocities!(phi_arr::Array{Float32, 1}, phi_diffs::Array{Float32, 1}, phi_out::Array{Float32, 1}, velocities::Array{Float32, 1}, timediffs::Array{Int, 1})
+    # multiply each column of vel array: each col is a separate solution
+    # phi_diffs = similar(velocities)
+    phi_diffs .= velocities .* timediffs
+
+    # Now the final phase results are the cumulative sum of delta phis
+    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
+    cumsum!(phi_arr, coalesce.(phi_diffs, 0))
+
+    # Add 0 as first entry of phase array to match geolist length on each col
+    # phi_out[1] = 0
+    for i in 1:length(phi_arr)
+        phi_out[i+1] = phi_arr[i]
+    end
+    # pushfirst!(phi_arr, 0)
+
+    return phi_out
+end
+
+function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1})
+    # multiply each depth stack of vel array
+    phi_diffs = vstack .* timediffs[1, 1, :]
+
+    phi_arr = cumsum(coalesce.(phi_diffs, 0), dims=3)
+
+    # Add 0 as first entry of phase array to match geolist length on each col
+    return cat(zeros(eltype(phi_arr), (size(vstack, 1), size(vstack, 2))), phi_arr, dims=3)
 end
 
 # Separate one for 2D velocities array
