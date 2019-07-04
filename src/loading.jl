@@ -1,5 +1,5 @@
 import Glob
-
+using HDF5
 
 const SENTINEL_EXTS = [".geo", ".cc", ".int", ".amp", ".unw", ".unwflat"]
 const COMPLEX_EXTS = [".int", ".slc", ".geo", ".cc", ".unw", ".unwflat", ".mlc", ".grd"]
@@ -11,6 +11,20 @@ const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 
 const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
+
+# dataset names for general 3D stacks
+const STACK_DSET = "stack"
+const STACK_MEAN_DSET = "mean_stack"
+const STACK_FLAT_DSET = "deramped_stack"
+
+# Mask file datasets
+const GEO_MASK_DSET = "geo"
+const IGRAM_MASK_DSET = "igram"
+const IGRAM_MASK_SUM_DSET = "igram_sum"
+
+const DEM_RSC_DSET = "dem_rsc"
+const GEOLIST_DSET = "geo_dates"
+const INTLIST_DSET = "int_dates"
 
 
 """Examines file type for real/complex and runs appropriate load
@@ -59,6 +73,52 @@ end
 
 """Extracts the file extension, including the "." (e.g.: .slc)"""
 get_file_ext(filename::String) = splitext(filename)[end]
+
+function load_geolist_from_h5(h5file::String)
+    h5open(h5file) do f
+        geo_strings = read(f, GEOLIST_DSET)
+        return sario.parse_geolist_strings(geo_strings)
+    end
+end
+
+
+function load_intlist_from_h5(h5file)
+    h5open(h5file) do f
+        int_strings = read(f, INTLIST_DSET)
+        # Note transpose, since it's stored as a N x 2 array
+        # (which is flipped to 2 x N for julia
+        return sario.parse_intlist_strings(int_strings')
+    end
+end
+
+
+function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true)
+    if overwrite
+        mode = "w"
+    else
+        mode = "cw"  # Append mode
+    end
+    h5open(h5file, mode) do f 
+        write(f, dset_name, permutedims(stack, (2, 1, 3)))
+    end
+end
+
+function save_deformation(h5file, deformation, geolist; dset_name=STACK_DSET)
+    save_hdf5_stack(h5file, dset_name, deformation)
+    h5open(h5file, "cw") do f
+        write(f, GEOLIST_DSET, geolist)
+    end
+end
+
+"""Wrapper around h5read to account for the transpose
+necessary when reading from python-written stacks
+
+"""
+function load_hdf5_stack(h5file::String, dset_name::String)
+    h5open(h5file) do f
+        return permutedims(read(f[dset_name]), (2, 1, 3))
+    end
+end
 
 function load_complex(filename::String, rsc_data::Dict{String, Any})
     rows = rsc_data["file_length"]

@@ -6,18 +6,23 @@ using LinearAlgebra
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
 
+const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
+
 
 """Runs SBAS inversion on all unwrapped igrams
 
 Returns:
-    geolist (list[datetime]): dates of each SAR acquisition from read_geolist
+
+    geolist (list[datetime]): dates of each SAR acquisition
+
     phi_arr (ndarray): absolute phases of every pixel at each time
+
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(igram_path::String, reference::Tuple{Int, Int}; window::Int=3, unw_ext::String=".unwflat")
+function run_inversion(unw_stack_file::String; outfile::String="deformation.h5" )
 
-    intlist = sario.read_intlist(filepath=igram_path)
-    geolist = sario.read_geolist(filepath=igram_path)
+    intlist = load_intlist_from_h5(unw_stack_file)
+    geolist = load_geolist_from_h5(unw_stack_file)
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
@@ -26,14 +31,9 @@ function run_inversion(igram_path::String, reference::Tuple{Int, Int}; window::I
         println("Shapes of B $(size(B)) and timediffs $(size(timediffs)) not compatible")
     end
 
+
     println("Reading unw stack")
-    unw_stack = load_stack(directory=igram_path, file_ext=unw_ext)
-
-    ref_row, ref_col = reference
-
-    println("Starting shift_stack: using $ref_row, $ref_col as ref_row, ref_col")
-    @time unw_stack = shift_stack(unw_stack, ref_row, ref_col, window=window)
-    println("Shifting stack complete")
+    unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
 
     phi_arr = invert_sbas(unw_stack, B, timediffs)
         # geo_mask_columns=geo_mask_patch,
@@ -42,10 +42,13 @@ function run_inversion(igram_path::String, reference::Tuple{Int, Int}; window::I
         # difference=difference,
     # )
 
-    # Multiple by wavelength ratio to go from phase to cm
-    deformation = similar(phi_arr)
-    @. deformation = PHASE_TO_CM * phi_arr
+    # Multiply by wavelength ratio to go from phase to cm
+    deformation = PHASE_TO_CM .* phi_arr
 
+    if !isnothing(outfile)
+        println("Saving deformation to $outfile")
+        save_deformation(outfile, deformation, geolist)
+    end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)
 end
