@@ -19,10 +19,14 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::String="deformation.h5" )
+function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", ignore_geo_file=nothing)
 
-    intlist = load_intlist_from_h5(unw_stack_file)
-    geolist = load_geolist_from_h5(unw_stack_file)
+    if !isnothing(ignore_geo_file)
+        geolist, intlist, ignore_int_indices = find_ignored(unw_stack_file, ignore_file=ignore_geo_file)
+    else
+        intlist = load_intlist_from_h5(unw_stack_file)
+        geolist = load_geolist_from_h5(unw_stack_file)
+    end
 
     # Prepare B matrix and timediffs used for each pixel inversion
     B = build_B_matrix(geolist, intlist)
@@ -113,6 +117,28 @@ end
 #     v = qB \ pixel_diffs
 # end
 
+# open(readlines, filename)
+read_geolist_file(filename::String) = sario.find_geos(filename=filename)
+
+function find_ignored(unw_stack_file::String; ignore_file="geolist_missing.txt")
+    """Read extra file to ignore certain dates of interferograms"""
+    all_ints = load_intlist_from_h5(unw_stack_file)
+    all_geos = load_geolist_from_h5(unw_stack_file)
+
+    ignore_geos = sort(sario.find_geos(filename=ignore_file, parse=true))
+    println("Ignoring the following .geo dates:")
+    println(ignore_geos)
+
+    ignore_igrams = [i for i in int_date_list if (i[0] in ignore_geos) || (i[1] in ignore_geos)]
+    println("Ignoring $(length(ignore_igrams)) number of igrams")
+
+    valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
+    valid_igrams = [i for i in int_date_list if !(i[0] in ignore_geos) && !(i[1] in ignore_geos)]
+
+    # ignore_geo_indices = indexin(ignore_geos, all_geos)
+    ignore_int_indices = indexin(ignore_ints, all_ints)
+    return valid_geos, valid_igrams, ignore_int_indices
+end
 
 function stack_to_cols(stack::Array{<:Number, 3})
     nrows, ncols, nlayers = size(stack)

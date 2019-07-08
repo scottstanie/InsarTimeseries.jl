@@ -1,6 +1,7 @@
 import Glob
 using HDF5
 
+const DATE_FMT = "yyyymmdd"
 const SENTINEL_EXTS = [".geo", ".cc", ".int", ".amp", ".unw", ".unwflat"]
 const COMPLEX_EXTS = [".int", ".slc", ".geo", ".cc", ".unw", ".unwflat", ".mlc", ".grd"]
 const REAL_EXTS = [".amp", ".cor", ".mlc", ".grd"]
@@ -103,10 +104,11 @@ function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bo
     end
 end
 
-function save_deformation(h5file, deformation, geolist; dset_name=STACK_DSET)
+function save_deformation(h5file, deformation, geolist::Array{Date, 1}; dset_name=STACK_DSET)
     save_hdf5_stack(h5file, dset_name, deformation)
     h5open(h5file, "cw") do f
-        write(f, GEOLIST_DSET, geolist)
+        geo_strings = Dates.format.(geolist, DATE_FMT)
+        write(f, GEOLIST_DSET, geo_strings)
     end
 end
 
