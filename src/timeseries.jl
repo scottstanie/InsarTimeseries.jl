@@ -239,30 +239,35 @@ Arguments:
     timediffs are the days between each SAR acquisitions
         length will be 1 less than num SAR acquisitions
 """
-function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
-    # multiply each column of vel array: each col is a separate solution
-    phi_diffs = velocities .* timediffs
-
-    # Now the final phase results are the cumulative sum of delta phis
-    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
-    phi_arr = cumsum(coalesce.(phi_diffs, 0))
-
-    # Add 0 as first entry of phase array to match geolist length on each col
-    pushfirst!(phi_arr, 0)
-
-    return phi_arr
-end
-
-
 function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1})
     nrows, ncols, nlayers = size(vstack)
-    phi_arr = zeros(nrows, ncols, nlayers + 1)
+    phi_stack = zeros(nrows, ncols, nlayers + 1)
+    phi_diffs = similar(vstack[1, 1, :])
+    phi_arr = zeros(length(phi_diffs) + 1)
     for j = 1:ncols
         for i = 1:nrows
             varr = view(vstack, i, j, :)
-            phi_arr[i, j, :] = integrate_velocities(varr, timediffs)
+            phi_stack[i, j, :] = integrate1D!(phi_diffs, phi_arr, varr, timediffs)
         end
     end
+    return phi_stack
+end
+
+function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
+    # multiply each column of vel array: each col is a separate solution
+    phi_diffs .= velocities .* timediffs
+
+    # Now the final phase results are the cumulative sum of delta phis
+    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
+    phi_arr[2:end] .= cumsum(coalesce.(phi_diffs, 0))
+    return phi_arr
+end
+
+# Older 1D version with allocations
+function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
+    phi_diffs = velocities .* timediffs
+    phi_arr = cumsum(coalesce.(phi_diffs, 0))
+    pushfirst!(phi_arr, 0)
     return phi_arr
 end
 
