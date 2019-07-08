@@ -65,26 +65,11 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
     nrows, ncols, nlayers = size(unw_stack)
     num_geos = length(timediffs) + 1
 
-
-    # Speeds up inversion to QR factorize
-    # qB = qr(B)
     # Speeds up inversion to precompute pseudo inverse
     pB = pinv(B)
 
-    # # One way: invert all columns as chunk (wont work with masking)
-    # unw_cols = stack_to_cols(unw_stack)
-    # velos = qB \ unw_cols
-    # velos = pB * unw_cols
-    # phi_cols = integrate_velocities(velos, timediffs)
-    # phi_arr = cols_to_stack(phi_cols, nrows, ncols)
-    
-
     # Pixel looping method:
-    # phi_arr = Array{Float32, 3}(undef, (nrows, ncols, num_geos))
-
-    # v = Array{Float32, 1}(undef, length(timediffs))
     vstack = Array{Float32, 3}(undef, (nrows, ncols, length(timediffs)))
-    # pixel_diffs = Array{Float32, 1}(undef, size(unw_stack, 3))
 
     # # Column format:
     # unw_cols = copy(stack_to_cols(unw_stack))
@@ -97,20 +82,9 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
         @inbounds for i in 1:nrows
             # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
             vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
-            # vcols[:, j] .= pB * unw_cols[:, j]
-            
-            # phi_arr[i, j, :] .= phi_out
         end
     end
     return vstack
-    # Go from velocities to phases in stack format
-    # phi_arr = integrate_velocities(vstack, timediffs)
-
-    # # Below: for column format
-    # phi_cols = integrate_velocities(vcols, timediffs)
-    # phi_arr = cols_to_stack(phi_cols, nrows, ncols)
-
-    # return phi_arr
 end
 
 # function invert_column(unw_stack, pB, i::Int, j::Int)
@@ -118,11 +92,6 @@ end
 #     v = pB * c
 # end
 
-# function invert_column(pixel_diffs, qB)
-#     v = qB \ pixel_diffs
-# end
-
-# open(readlines, filename)
 read_geolist_file(filename::String) = sario.find_geos(filename=filename)
 
 function find_ignored(unw_stack_file::String; ignore_file="geolist_missing.txt")
