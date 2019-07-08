@@ -39,13 +39,15 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
     println("Reading unw stack")
     unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
 
-    phi_arr = invert_sbas(unw_stack, B, timediffs)
+    vstack = invert_sbas(unw_stack, B, timediffs)
+    # phi_arr = invert_sbas(unw_stack, B, timediffs)
         # geo_mask_columns=geo_mask_patch,
         # constant_vel=constant_vel,
         # alpha=alpha,
         # difference=difference,
     # )
 
+    phi_arr = integrate_velocities(vstack, timediffs)
     # Multiply by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM .* phi_arr
 
@@ -78,7 +80,8 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
     
 
     # Pixel looping method:
-    phi_arr = Array{Float32, 3}(undef, (nrows, ncols, num_geos))
+    # phi_arr = Array{Float32, 3}(undef, (nrows, ncols, num_geos))
+
     # v = Array{Float32, 1}(undef, length(timediffs))
     vstack = Array{Float32, 3}(undef, (nrows, ncols, length(timediffs)))
     # pixel_diffs = Array{Float32, 1}(undef, size(unw_stack, 3))
@@ -99,13 +102,15 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
             # phi_arr[i, j, :] .= phi_out
         end
     end
+    return vstack
     # Go from velocities to phases in stack format
-    phi_arr = integrate_velocities(vstack, timediffs)
+    # phi_arr = integrate_velocities(vstack, timediffs)
+
     # # Below: for column format
     # phi_cols = integrate_velocities(vcols, timediffs)
     # phi_arr = cols_to_stack(phi_cols, nrows, ncols)
 
-    return phi_arr
+    # return phi_arr
 end
 
 # function invert_column(unw_stack, pB, i::Int, j::Int)
@@ -234,10 +239,9 @@ Arguments:
     timediffs are the days between each SAR acquisitions
         length will be 1 less than num SAR acquisitions
 """
-function integrate_velocities(velocities::Array{Float32, 1}, timediffs::Array{Int, 1})
+function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
     # multiply each column of vel array: each col is a separate solution
-    phi_diffs = similar(velocities)
-    phi_diffs .= velocities .* timediffs
+    phi_diffs = velocities .* timediffs
 
     # Now the final phase results are the cumulative sum of delta phis
     # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
@@ -249,43 +253,15 @@ function integrate_velocities(velocities::Array{Float32, 1}, timediffs::Array{In
     return phi_arr
 end
 
-function integrate_velocities!(phi_arr::Array{Float32, 1}, phi_diffs::Array{Float32, 1}, phi_out::Array{Float32, 1}, velocities::Array{Float32, 1}, timediffs::Array{Int, 1})
-    # multiply each column of vel array: each col is a separate solution
-    # phi_diffs = similar(velocities)
-    phi_diffs .= velocities .* timediffs
-
-    # Now the final phase results are the cumulative sum of delta phis
-    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
-    cumsum!(phi_arr, coalesce.(phi_diffs, 0))
-
-    # Add 0 as first entry of phase array to match geolist length on each col
-    # phi_out[1] = 0
-    for i in 1:length(phi_arr)
-        phi_out[i+1] = phi_arr[i]
-    end
-    # pushfirst!(phi_arr, 0)
-
-    return phi_out
-end
 
 function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1})
-    # multiply each depth stack of vel array
-    phi_diffs = vstack .* timediffs[1, 1, :]
-
-    phi_arr = cumsum(coalesce.(phi_diffs, 0), dims=3)
-
-    # Add 0 as first entry of phase array to match geolist length on each col
-    return cat(zeros(eltype(phi_arr), (size(vstack, 1), size(vstack, 2))), phi_arr, dims=3)
-end
-
-# Separate one for 2D velocities array
-function integrate_velocities(velocities::Array{Float32, 2}, timediffs::Array{Int, 1})
-    nrows, ncols = size(velocities)
-    phi_arr = Array{Float32, 2}(undef, (nrows + 1, ncols))    
-    col = Array{Float32, 1}(undef, (nrows,))
-    for j in 1:ncols
-        col .= velocities[:, j]
-        phi_arr[:, j] .= integrate_velocities(col, timediffs)
+    nrows, ncols, nlayers = size(vstack)
+    phi_arr = zeros(nrows, ncols, nlayers + 1)
+    for j = 1:ncols
+        for i = 1:nrows
+            varr = view(vstack, i, j, :)
+            phi_arr[i, j, :] = integrate_velocities(varr, timediffs)
+        end
     end
     return phi_arr
 end
