@@ -19,7 +19,7 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", ignore_geo_file=nothing)
+function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", constant_velocity::Bool=true, ignore_geo_file=nothing)
 
     geolist = load_geolist_from_h5(unw_stack_file)
     intlist = load_intlist_from_h5(unw_stack_file)
@@ -42,8 +42,13 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
 
     # Remove the layers corresponding to ignored igrams
     unw_stack = unw_stack[:, :, valid_igram_indices]
-
     # TODO: also do this for the masks
+    
+    # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
+    if constant_velocity
+        println("Using constant velocity for inversion solution")
+        B = sum(B, dims=2)
+    end
     vstack = invert_sbas(unw_stack, B, timediffs)
     # phi_arr = invert_sbas(unw_stack, B, timediffs)
         # geo_mask_columns=geo_mask_patch,
@@ -77,10 +82,10 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
     vstack = Array{Float32, 3}(undef, (nrows, ncols, length(timediffs)))
 
     println("Using $(Threads.nthreads()) threads for invert_sbas loop")
-    # @inbounds Threads.@threads for j in 1:ncols
-        # @inbounds for i in 1:nrows
-    for j in 1:ncols
-        for i in 1:nrows
+    @inbounds Threads.@threads for j in 1:ncols
+        @inbounds for i in 1:nrows
+    # for j in 1:ncols
+        # for i in 1:nrows
             # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
             vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
         end
