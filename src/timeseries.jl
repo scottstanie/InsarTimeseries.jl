@@ -21,24 +21,29 @@ Returns:
 """
 function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", ignore_geo_file=nothing)
 
-    if !isnothing(ignore_geo_file)
-        geolist, intlist, ignore_int_indices = find_ignored(unw_stack_file, ignore_file=ignore_geo_file)
-    else
-        intlist = load_intlist_from_h5(unw_stack_file)
-        geolist = load_geolist_from_h5(unw_stack_file)
-    end
+    geolist = load_geolist_from_h5(unw_stack_file)
+    intlist = load_intlist_from_h5(unw_stack_file)
 
-    # Prepare B matrix and timediffs used for each pixel inversion
+    # If we are ignoreing some indices, remove them from for all pixels
+    valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file)
+    geolist = geolist[valid_geo_indices]
+    intlist = intlist[valid_igram_indices]
+
+    # Prepare A and B matrix and timediffs used for each pixel inversion
+    # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
     timediffs = day_diffs(geolist)
     if size(B, 2) != length(timediffs)
         println("Shapes of B $(size(B)) and timediffs $(size(timediffs)) not compatible")
     end
 
-
     println("Reading unw stack")
     unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
 
+    # Remove the layers corresponding to ignored igrams
+    unw_stack = unw_stack[:, :, valid_igram_indices]
+
+    # TODO: also do this for the masks
     vstack = invert_sbas(unw_stack, B, timediffs)
     # phi_arr = invert_sbas(unw_stack, B, timediffs)
         # geo_mask_columns=geo_mask_patch,
@@ -71,15 +76,11 @@ function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2}, timedif
     # Pixel looping method:
     vstack = Array{Float32, 3}(undef, (nrows, ncols, length(timediffs)))
 
-    # # Column format:
-    # unw_cols = copy(stack_to_cols(unw_stack))
-    # vcols = Array{Float32, 2}(undef, (length(timediffs), nrows * ncols ))
-
-
-    # @inbounds Threads.@threads for j in 1:size(unw_cols, 2)
     println("Using $(Threads.nthreads()) threads for invert_sbas loop")
-    @inbounds Threads.@threads for j in 1:ncols
-        @inbounds for i in 1:nrows
+    # @inbounds Threads.@threads for j in 1:ncols
+        # @inbounds for i in 1:nrows
+    for j in 1:ncols
+        for i in 1:nrows
             # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
             vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
         end
@@ -91,28 +92,6 @@ end
 #     c = view(unw_stack, i, j, :)
 #     v = pB * c
 # end
-
-read_geolist_file(filename::String) = sario.find_geos(filename=filename)
-
-function find_ignored(unw_stack_file::String; ignore_file="geolist_missing.txt")
-    """Read extra file to ignore certain dates of interferograms"""
-    all_ints = load_intlist_from_h5(unw_stack_file)
-    all_geos = load_geolist_from_h5(unw_stack_file)
-
-    ignore_geos = sort(sario.find_geos(filename=ignore_file, parse=true))
-    println("Ignoring the following .geo dates:")
-    println(ignore_geos)
-
-    ignore_igrams = [i for i in int_date_list if (i[0] in ignore_geos) || (i[1] in ignore_geos)]
-    println("Ignoring $(length(ignore_igrams)) number of igrams")
-
-    valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
-    valid_igrams = [i for i in int_date_list if !(i[0] in ignore_geos) && !(i[1] in ignore_geos)]
-
-    # ignore_geo_indices = indexin(ignore_geos, all_geos)
-    ignore_int_indices = indexin(ignore_ints, all_ints)
-    return valid_geos, valid_igrams, ignore_int_indices
-end
 
 function stack_to_cols(stack::Array{<:Number, 3})
     nrows, ncols, nlayers = size(stack)

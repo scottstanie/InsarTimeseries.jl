@@ -16,6 +16,7 @@ end
 
 include("./loading.jl")
 include("./timeseries.jl")
+include("./mask.jl")
 
 
 export load,
