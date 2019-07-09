@@ -60,6 +60,7 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
         # difference=difference,
     # )
 
+    println("Integrating velocities to phases")
     phi_arr = integrate_velocities(vstack, timediffs)
     # Multiply by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM .* phi_arr
