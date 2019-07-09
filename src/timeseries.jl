@@ -38,14 +38,10 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
     end
 
     println("Reading unw stack")
-    @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
+    # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
+    @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
 
-    # Remove the layers corresponding to ignored igrams
     # TODO: also do this for the masks
-    # TODO: see if theres a way to not temporarily use double the memory? 
-    # probably should read in just the stacks from .h5 we will use
-    println("Removing ignored/invalid igrams")
-    @time unw_stack = unw_stack[:, :, valid_igram_indices]
     
     # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
     if constant_velocity
@@ -53,21 +49,15 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
         B = sum(B, dims=2)
     end
     @time vstack = invert_sbas(unw_stack, B, timediffs)
-    # phi_arr = invert_sbas(unw_stack, B, timediffs)
-        # geo_mask_columns=geo_mask_patch,
-        # constant_vel=constant_vel,
-        # alpha=alpha,
-        # difference=difference,
-    # )
 
     println("Integrating velocities to phases")
-    phi_arr = integrate_velocities(vstack, timediffs)
+    @time phi_arr = integrate_velocities(vstack, timediffs)
     # Multiply by wavelength ratio to go from phase to cm
     deformation = PHASE_TO_CM .* phi_arr
 
     if !isnothing(outfile)
         println("Saving deformation to $outfile")
-        save_deformation(outfile, deformation, geolist)
+        @time save_deformation(outfile, deformation, geolist)
     end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)

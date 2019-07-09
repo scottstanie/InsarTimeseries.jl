@@ -122,6 +122,19 @@ function load_hdf5_stack(h5file::String, dset_name::String)
     end
 end
 
+# If loading only certain layers, don't read all into memory
+function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
+    h5open(h5file) do f
+        dset = f[dset_name]
+        nrows, ncols, _ = size(dset)
+        out = Array{eltype(dset), ndims(dset)}(undef, (nrows, ncols, length(valid_layer_idxs)))
+        for (idx, k) in enumerate(valid_layer_idxs)
+            out[:, :, idx] = dset[:, :, k]
+        end
+        return permutedims(out, (2, 1, 3))
+    end
+end
+
 function load_complex(filename::String, rsc_data::Dict{String, Any})
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
