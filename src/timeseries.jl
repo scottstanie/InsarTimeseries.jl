@@ -38,18 +38,21 @@ function run_inversion(unw_stack_file::String; outfile::String="deformation.h5",
     end
 
     println("Reading unw stack")
-    unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
+    @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
 
     # Remove the layers corresponding to ignored igrams
-    unw_stack = unw_stack[:, :, valid_igram_indices]
     # TODO: also do this for the masks
+    # TODO: see if theres a way to not temporarily use double the memory? 
+    # probably should read in just the stacks from .h5 we will use
+    println("Removing ignored/invalid igrams")
+    @time unw_stack = unw_stack[:, :, valid_igram_indices]
     
     # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
     if constant_velocity
         println("Using constant velocity for inversion solution")
         B = sum(B, dims=2)
     end
-    vstack = invert_sbas(unw_stack, B, timediffs)
+    @time vstack = invert_sbas(unw_stack, B, timediffs)
     # phi_arr = invert_sbas(unw_stack, B, timediffs)
         # geo_mask_columns=geo_mask_patch,
         # constant_vel=constant_vel,
