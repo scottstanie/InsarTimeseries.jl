@@ -6,7 +6,7 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
-        "--constant-velocity"
+        "--constant-velocity", "-c"
             help = "Use constant velocity (linear solution) to invert"
             action = :store_true
         "--outfile", "-o"
@@ -20,6 +20,11 @@ function parse_commandline()
         "--mask-stack-file"
             default = "masks.h5"
             help = "name of .h5 file with mask data"
+        "--alpha"
+            default = 0.0f0
+            arg_type = Float32
+            # range_tester = x-> (x>0)
+            help = "Strength of regularization for SBAS"
         "path"
             help = "Path to directory with .h5 files"
             default = "."
@@ -38,7 +43,8 @@ function main()
     InsarTimeseries.run_inversion(parsed_args["unw-stack-file"],
                                   outfile=parsed_args["outfile"],
                                   constant_velocity=parsed_args["constant-velocity"],
-                                  ignore_geo_file=parsed_args["ignore-geo-file"])
+                                  ignore_geo_file=parsed_args["ignore-geo-file"],
+                                  alpha=parsed_args["alpha"])
 end
 
 main()
