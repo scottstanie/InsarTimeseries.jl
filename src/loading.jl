@@ -128,8 +128,8 @@ function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
         dset = f[dset_name]
         nrows, ncols, _ = size(dset)
         out = Array{eltype(dset), ndims(dset)}(undef, (nrows, ncols, length(valid_layer_idxs)))
-        for (idx, k) in enumerate(valid_layer_idxs)
-            out[:, :, idx] = dset[:, :, k]
+        for (tot_idx, v_idx) in enumerate(valid_layer_idxs)
+            out[:, :, tot_idx] = dset[:, :, v_idx]
         end
         return permutedims(out, (2, 1, 3))
     end

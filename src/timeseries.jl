@@ -6,8 +6,6 @@ using LinearAlgebra
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
 
-const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
-
 
 """Runs SBAS inversion on all unwrapped igrams
 
@@ -19,19 +17,22 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0, use_stackavg::Bool=false)
+function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=nothing, constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0, use_stackavg::Bool=false)
 
+    # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file)
 
-    
 
     if use_stackavg
-        vstack = run_stackavg(geolist, intlist)
+        println("Averaging stack for solution")
+        vstack = run_stackavg(unw_stack_file, geolist, intlist)
     else
+        println("Performing SBAS solution")
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
         @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
         # TODO: also do this for the masks
+
         vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
     end
 
@@ -62,8 +63,6 @@ end
 
 
 
-
-
 """Finds the number of days between successive .geo files"""
 function day_diffs(geolist::Array{Date, 1})
     [difference.value for difference in diff(geolist)]
@@ -87,7 +86,7 @@ function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1
     for j = 1:ncols
         for i = 1:nrows
             varr = view(vstack, i, j, :)
-            phi_stack[i, j, :] = integrate1D!(phi_diffs, phi_arr, varr, timediffs)
+            phi_stack[i, j, :] .= integrate1D!(phi_diffs, phi_arr, varr, timediffs)
         end
     end
     return phi_stack
