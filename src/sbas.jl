@@ -1,4 +1,4 @@
-function run_sbas(geolist, intlist, constant_velocity::Bool, alpha::Float32)
+function run_sbas(unw_stack::Array{Float32, 3}, geolist, intlist, constant_velocity::Bool, alpha::Float32)
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)

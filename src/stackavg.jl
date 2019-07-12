@@ -23,3 +23,7 @@ end
 """Find the indices of the stack-picked igrams within the full stack
 of all compute igrams (that are stored in the unw_stack file)"""
 igram_indices(stack_igrams, full_igram_list) = indexin(stack_igrams, full_igram_list)
+
+function run_stackavg(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1})
+    return
+end

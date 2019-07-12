@@ -19,20 +19,20 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0, use_stackavg::Bool=False)
+function run_inversion(unw_stack_file::String; outfile::String="deformation.h5", constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0, use_stackavg::Bool=false)
 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file)
 
     
 
     if use_stackavg
-        vstack = run_stackavg(geolist, intlist, constant_velocity, alpha)
+        vstack = run_stackavg(geolist, intlist)
     else
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
         @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
         # TODO: also do this for the masks
-        vstack = run_sbas(geolist, intlist, constant_velocity, alpha)
+        vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
     end
 
 
@@ -78,10 +78,12 @@ Arguments:
         length will be 1 less than num SAR acquisitions
 """
 function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1})
-    nrows, ncols, nlayers = size(vstack)
-    phi_stack = zeros(nrows, ncols, nlayers + 1)
-    phi_diffs = similar(vstack[1, 1, :])
-    phi_arr = zeros(length(phi_diffs) + 1)
+    nrows, ncols, _ = size(vstack)
+    num_geos = length(timediffs) + 1
+    phi_stack = zeros(nrows, ncols, num_geos)
+    phi_diffs = zeros(num_geos - 1)
+
+    phi_arr = zeros(num_geos)  # Buffer to hold each result
     for j = 1:ncols
         for i = 1:nrows
             varr = view(vstack, i, j, :)
