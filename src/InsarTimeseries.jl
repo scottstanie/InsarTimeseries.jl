@@ -15,6 +15,9 @@ function __init__()
 end
 
 include("./loading.jl")
+include("./prepare.jl")
+include("./stackavg.jl")
+include("./sbas.jl")
 include("./timeseries.jl")
 include("./mask.jl")
 
