@@ -20,11 +20,9 @@ function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igr
     filter!(.!isnothing, picked_igram_indices)
 
     # Load only these 
-    println("Reading $(length(picked_igram_indices)) igrams out of unw stack")
-
-
-    stack_dset = STACK_DSET
-    println("Using '$stack_dset' dataset from file for averaging")
+    # stack_dset = STACK_DSET
+    stack_dset = STACK_FLAT_DSET
+    println("Reading $(length(picked_igram_indices)) igrams out of '$stack_dset' dataset from file ")
     @time unw_stack = load_hdf5_stack(unw_stack_file, stack_dset, picked_igram_indices)
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
