@@ -17,7 +17,7 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=nothing, constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0, use_stackavg::Bool=false)
+function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=nothing, use_stackavg::Bool=false, constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0)
 
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file)

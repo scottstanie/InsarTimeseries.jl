@@ -6,8 +6,12 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
+        "--stack-average", "-s"
+            help = "(Average a subset of independent igrams to get a linear solution."*
+                   " If not, SBAS is used." 
+            action = :store_true
         "--constant-velocity", "-c"
-            help = "Use constant velocity (linear solution) to invert"
+            help = "(SBAS) Use constant velocity (linear solution) to invert"
             action = :store_true
         "--outfile", "-o"
             default = "deformation.h5"
@@ -24,7 +28,7 @@ function parse_commandline()
             default = 0.0f0
             arg_type = Float32
             # range_tester = x-> (x>0)
-            help = "Strength of regularization for SBAS"
+            help = "(SBAS) Strength of Tikhonov regularization"
         "path"
             help = "Path to directory with .h5 files"
             default = "."
@@ -42,6 +46,7 @@ function main()
     end
     InsarTimeseries.run_inversion(parsed_args["unw-stack-file"],
                                   outfile=parsed_args["outfile"],
+                                  use_stackavg=parsed_args["stack-average"],
                                   constant_velocity=parsed_args["constant-velocity"],
                                   ignore_geo_file=parsed_args["ignore-geo-file"],
                                   alpha=parsed_args["alpha"])

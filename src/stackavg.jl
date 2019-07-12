@@ -15,7 +15,7 @@ function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igr
     full_igram_list = load_intlist_from_h5(unw_stack_file)
 
     picked_igram_indices = indices_from_full(chosen_igrams, full_igram_list)
-    println("Out of $(length(picked_igram_indices)) desired igrams, "
+    println("Out of $(length(picked_igram_indices)) desired igrams, "*
             "$(sum(isnothing.(picked_igram_indices))) are not available")
     filter!(.!isnothing, picked_igram_indices)
 
