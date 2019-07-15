@@ -1,5 +1,6 @@
 *.swp
 
+builddir/
 
 # Don't add huge DEM data files
 *.hgt
@@ -17,3 +18,5 @@
 
 # Julia profiling files
 *.mem
+
+*.log

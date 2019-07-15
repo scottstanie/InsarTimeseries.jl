@@ -52,4 +52,4 @@ function main()
                                   alpha=parsed_args["alpha"])
 end
 
-main()
+
