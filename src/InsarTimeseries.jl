@@ -14,6 +14,11 @@ function __init__()
     copy!(sario, pyimport("apertools.sario"))
 end
 
+
+# Type alias for commonly used compositite type
+const Igram = Tuple{Date, Date}
+
+
 include("./loading.jl")
 include("./prepare.jl")
 include("./stackavg.jl")

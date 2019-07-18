@@ -4,11 +4,14 @@ const STACK_DSET = "stack"
 const STACK_FLAT_DSET = "deramped_stack"
 const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
+igram_spans(igram_list) = [(later - early).value for (early, later) in igram_list]
 
-function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igram_list::Array{Tuple{Date, Date}, 1})
+
+function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1})
 
     # Figure out which of all the igrams we want to use
-    chosen_igrams = pick_igrams(geolist)
+    # chosen_igrams = pick_igrams(geolist)
+    chosen_igrams = pick_igrams(geolist, valid_igram_list)
 
     # Get the full list including invalid/ignored to figure out indices to pick
     # from the .h5 file (we dont know this just from valid_igram_list
@@ -26,14 +29,19 @@ function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igr
     @time unw_stack = load_hdf5_stack(unw_stack_file, stack_dset, picked_igram_indices)
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
-    timediffs = [(later - early).value for (early, later) in chosen_igrams]
+    timediffs = igram_spans(chosen_igrams)
     phase_sum = sum(unw_stack, dims=3)
     avg_velo = phase_sum ./ sum(timediffs)
     return avg_velo
 end
 
+
+
+
 """Given the set of acquisition dates, find which pairs should be used 
-as interferograms to average"""
+as interferograms to average
+
+"""
 function stack_indices(geolist::Array{Date, 1})
     num_geos = length(geolist)
     # We round up here so that if there is an odd number, 
@@ -45,7 +53,57 @@ function stack_indices(geolist::Array{Date, 1})
 end
 
 
-function pick_igrams(geolist::Array{Date, 1})::Array{Tuple{Date, Date}, 1}
+
+"""Remove the first instance of `value` from `array`
+If it is not containing, will return array
+"""
+function removefirst!(array, value)
+    idx = findfirst(isequal(value), array)
+    return isnothing(idx) ? array : deleteat!(array, idx)
+end
+
+function remove_all_igrams!(array, geo_dates) 
+    for date in geo_dates
+        for idx = 1:2
+            deleteat!(array, findall(x -> x[idx] == date, array))
+        end
+    end
+end
+
+
+"""Get all igrams that start with `geo_date`"""
+find_igrams(igram_list::Array{Igram, 1}, geo_date::Date) = filter(ig -> ig[1] == geo_date, igram_list)
+
+max_igram(igram_list, geo_date) = find_igrams(igram_list, geo_date)[end]
+
+function pick_igrams(full_geolist::Array{Date, 1}, full_igram_list::Array{Igram, 1})
+    geolist = copy(full_geolist)
+    igram_list = copy(full_igram_list)
+
+    total_timespan = (geolist[end] - geolist[1]).value  
+    # Find this value to make sure no igram goes over half
+    half_span = total_timespan / 2
+
+    chosen_igrams = Array{Igram, 1}()
+
+    while length(geolist) > 1
+        cur_geo = popfirst!(geolist)
+        longest_igram = max_igram(igram_list, cur_geo)
+        push!(chosen_igrams, longest_igram)
+
+        early, late = longest_igram
+        remove_all_igrams!(igram_list, [early, late])
+        removefirst!(geolist, late)  # Only late, since first was popped off
+    end
+
+    return chosen_igrams
+
+end
+
+
+
+""" Ideal way to pick stack igrams: evenly spaced"""
+function pick_igrams_default(geolist::Array{Date, 1})::Array{Igram, 1}
     geo_pairs = stack_indices(geolist)
     return [(geolist[i1], geolist[i2]) for (i1, i2) in geo_pairs]
 end

@@ -49,7 +49,7 @@ end
 # end
 
 """
-    build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1}) -> Array{Int8, 2}
+    build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1}) -> Array{Int8, 2}
 
 Takes the list of igram dates and builds the SBAS A matrix
 
@@ -57,7 +57,7 @@ Returns the incident-like matrix from the SBAS paper: A*phi = dphi
     Each row corresponds to an igram, each column to a .geo
     value will be -1 on the early (slave) igrams, +1 on later (master)
 """
-function build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1})
+function build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1})
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
     geolist = geolist[2:end]
@@ -84,7 +84,7 @@ Each row corresponds to an igram, each column to a .geo
 Values will be t_k+1 - t_k for columns after the -1 in A,
 up to and including the +1 entry
 """
-function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Tuple{Date, Date}, 1})
+function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1})
 
     A = build_A_matrix(geolist, intlist)
     timediffs = day_diffs(geolist)

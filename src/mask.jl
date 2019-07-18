@@ -1,7 +1,7 @@
 read_geolist_file(filename::String) = sario.find_geos(filename=filename)
 
 """Read extra file to ignore certain dates of interferograms"""
-function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Tuple{Date, Date}, 1}, ignore_geo_file)
+function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, ignore_geo_file)
     if isnothing(ignore_geo_file)
         return 1:length(geo_date_list), 1:length(igram_date_list)
     end
