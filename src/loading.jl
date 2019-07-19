@@ -104,11 +104,14 @@ function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bo
     end
 end
 
-function save_deformation(h5file, deformation, geolist::Array{Date, 1}; dset_name=STACK_DSET)
+function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc; dset_name=STACK_DSET)
     save_hdf5_stack(h5file, dset_name, deformation)
     h5open(h5file, "cw") do f
         geo_strings = Dates.format.(geolist, DATE_FMT)
         write(f, GEOLIST_DSET, geo_strings)
+        # Note: using the sario python version since for some reason (as of 7.21.2019)
+        # saving a JSON.json(dem) cant be loaded at all in h5py. weird string stuff
+        sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
     end
 end
 

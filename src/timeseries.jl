@@ -45,7 +45,8 @@ function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=no
 
     if !isnothing(outfile)
         println("Saving deformation to $outfile")
-        @time save_deformation(outfile, deformation, geolist)
+        dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
+        @time save_deformation(outfile, deformation, geolist, dem_rsc)
     end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)
