@@ -112,6 +112,7 @@ function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc;
         # Note: using the sario python version since for some reason (as of 7.21.2019)
         # saving a JSON.json(dem) cant be loaded at all in h5py. weird string stuff
         sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+        # TODO: save reference that was used at the time
     end
 end
 
