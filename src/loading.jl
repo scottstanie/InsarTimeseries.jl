@@ -139,6 +139,19 @@ function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
     end
 end
 
+function create_mean_hdf5(h5file::String, dset_name::String)
+    h5open(h5file, "cw") do f
+        dset = f[dset_name]
+        nrows, ncols, nlayers = size(dset)
+        mean_buf = Array{eltype(dset), 2}(0, (nrows, ncols))
+        for idx in 1:nlayers
+            @. mean_buf = mean_buf + dset[:, :, idx]
+        end
+        mean_buf ./= nlayers
+        write(f, STACK_MEAN_DSET, mean_buf)
+    end
+end
+
 function load_complex(filename::String, rsc_data::Dict{String, Any})
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
