@@ -47,7 +47,6 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     while col <= ncols
         while row <= nrows
 
-            println("Reading new chunk")
             rend = row + step - 1
             if rend > nrows
                 rend = lastindex(unw_stack, 1)
@@ -56,16 +55,19 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             if cend > ncols
                 cend = lastindex(unw_stack, 2)
             end
+
             # If the chunk is not a full square, make sure we assign 
             # only part to the chunk buffer to match broadcast
             cc = length(col:cend)
             cr = length(row:rend)
-            chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :]
+            println("Reading new chunk")
+            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :]
+
             for j in 1:cc
                 for i in 1:cr
                     pixelcount += 1
                     if (pixelcount % 100_000) == 0
-                        println("Processed $pixelcount pixels out of $total_pixels")
+                        println("Processed $(pixelcount*nlayers) pixels out of $total_pixels")
                     end
                     vstack[row+i-1, col+j-1, :] .= pB * chunk[i, j, :]
                 end
