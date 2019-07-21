@@ -1,4 +1,4 @@
-function run_sbas(unw_stack::Array{Float32, 3}, geolist, intlist, constant_velocity::Bool, alpha::Float32)
+function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, geolist, intlist, valid_igram_indices, constant_velocity::Bool, alpha::Float32)
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
@@ -13,33 +13,78 @@ function run_sbas(unw_stack::Array{Float32, 3}, geolist, intlist, constant_veloc
     end
     if alpha > 0
         println("Regularizing solution with alpha = $alpha")
-        B, unw_stack = augment_matrices(B, unw_stack, alpha)
+        # TODO: fix this part for only HDF5 file
+        println("TODO")
+        # B, unw_stack = augment_matrices(B, unw_stack, alpha)
     end
 
-    @time vstack = invert_sbas(unw_stack, B)
+    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices)
     return vstack
 end
 
 """Solve the problem Bv = d for each pixel in the stack"""
-function invert_sbas(unw_stack::Array{Float32, 3}, B::Array{Float32, 2})
+function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{Float32, 2}, valid_igram_indices)
     nrows, ncols, nlayers = size(unw_stack)
+    total_pixels = nrows*ncols*nlayers
     num_timediffs = size(B, 2)
 
     # Speeds up inversion to precompute pseudo inverse
     pB = pinv(B)
 
     # Pixel looping method:
+    # TODO: maybe this should be an HDF5Dataset too?
     vstack = Array{Float32, 3}(undef, (nrows, ncols, num_timediffs))
 
     println("Using $(Threads.nthreads()) threads for invert_sbas loop")
-    @inbounds Threads.@threads for j in 1:ncols
-        @inbounds for i in 1:nrows
-    # for j in 1:ncols
-        # for i in 1:nrows
-            # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
-            vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
+    # @inbounds Threads.@threads for j in 1:ncols
+        # @inbounds for i in 1:nrows
+    step = 1000
+    row = 1
+    col = 1
+
+    chunk = zeros(Float32, (step, step, nlayers))
+    pixelcount = 0
+    while col <= ncols
+        while row <= nrows
+
+            println("Reading new chunk")
+            rend = row + step - 1
+            if rend > nrows
+                rend = lastindex(unw_stack, 1)
+            end
+            cend = col + step - 1
+            if cend > ncols
+                cend = lastindex(unw_stack, 2)
+            end
+            # If the chunk is not a full square, make sure we assign 
+            # only part to the chunk buffer to match broadcast
+            cc = length(col:cend)
+            cr = length(row:rend)
+            chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :]
+            for j in 1:cc
+                for i in 1:cr
+                    pixelcount += 1
+                    if (pixelcount % 100_000) == 0
+                        println("Processed $pixelcount pixels out of $total_pixels")
+                    end
+                    vstack[row+i-1, col+j-1, :] .= pB * chunk[i, j, :]
+                end
+            end
+            row += step
         end
+
+        row = 1
+        col += step
     end
+
+    # for j in 1:ncols
+    #     for i in 1:nrows
+    #         chunk .= unw_stack[i, j, :][1, 1, :]
+    #         # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
+    #         # vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
+    #         vstack[i, j, :] .= pB * unw_stack[i, j, :][1, 1, :]
+    #     end
+    # end
     return vstack
 end
 

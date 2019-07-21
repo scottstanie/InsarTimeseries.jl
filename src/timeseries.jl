@@ -26,17 +26,25 @@ function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=no
     if use_stackavg
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, geolist, intlist)
+        is_hdf5 = false
     else
         println("Performing SBAS solution")
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
-        @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
+        # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
         # TODO: also do this for the masks
 
-        vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
+        # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
+        h5open(unw_stack_file) do unw_file
+            unw_stack = unw_file[STACK_FLAT_SHIFTED_DSET]
+            vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
+                              constant_velocity, alpha)
+        end
+        is_hdf5 = true
     end
 
 
+    # TODO: make these hdf5 compatible to avoid the mem overhead 
     timediffs = day_diffs(geolist)
     println("Integrating velocities to phases")
     @time phi_arr = integrate_velocities(vstack, timediffs)
@@ -46,7 +54,7 @@ function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=no
     if !isnothing(outfile)
         println("Saving deformation to $outfile")
         dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
-        @time save_deformation(outfile, deformation, geolist, dem_rsc)
+        @time save_deformation(outfile, deformation, geolist, dem_rsc, do_permute=!is_hdf5)
     end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)

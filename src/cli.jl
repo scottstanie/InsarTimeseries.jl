@@ -29,6 +29,10 @@ function parse_commandline()
             arg_type = Float32
             # range_tester = x-> (x>0)
             help = "(SBAS) Strength of Tikhonov regularization"
+        "--ref-station"
+            arg_type = String
+            help = "Name of a gps reference station to shift the stack to."*
+                   " Will overwrite the current shifted dataset if specified"
         "path"
             help = "Path to directory with .h5 files"
             default = "."
@@ -44,7 +48,13 @@ function main()
     for (arg,val) in parsed_args
         @show arg, val
     end
-    InsarTimeseries.run_inversion(parsed_args["unw-stack-file"],
+    unw_file = parsed_args["unw-stack-file"]
+    ref_station = parsed_args["ref-station"]
+    if !isnothing(ref_station)
+        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station, overwrite=true)
+    end
+
+    InsarTimeseries.run_inversion(unw_file,
                                   outfile=parsed_args["outfile"],
                                   use_stackavg=parsed_args["stack-average"],
                                   constant_velocity=parsed_args["constant-velocity"],

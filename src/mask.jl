@@ -9,6 +9,9 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     ignore_geos = sort(sario.find_geos(filename=ignore_geo_file, parse=true))
     println("Ignoring the following .geo dates:")
     println(ignore_geos)
+    if length(ignore_geos) < 1
+        return 1:length(geo_date_list), 1:length(igram_date_list)
+    end
 
     valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
     valid_igrams = [i for i in igram_date_list if !((i[1] in ignore_geos) || (i[2] in ignore_geos))]

@@ -27,6 +27,9 @@ const DEM_RSC_DSET = "dem_rsc"
 const GEOLIST_DSET = "geo_dates"
 const INTLIST_DSET = "int_dates"
 
+const REFERENCE_ATTR = "reference"
+const REFERENCE_STATION_ATTR = "reference_station"
+
 
 """Examines file type for real/complex and runs appropriate load
 
@@ -93,27 +96,31 @@ function load_intlist_from_h5(h5file)
 end
 
 
-function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true)
+function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true)
     if overwrite
         mode = "w"
     else
         mode = "cw"  # Append mode
     end
     h5open(h5file, mode) do f 
-        write(f, dset_name, permutedims(stack, (2, 1, 3)))
+        if do_permute
+            write(f, dset_name, permutedims(stack, (2, 1, 3)))
+        else
+            write(f, dset_name, stack)
+        end
     end
 end
 
-function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc; dset_name=STACK_DSET)
-    save_hdf5_stack(h5file, dset_name, deformation)
+function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc; dset_name=STACK_DSET, do_permute=true)
+    save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
     h5open(h5file, "cw") do f
         geo_strings = Dates.format.(geolist, DATE_FMT)
         write(f, GEOLIST_DSET, geo_strings)
         # Note: using the sario python version since for some reason (as of 7.21.2019)
         # saving a JSON.json(dem) cant be loaded at all in h5py. weird string stuff
-        sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
         # TODO: save reference that was used at the time
     end
+    sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 end
 
 """Wrapper around h5read to account for the transpose
@@ -139,18 +146,6 @@ function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
     end
 end
 
-function create_mean_hdf5(h5file::String, dset_name::String)
-    h5open(h5file, "cw") do f
-        dset = f[dset_name]
-        nrows, ncols, nlayers = size(dset)
-        mean_buf = Array{eltype(dset), 2}(0, (nrows, ncols))
-        for idx in 1:nlayers
-            @. mean_buf = mean_buf + dset[:, :, idx]
-        end
-        mean_buf ./= nlayers
-        write(f, STACK_MEAN_DSET, mean_buf)
-    end
-end
 
 function load_complex(filename::String, rsc_data::Dict{String, Any})
     rows = rsc_data["file_length"]
