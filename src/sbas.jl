@@ -68,7 +68,9 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             cc = length(col:cend)
             cr = length(row:rend)
             println("Reading new chunk")
-            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, valid_igram_indices]
+            # TODO: check that reading all depth, then subselecting is actually better than
+            # For-looping and reading one layer at a time
+            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :][:, :, valid_igram_indices]
 
             for j in 1:cc
                 for i in 1:cr

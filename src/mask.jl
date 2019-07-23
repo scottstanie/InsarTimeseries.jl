@@ -17,14 +17,16 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     # Now also remove igrams spanning longer than `max_temporal_baseline`
     #
     # Compute for logging purposes:
-    too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
-    println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
-    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+    if !isnothing(max_temporal_baseline)
+        too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
+        println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
+        valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+    end
 
     valid_geo_indices = indexin(valid_geos, geo_date_list)
     valid_igram_indices = indexin(valid_igrams, igram_date_list)
 
-    println("Ignoring $(length(igram_date_list) - length(valid_igrams)) number of igrams total")
+    println("Ignoring $(length(igram_date_list) - length(valid_igrams)) igrams total")
 
     return valid_geo_indices, valid_igram_indices
 end
