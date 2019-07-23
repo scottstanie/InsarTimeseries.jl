@@ -1,3 +1,5 @@
+using Printf
+
 function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
                   geolist,
                   intlist, 
@@ -76,7 +78,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                 for i in 1:cr
                     pixelcount += 1
                     if (pixelcount % 100_000) == 0
-                        println("Processed $(pixelcount*nlayers) pixels out of $total_pixels")
+                        @printf("Processed %.3g pixels out of %.3g ( %.2f %% done)\n", 
+                                pixelcount*nlayers, total_pixels, 100*pixelcount*nlayers/total_pixels)
                     end
                     vstack[row+i-1, col+j-1, :] .= pB * chunk[i, j, :]
                 end
