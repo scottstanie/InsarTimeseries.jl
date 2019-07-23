@@ -1,20 +1,21 @@
 read_geolist_file(filename::String) = sario.find_geos(filename=filename)
 
 """Read extra file to ignore certain dates of interferograms"""
-function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, ignore_geo_file)
-    if isnothing(ignore_geo_file)
+function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, ignore_geo_file, max_temporal_baseline)
+    if isnothing(ignore_geo_file) && isnothing(max_temporal_baseline)
         return 1:length(geo_date_list), 1:length(igram_date_list)
     end
 
     ignore_geos = sort(sario.find_geos(filename=ignore_geo_file, parse=true))
     println("Ignoring the following .geo dates:")
     println(ignore_geos)
-    if length(ignore_geos) < 1
-        return 1:length(geo_date_list), 1:length(igram_date_list)
-    end
 
+    # First filter by remove igrams with either date in `ignore_geo_file`
     valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
     valid_igrams = [i for i in igram_date_list if !((i[1] in ignore_geos) || (i[2] in ignore_geos))]
+
+    # Now also remove igrams spanning longer than `max_temporal_baseline`
+    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
 
     valid_geo_indices = indexin(valid_geos, geo_date_list)
     valid_igram_indices = indexin(valid_igrams, igram_date_list)

@@ -17,10 +17,16 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=nothing, use_stackavg::Bool=false, constant_velocity::Bool=true, ignore_geo_file=nothing, alpha::Float32=0.0f0)
+function run_inversion(unw_stack_file::String; 
+                       outfile::Union{String,Nothing}=nothing, 
+                       use_stackavg::Bool=false, 
+                       constant_velocity::Bool=true, 
+                       ignore_geo_file=nothing, 
+                       max_temporal_baseline::Union{Int, Nothing}=nothing,
+                       alpha::Float32=0.0f0)
 
     # the valid igram indices is out of all layers in the stack and mask files 
-    geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file)
+    geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
 
     if use_stackavg
@@ -61,12 +67,12 @@ function run_inversion(unw_stack_file::String; outfile::Union{String,Nothing}=no
 end
 
 
-function load_geolist_intlist(unw_stack_file, ignore_geo_file)
+function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
     geolist = load_geolist_from_h5(unw_stack_file)
     intlist = load_intlist_from_h5(unw_stack_file)
 
     # If we are ignoreing some indices, remove them from for all pixels
-    valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file)
+    valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file, max_temporal_baseline)
     return geolist[valid_geo_indices], intlist[valid_igram_indices], valid_igram_indices
 end
 

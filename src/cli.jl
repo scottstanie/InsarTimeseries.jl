@@ -16,6 +16,10 @@ function parse_commandline()
         "--outfile", "-o"
             default = "deformation.h5"
             help = "Name output .h5 file to save solution stack"
+        "--max-temporal-baseline"
+            arg_type = Int
+            range_tester = x-> (x>0)
+            help = "Max span allowed between igrams"
         "--ignore-geo-file"
             help = "name of file with list of .geo  dates to ignore"
         "--unw-stack-file"
@@ -27,7 +31,7 @@ function parse_commandline()
         "--alpha"
             default = 0.0f0
             arg_type = Float32
-            # range_tester = x-> (x>0)
+            range_tester = x-> (x>=0.0f0)
             help = "(SBAS) Strength of Tikhonov regularization"
         "--ref-station"
             arg_type = String
@@ -59,6 +63,7 @@ function main()
                                   use_stackavg=parsed_args["stack-average"],
                                   constant_velocity=parsed_args["constant-velocity"],
                                   ignore_geo_file=parsed_args["ignore-geo-file"],
+                                  max_temporal_baseline=parsed_args["max-temporal-baseline"],
                                   alpha=parsed_args["alpha"])
 end
 

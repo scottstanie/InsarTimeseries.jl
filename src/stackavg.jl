@@ -4,8 +4,6 @@ const STACK_DSET = "stack"
 const STACK_FLAT_DSET = "deramped_stack"
 const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
-igram_spans(igram_list) = [(later - early).value for (early, later) in igram_list]
-
 
 function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1})
 
@@ -29,7 +27,7 @@ function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igr
     @time unw_stack = load_hdf5_stack(unw_stack_file, stack_dset, picked_igram_indices)
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
-    timediffs = igram_spans(chosen_igrams)
+    timediffs = temporal_baseline(chosen_igrams)
     phase_sum = sum(unw_stack, dims=3)
     avg_velo = phase_sum ./ sum(timediffs)
     return avg_velo

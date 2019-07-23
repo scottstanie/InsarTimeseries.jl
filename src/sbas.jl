@@ -1,4 +1,11 @@
-function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, geolist, intlist, valid_igram_indices, constant_velocity::Bool, alpha::Float32)
+function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
+                  geolist,
+                  intlist, 
+                  valid_igram_indices, 
+                  constant_velocity::Bool, 
+                  alpha::Float32, 
+                  )
+
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
@@ -90,6 +97,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     return vstack
 end
 
+# In case we make each column inversion more complicated (extra penalty functions, etc.)
+#
 # function invert_column(unw_stack, pB, i::Int, j::Int)
 #     c = view(unw_stack, i, j, :)
 #     v = pB * c

@@ -2,6 +2,9 @@ import Base.view
 import Base.lastindex
 using HDF5
 
+temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
+temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]
+
 # Allow the slicing of c[1:end, :]
 # TODO: why isn't this defined in HDF5?? prob should do a PR to them
 function lastindex(dset::HDF5Dataset, d::Int)
