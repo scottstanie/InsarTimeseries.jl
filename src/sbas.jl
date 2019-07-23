@@ -49,7 +49,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     row = 1
     col = 1
 
-    chunk = zeros(Float32, (step, step, nlayers))
+    chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pixelcount = 0
     while col <= ncols
         while row <= nrows
@@ -68,7 +68,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             cc = length(col:cend)
             cr = length(row:rend)
             println("Reading new chunk")
-            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :]
+            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, valid_igram_indices]
 
             for j in 1:cc
                 for i in 1:cr
