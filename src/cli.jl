@@ -59,8 +59,9 @@ function main()
     end
     unw_file = parsed_args["unw-stack-file"]
     ref_station = parsed_args["ref-station"]
+    window = parsed_args["window"]
     if !isnothing(ref_station)
-        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station, overwrite=true)
+        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station, overwrite=true, window=window)
     end
 
     InsarTimeseries.run_inversion(unw_file,

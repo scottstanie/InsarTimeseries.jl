@@ -130,10 +130,10 @@ function save_deformation(h5file,
     sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 
     # Read ref. unfo from unw file, save what was used to deformation result file
-    reference = h5readattr(unw_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_ATTR]
-    h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR -> reference))
-    reference_station = h5readattr(unw_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_STATION_ATTR]
-    h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR -> reference_station))
+    reference = h5readattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_ATTR]
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR => reference))
+    reference_station = h5readattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_STATION_ATTR]
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR => reference_station))
 end
 
 """Wrapper around h5read to account for the transpose

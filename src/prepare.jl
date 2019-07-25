@@ -27,6 +27,7 @@ function shift_unw_file(unw_stack_file::String; ref_row=nothing, ref_col=nothing
             dataspace(size(stack_in)),
         )
         stack_out = f[STACK_FLAT_SHIFTED_DSET]
+
         # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
         # Note: switching these so we don't have to permute dims upon loading HDF5Dset
         shift_stack(stack_in, stack_out, ref_col, ref_row, window=window)
@@ -58,7 +59,7 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; window::In
         layer = view(stack_in, :, :, k)
         
         patch .= layer[ref_row - half_win:ref_row + half_win, 
-                      ref_col - half_win:ref_col + half_win]
+                       ref_col - half_win:ref_col + half_win]
 
         # Adding the `view` to eliminate extra singleton dimension from HDF5
         stack_out[:, :, k] = view(layer .- mean(patch), :, :)
