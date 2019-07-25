@@ -37,6 +37,11 @@ function parse_commandline()
             arg_type = String
             help = "Name of a gps reference station to shift the stack to."*
                    " Will overwrite the current shifted dataset if specified"
+        "--window"
+            arg_type = Int
+            range_tester = x-> (x>0)
+            help = "Size of window to use to shift stack"
+            default = 3
         "path"
             help = "Path to directory with .h5 files"
             default = "."
