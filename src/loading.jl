@@ -17,6 +17,7 @@ const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".n
 const STACK_DSET = "stack"
 const STACK_MEAN_DSET = "mean_stack"
 const STACK_FLAT_DSET = "deramped_stack"
+const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
 # Mask file datasets
 const GEO_MASK_DSET = "geo"
@@ -111,7 +112,13 @@ function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bo
     end
 end
 
-function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc; dset_name=STACK_DSET, do_permute=true)
+function save_deformation(h5file, 
+                          deformation, 
+                          geolist::Array{Date, 1}, 
+                          dem_rsc; 
+                          dset_name=STACK_DSET, 
+                          do_permute=true,
+                          unw_stack_file="unw_stack.h5")
     save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
     h5open(h5file, "cw") do f
         geo_strings = Dates.format.(geolist, DATE_FMT)
@@ -121,6 +128,12 @@ function save_deformation(h5file, deformation, geolist::Array{Date, 1}, dem_rsc;
         # TODO: save reference that was used at the time
     end
     sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+
+    # Read ref. unfo from unw file, save what was used to deformation result file
+    reference = h5readattr(unw_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_ATTR]
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR -> reference))
+    reference_station = h5readattr(unw_file, STACK_FLAT_SHIFTED_DSET)[REFERENCE_STATION_ATTR]
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR -> reference_station))
 end
 
 """Wrapper around h5read to account for the transpose
