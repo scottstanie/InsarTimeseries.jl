@@ -35,7 +35,9 @@ function shift_unw_file(unw_stack_file::String; ref_row=nothing, ref_col=nothing
     end
 
     h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
-    h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict(REFERENCE_STATION_ATTR => ref_station))
+    # Make sure we don't write Nothing
+    station_str = isnothing(ref_station) ? "" : ref_station
+    h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict(REFERENCE_STATION_ATTR => station_str))
 
     println("Shifting stack complete")
 end
@@ -47,23 +49,35 @@ Note: window is size of the group around ref pixel to avg for reference.
 """
 
 # TODO: check later if worth doing one for HDF5Dataset, one for Array
-function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; window::Int=3)
+function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; 
+                     window::Int=3, chunk_layers=100)
     half_win = div(window, 2)
     winsize = (2half_win + 1, 2half_win + 1)  # Make sure it is odd sized
     patch = Array{Float32, 2}(undef, winsize)
 
     @show stack_in
     @show stack_out
-    for k = 1:size(stack_in, 3)
-        println("Shiffting layer $k")
-        layer = view(stack_in, :, :, k)
+
+    # Read chunks in at a time to limit HDF5 reading latency
+    nrows, ncols, nlayers = size(stack_in)
+    chunk =  Array{Float32, 3}(undef, (nrows, ncols, chunk_layers))
+
+    k = 1
+    while k < size(stack_in, 3)
+        endk = min(k + chunk_layers - 1, lastindex(stack_in, 3))
+        println("Shiffting layers $k : $endk")
+        chunk[:, :, k:endk] .= stack_in[:, :, k:endk]
+
+        for jdx in 1:(endk - k)
+            layer = view(chunk, :, :, jdx)
         
-        patch .= layer[ref_row - half_win:ref_row + half_win, 
-                       ref_col - half_win:ref_col + half_win]
+            patch .= layer[ref_row - half_win:ref_row + half_win, 
+                           ref_col - half_win:ref_col + half_win]
 
-        # Adding the `view` to eliminate extra singleton dimension from HDF5
-        stack_out[:, :, k] = view(layer .- mean(patch), :, :)
-
+            # Adding the `view` to eliminate extra singleton dimension from HDF5
+            stack_out[:, :, k + jdx - 1] = view(layer .- mean(patch), :, :)
+        end
+        k += chunk_layers
     end
     return stack_out
 end
