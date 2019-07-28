@@ -5,8 +5,7 @@ function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}},
                   intlist, 
                   valid_igram_indices, 
                   constant_velocity::Bool, 
-                  alpha::Float32, 
-                  )
+                  alpha::Float32) 
 
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
@@ -22,19 +21,23 @@ function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}},
     end
     if alpha > 0
         println("Regularizing solution with alpha = $alpha")
-        # TODO: fix this part for only HDF5 file
-        println("TODO")
-        # B, unw_stack = augment_matrices(B, unw_stack, alpha)
+        B = augment_B(B, alpha)
+        extra_zeros = size(B, 1) - size(unw_stack, 3)
+    else
+        # No regularization added to pixels
+        extra_zeros = 0
     end
 
-    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices)
+    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros)
     return vstack
 end
 
 """Solve the problem Bv = d for each pixel in the stack"""
-function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{Float32, 2}, valid_igram_indices)
+function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{Float32, 2}, valid_igram_indices;
+                     extra_zeros=0)
     nrows, ncols, nlayers = size(unw_stack)
     total_pixels = nrows*ncols*nlayers
+
     num_timediffs = size(B, 2)
 
     # Speeds up inversion to precompute pseudo inverse
@@ -52,36 +55,26 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     col = 1
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
-    pixelcount = 0
+    pix_count = 0
     while col <= ncols
         while row <= nrows
-
-            rend = row + step - 1
-            if rend > nrows
-                rend = lastindex(unw_stack, 1)
-            end
-            cend = col + step - 1
-            if cend > ncols
-                cend = lastindex(unw_stack, 2)
-            end
+            end_row = min(row + step - 1, nrows)
+            end_col = min(col + step - 1, ncols)
 
             # If the chunk is not a full square, make sure we assign 
             # only part to the chunk buffer to match broadcast
-            cc = length(col:cend)
-            cr = length(row:rend)
-            println("Reading new chunk")
+            col_c = length(col:end_col)
+            row_c = length(row:end_row)
+
             # TODO: check that reading all depth, then subselecting is actually better than
             # For-looping and reading one layer at a time
-            @time chunk[1:cr, 1:cc, :] .= unw_stack[row:rend, col:cend, :][:, :, valid_igram_indices]
+            println("Reading new chunk")
+            @time chunk[1:row_c, 1:col_c, :] .= unw_stack[row:end_row, col:end_col, :][:, :, valid_igram_indices]
 
-            for j in 1:cc
-                for i in 1:cr
-                    pixelcount += 1
-                    if (pixelcount % 100_000) == 0
-                        @printf("Processed %.3g pixels out of %.3g ( %.2f %% done)\n", 
-                                pixelcount*nlayers, total_pixels, 100*pixelcount*nlayers/total_pixels)
-                    end
-                    vstack[row+i-1, col+j-1, :] .= pB * chunk[i, j, :]
+            for j in 1:col_c
+                for i in 1:row_c
+                    vstack[row+i-1, col+j-1, :] .= invert_pixel(pB, chunk[i, j, :], extra_zeros)
+                    log_count!(pix_count, total_pixels, nlayers, every=100_000)
                 end
             end
             row += step
@@ -91,23 +84,34 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
         col += step
     end
 
+    # OLd way where we could load all in memory:
     # for j in 1:ncols
     #     for i in 1:nrows
-    #         chunk .= unw_stack[i, j, :][1, 1, :]
     #         # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
-    #         # vstack[i, j, :] .= pB * view(unw_stack, i, j, :) 
     #         vstack[i, j, :] .= pB * unw_stack[i, j, :][1, 1, :]
     #     end
     # end
     return vstack
 end
 
-# In case we make each column inversion more complicated (extra penalty functions, etc.)
-#
-# function invert_column(unw_stack, pB, i::Int, j::Int)
-#     c = view(unw_stack, i, j, :)
-#     v = pB * c
-# end
+# In case we make each pixel inversion more complicated (extra penalty functions, etc.)
+# TODO: does a Val type for the case with no extra zeros help here?
+function invert_pixel(pB, pixel::Array{Float32, 1}, extra_zeros=0)
+    if extra_zeros == 0
+        return pB * pixel
+    else
+        return pB * vcat(pixel, zeros(extra_zeros))
+    end
+end
+
+function log_count!(pix_count, total_pixels, nlayers; every=100_000)
+    pix_count += 1
+    if (pix_count % every) == 0
+        pct_done = 100*pix_count*nlayers/total_pixels
+        @printf("Processed %.3g pixels out of %.3g ( %.2f %% done)\n", 
+                pix_count*nlayers, total_pixels, pct_done)
+    end
+end
 
 """
     build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1}) -> Array{Int8, 2}
@@ -179,6 +183,11 @@ function _create_B(A::Array{Int8, 2}, timediffs::Array{Int, 1})
     return B
 end
 
+
+"""For Tikhonov regularization, pad the B matrix with alpha*I"""
+function augment_B(B::Array{Float32, 2}, alpha::Float32)
+    return Float32.(vcat(B, alpha*I))
+end
 
 function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Float32)
     B = Float32.(vcat(B, alpha*I))
