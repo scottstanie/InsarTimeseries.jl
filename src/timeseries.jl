@@ -1,6 +1,5 @@
 using Dates
 using Statistics
-using Debugger
 using LinearAlgebra
 
 const SENTINEL_WAVELENGTH = 5.5465763  # cm

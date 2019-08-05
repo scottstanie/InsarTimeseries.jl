@@ -3,9 +3,7 @@
 window is the size around the reference pixel to average at each layer
 """
 
-using Debugger
-
-function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing, order=1,
+function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing, order=2,
                         ref_row=nothing, ref_col=nothing, window=3, ref_station=nothing, 
                         overwrite=false)
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
@@ -135,12 +133,15 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
         coeffs = ones(numel)
         z_fit = similar(layer)
 
-        for k = 1:size(stack_in, 3)
+        layer_out = similar(layer)
+
+        Threads.@sync for k = 1:size(stack_in, 3)
             layer .= view(stack_in, :, :, k)
             mask .= Bool.(view(mask_dset, :, :, k))
             # @show size(layer), size(mask), size(stack_out[:,:,k])
-            stack_out[:, :, k] .= remove_ramp(layer, order, mask, buf=layer_buf, 
-                                              A=A, coeffs=coeffs, z_fit=z_fit)
+            Threads.@spawn layer_out .= remove_ramp(layer, order, mask, buf=layer_buf, 
+                                                    A=A, coeffs=coeffs, z_fit=z_fit)
+            stack_out[:, :, k] .= layer_out
 
             if k % 100 == 0
                 println("Finished with $k layers")
