@@ -1,6 +1,14 @@
 using ArgParse
+
 include("./InsarTimeseries.jl")
 using .InsarTimeseries
+
+# # TODO: make this work for single arg
+# import ArgParse.parse_item
+# function ArgParse.parse_item(it_type::Tuple{Int, Int}, x::AbstractString) 
+#     tup = split(replace(x, " "=>""), ",")
+#     return convert(it_type, tup)
+# end
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -37,6 +45,10 @@ function parse_commandline()
             arg_type = String
             help = "Name of a gps reference station to shift the stack to."*
                    " Will overwrite the current shifted dataset if specified"
+        "--ref-row"
+            arg_type = Int
+        "--ref-col"
+            arg_type = Int
         "--window"
             arg_type = Int
             range_tester = x-> (x>0)
@@ -58,10 +70,15 @@ function main()
         @show arg, val
     end
     unw_file = parsed_args["unw-stack-file"]
+
     ref_station = parsed_args["ref-station"]
-    window = parsed_args["window"]
-    if !isnothing(ref_station)
-        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station, overwrite=true, window=window)
+    ref_row = parsed_args["ref-row"]
+    ref_col = parsed_args["ref-col"]
+    if !isnothing(ref_station) || !(isnothing(ref_row) || isnothing(ref_col))
+        window = parsed_args["window"]
+        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station,
+                                             ref_row=ref_col, ref_col=ref_col, overwrite=true, 
+                                             window=window)
     end
 
     InsarTimeseries.run_inversion(unw_file,
