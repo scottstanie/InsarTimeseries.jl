@@ -2,9 +2,19 @@
 
 window is the size around the reference pixel to average at each layer
 """
-function shift_unw_file(unw_stack_file::String; ref_row=nothing, ref_col=nothing, window=3, ref_station=nothing, overwrite=false)
+
+using Debugger
+
+function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing, order=1,
+                        ref_row=nothing, ref_col=nothing, window=3, ref_station=nothing, 
+                        overwrite=false)
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
-    if !sario.check_dset(unw_stack_file, STACK_FLAT_SHIFTED_DSET, overwrite)
+    if isnothing(stack_flat_dset)
+        stack_flat_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
+    end
+    stack_flat_shifted_dset = stack_flat_dset * "_shifted"
+
+    if !sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite)
         return nothing
     end
 
@@ -16,17 +26,17 @@ function shift_unw_file(unw_stack_file::String; ref_row=nothing, ref_col=nothing
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
     h5open(unw_stack_file, "cw") do f
-        if !(STACK_FLAT_DSET in names(f))
-            throw("Need $STACK_FLAT_DSET to be created in $unw_stack_file before shift stack can be run")
+        if !(stack_flat_dset in names(f))
+            throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
         end
 
-        stack_in = f[STACK_FLAT_DSET]
+        stack_in = f[stack_flat_dset]
         d_create(f,
-            STACK_FLAT_SHIFTED_DSET,
+            stack_flat_shifted_dset,
             datatype(Float32),
             dataspace(size(stack_in)),
         )
-        stack_out = f[STACK_FLAT_SHIFTED_DSET]
+        stack_out = f[stack_flat_shifted_dset]
 
         # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
         # Note: switching these so we don't have to permute dims upon loading HDF5Dset
@@ -34,10 +44,10 @@ function shift_unw_file(unw_stack_file::String; ref_row=nothing, ref_col=nothing
 
     end
 
-    h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
+    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
     # Make sure we don't write Nothing
     station_str = isnothing(ref_station) ? "" : ref_station
-    h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict(REFERENCE_STATION_ATTR => station_str))
+    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_STATION_ATTR => station_str))
 
     println("Shifting stack complete")
 end
@@ -78,19 +88,25 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
             stack_out[:, :, k + jdx - 1] = view(layer .- mean(patch), :, :)
         end
         k += chunk_layers
+        if k % 100 == 0
+            println("Finished with $k layers")
+        end
     end
     return stack_out
 end
 
-function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false)
+function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack_flat_dset=nothing)
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
-    if order == 1
-        flat_dset = STACK_FLAT_DSET1
-    elseif order == 2
-        flat_dset = STACK_FLAT_DSET2
+    if isnothing(stack_flat_dset)
+        if order == 1
+            stack_flat_dset = STACK_FLAT_DSET1
+        elseif order == 2
+            stack_flat_dset = STACK_FLAT_DSET2
+        end
     end
 
-    if !sario.check_dset(unw_stack_file, flat_dset, overwrite)
+    # If we already have this dataset made, skip the function
+    if !sario.check_dset(unw_stack_file, stack_flat_dset, overwrite)
         return nothing
     end
 
@@ -103,35 +119,55 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false)
 
         stack_in = f[STACK_DSET]
         d_create(f,
-            flat_dset,
+            stack_flat_dset,
             datatype(Float32),
             dataspace(size(stack_in)),
         )
-        stack_out = f[flat_dset]
+        stack_out = f[stack_flat_dset]
         mask_dset = fmask[IGRAM_MASK_DSET]
 
+        # Pre allocate buffers
+        layer = similar(stack_in[:, :, 1][:, :, 1])
+        layer_buf = similar(layer)
+        mask = similar(Bool.(mask_dset[ :, :, 1][:, :, 1]))
+        numel = (order == 1) ? 3 : 6
+        A = ones((length(layer), numel))
+        coeffs = ones(numel)
+        z_fit = similar(layer)
+
         for k = 1:size(stack_in, 3)
-            layer = view(stack_in, :, :, k)
-            mask = Bool.(view(mask_dset, :, :, k))
+            layer .= view(stack_in, :, :, k)
+            mask .= Bool.(view(mask_dset, :, :, k))
             # @show size(layer), size(mask), size(stack_out[:,:,k])
-            stack_out[:, :, k] = remove_ramp(layer, order, mask)
+            stack_out[:, :, k] .= remove_ramp(layer, order, mask, buf=layer_buf, 
+                                              A=A, coeffs=coeffs, z_fit=z_fit)
+
+            if k % 100 == 0
+                println("Finished with $k layers")
+            end
         end
 
     end
     close(fmask)
 
-    h5writeattr(unw_stack_file, STACK_FLAT_SHIFTED_DSET, Dict("order" => order))
+    h5writeattr(unw_stack_file, stack_flat_dset, Dict("order" => order))
 
     println("Deramping stack complete")
 end
 
-function remove_ramp(z, order, mask)
-    z_masked = copy(z)
+function remove_ramp(z, order, mask; buf=nothing, A=nothing, coeffs=nothing, z_fit=nothing)
+    if isnothing(buf)
+        z_masked = copy(z)
+    else
+        z_masked = buf
+        z_masked .= z
+    end
+
     z_masked[mask] .= NaN
     if order == 1
         return z - estimate_ramp1(z_masked)
     elseif order == 2
-        return z - estimate_ramp2(z_masked)
+        return z - estimate_ramp2(z_masked, A, coeffs, z_fit)
     else
         println("WARNING: Order $order not supported. Running order 1 ramp removal")
         return z - estimate_ramp1(z_masked)
@@ -146,10 +182,19 @@ end
 For order = 1, it will be 3 numbers, a, b, c from
      ax + by + c = z
 """
-function estimate_ramp1(z::Array{<:AbstractFloat, 2})
+# TODO: Fix the mem-allocations here
+function estimate_ramp1(z::Array{<:AbstractFloat, 2}, A=nothing, coeffs=nothing, z_fit=nothing)
     good_idxs = .~isnan.(z)
 
-    A = ones((sum(good_idxs), 3))
+    if isnothing(A)
+        A = ones((sum(good_idxs), 3))
+    end
+    if isnothing(coeffs)
+        coeffs = Array{eltype(A), 1}(undef, (3,))
+    end
+    if isnothing(z_fit)
+        z_fit = similar(z)
+    end
     Aidx = 1
 
     for idx in CartesianIndices(z)
@@ -161,10 +206,9 @@ function estimate_ramp1(z::Array{<:AbstractFloat, 2})
             Aidx += 1
         end
     end
-    coeffs = A \ z[good_idxs]
+    coeffs .= A[good_idxs, :] \ z[good_idxs]
     a, b, c = coeffs
 
-    z_fit = similar(z)
     for idx in CartesianIndices(z_fit)
         # again subtract 1 to keep consistent with the fitting
         y, x = idx.I .- 1
@@ -178,24 +222,36 @@ end
 For order = 2, it will be 6:
     a*x + b*y + c*x*y + d*x^2 + ey^2 + f
 """
-function estimate_ramp2(z::Array{<:AbstractFloat, 2})
+# TODO: Fix the mem-allocations here
+function estimate_ramp2(z::Array{<:AbstractFloat, 2}, A=nothing, coeffs=nothing, z_fit=nothing)
     good_idxs = .~isnan.(z)
 
-    A = ones((sum(good_idxs), 6))
+    if isnothing(A)
+        A = ones((sum(good_idxs), 6))
+    end
+    if isnothing(coeffs)
+        coeffs = Array{eltype(A), 1}(undef, (6,))
+    end
+    if isnothing(z_fit)
+        z_fit = similar(z)
+    end
+
     Aidx = 1
 
     for idx in CartesianIndices(z)
         if good_idxs[idx]
             # row, col is equiv to y, x, but subtract 1 to start at 0
             y, x = idx.I .- 1
-            A[Aidx, 1:5] = [x, y, x*y, x^2, y^2]
+            A[Aidx, 1] = x;   A[Aidx, 2] = y;  A[Aidx, 3] = x*y
+            A[Aidx, 4] = x^2; A[Aidx, 5] = y^2
             Aidx += 1
         end
     end
-    coeffs = A \ z[good_idxs]
+    qA = qr(A[reshape(good_idxs, :), :])
+    coeffs .=  qA \ z[good_idxs]
+
     a, b, c, d, e, f = coeffs
 
-    z_fit = similar(z)
     for idx in CartesianIndices(z_fit)
         # again subtract 1 to keep consistent with the fitting
         y, x = idx.I .- 1
