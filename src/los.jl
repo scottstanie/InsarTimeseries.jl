@@ -9,6 +9,12 @@ const SOL = 299792458
 const ELLP = Ellp(6378137.0, 0.0066943799901499996)
 
 
+function calculate_los()
+    # TODO: do i wanna get rid of this "params" file?
+    dem_file, dem_rsc_file = readlines("params")
+    dem_rsc = sario.load(dem_rsc_file)
+end
+
 function load_table_params(dbfile, param_list; param_types=nothing, tablename="file")
     db = SQLite.DB(dbfile)
 
@@ -67,4 +73,31 @@ function load_all_params(dbfile; tablename="file")
     merge!(param_dict, 
            load_table_params(dbfile, ["orbinfo"], tablename=tablename))
     return param_dict
+end
+
+function read_orbit_vector(orbtiming_file)
+    lines = readlines(orbtimingfile)
+    print(lines)
+    timefirst, timeend, nlines, num_state_vec = lines[1:4]
+    timeorbit = zeros(num_state_vec)
+    for i = 1:num_state_vec
+        xx[:, i] = x
+        vv[:, i] = v
+        aa[:, i] = a
+    end
+    return timeorbit, xx, vv, aa
+end
+
+
+function llh_to_xyz(llh::Array{<:AbstractFloat, 1})
+    a = ELLP.a
+    e2 = ELLP.e2
+    lat, lon, h = llh
+
+    rad_earth = a/sqrt(1.0 - e2*sin(lat)^2)
+
+    vec = similar(llh)
+    vec[1] = (rad_earth + h)*cos(lat)*cos(lon)
+    vec[2] = (rad_earth + h)*cos(lat)*sin(lon)
+    vec[3] = (rad_earth*(1.0 - e2) + h) * sin(lat)
 end
