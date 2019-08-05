@@ -63,34 +63,33 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
     winsize = (2half_win + 1, 2half_win + 1)  # Make sure it is odd sized
     patch = Array{Float32, 2}(undef, winsize)
 
+    nrows, ncols, nlayers = size(stack_in)
+    layer = Array{Float32, 2}(undef, (nrows, ncols))
+    layer_out = similar(layer)
+
     @show stack_in
     @show stack_out
 
     # Read chunks in at a time to limit HDF5 reading latency
-    nrows, ncols, nlayers = size(stack_in)
-    chunk =  Array{Float32, 3}(undef, (nrows, ncols, chunk_layers))
 
-    k = 1
-    while k < size(stack_in, 3)
-        endk = min(k + chunk_layers - 1, lastindex(stack_in, 3))
-        println("Shiffting layers $k : $endk")
-        chunk[:, :, k:endk] .= stack_in[:, :, k:endk]
+    Threads.@sync for k = 1:nlayers
+        layer .= view(stack_in, :, :, k)
+        Threads.@spawn layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
+        stack_out[:, :, k] .= layer_out
 
-        for jdx in 1:(endk - k)
-            layer = view(chunk, :, :, jdx)
-        
-            patch .= layer[ref_row - half_win:ref_row + half_win, 
-                           ref_col - half_win:ref_col + half_win]
-
-            # Adding the `view` to eliminate extra singleton dimension from HDF5
-            stack_out[:, :, k + jdx - 1] = view(layer .- mean(patch), :, :)
-        end
-        k += chunk_layers
         if k % 100 == 0
             println("Finished with $k layers")
         end
     end
     return stack_out
+end
+
+function _shift_layer(layer, patch, ref_row, ref_col, half_win)
+    patch .= layer[ref_row - half_win:ref_row + half_win, 
+                   ref_col - half_win:ref_col + half_win]
+
+    # Adding the `view` to eliminate extra singleton dimension from HDF5
+    return view(layer .- mean(patch), :, :)
 end
 
 function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack_flat_dset=nothing)
