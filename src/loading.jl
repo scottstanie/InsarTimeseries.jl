@@ -15,9 +15,11 @@ const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".n
 
 # dataset names for general 3D stacks
 const STACK_DSET = "stack"
-const STACK_MEAN_DSET = "mean_stack"
-const STACK_FLAT_DSET = "deramped_stack"
-const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
+const STACK_MEAN_DSET = "stack_mean"
+const STACK_FLAT_DSET1 = "stack_deramped_1"
+const STACK_FLAT_DSET2 = "stack_deramped_2"
+const STACK_FLAT_SHIFTED_DSET1 = "stack_deramped_1_shifted"
+const STACK_FLAT_SHIFTED_DSET2 = "stack_deramped_2_shifted"
 
 # Mask file datasets
 const GEO_MASK_DSET = "geo"
