@@ -109,14 +109,12 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
     end
 
     println("Starting stack deramp : using order $order")
-    fmask = h5open("masks.h5", "r")
     h5open(unw_stack_file, "cw") do f
         if !(STACK_DSET in names(f))
             throw("Need $STACK_DSET to be created in $unw_stack_file before deramp stack can be run")
         end
 
         stack_in = f[STACK_DSET]
-        nrows, ncols, nlayers = size(stack_in)
 
         d_create(f,
             stack_flat_dset,
@@ -124,37 +122,72 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
             dataspace(size(stack_in)),
         )
     end
+    f = h5open(unw_stack_file)
+    nrows, ncols, nlayers = size(f[STACK_DSET])
+    close(f)
 
-    h5open(unw_stack_file, "cw") do f
-        stack_in = f[STACK_DSET]
-        stack_out = f[stack_flat_dset]
-        mask_dset = fmask[IGRAM_MASK_DSET]
+    # fmask = h5open("masks.h5", "r")
 
-        # Pre allocate buffers
-        layer = similar(stack_in[:, :, 1][:, :, 1])
-        layer_buf = similar(layer)
-        layer_out = similar(layer)
-        mask = similar(Bool.(mask_dset[ :, :, 1][:, :, 1]))
-        numel = (order == 1) ? 3 : 6
-        A = ones((length(layer), numel))
-        coeffs = ones(numel)
-        z_fit = similar(layer)
+    chunk_size = 100
+    chunk = Array{Float32, 3}(undef, (nrows, ncols, chunk_size))
+    chunk_out = similar(chunk)
+    mask_chunk = Array{Bool, 3}(undef, (nrows, ncols, chunk_size))
+    k = 1
+    while k < nlayers
+        kend = min(k + chunk_size - 1, nlayers)
+        numch = kend - k + 1
+        println("reading $k : $kend")
+        @time chunk[:, :, 1:numch] .= h5read(unw_stack_file, STACK_DSET, (:, :, k:kend))
+        mask_chunk[:, :, 1:numch] .= h5read("masks.h5", IGRAM_MASK_DSET, (:, :, k:kend))
+        println("calculating ramp")
+        @time @inbounds Threads.@threads for jdx = 1:numch
+            chunk_out[:, :, jdx] .= remove_ramp(view(chunk, :, :, jdx), order, view(mask_chunk, :, :, jdx))
+        end
 
-        @inbounds for k = 1:size(stack_in, 3)
-            layer .= stack_in[ :, :, k][:, :, 1]
-            mask .= Bool.(mask_dset[:, :, k][:, :, 1])
-            layer_out .= remove_ramp(layer, order, mask, buf=layer_buf, 
-                                     A=A, coeffs=coeffs, z_fit=z_fit)
-            
-            stack_out[:, :, k] = layer_out
-
-            if k % 20 == 0
-                println("Finished with $k layers")
+        println("writing chunk layers")
+        @time h5open(unw_stack_file, "cw") do f
+            for jdx = 1:numch
+                f[stack_flat_dset][:, :, k+jdx-1] = view(chunk_out,:, :, jdx)
             end
         end
 
+        k += chunk_size
     end
-    close(fmask)
+
+
+    # h5open(unw_stack_file, "cw") do f
+    #     stack_in = f[STACK_DSET]
+    #     stack_out = f[stack_flat_dset]
+    #     mask_dset = fmask[IGRAM_MASK_DSET]
+
+    #     # Pre allocate buffers
+    #     layer = similar(stack_in[:, :, 1][:, :, 1])
+    #     layer_buf = similar(layer)
+    #     layer_out = similar(layer)
+    #     mask = similar(Bool.(mask_dset[ :, :, 1][:, :, 1]))
+    #     numel = (order == 1) ? 3 : 6
+    #     A = ones((length(layer), numel))
+    #     coeffs = ones(numel)
+    #     z_fit = similar(layer)
+
+    #     @inbounds for k = 1:size(stack_in, 3)
+    #         layer .= stack_in[ :, :, k][:, :, 1]
+    #         mask .= Bool.(mask_dset[:, :, k][:, :, 1])
+    #         layer_out .= remove_ramp(layer, order, mask, buf=layer_buf, 
+    #                                  A=A, coeffs=coeffs, z_fit=z_fit)
+    #         
+    #         stack_out[:, :, k] = layer_out
+
+    #         if k % 20 == 0
+    #             println("Finished with $k layers")
+    #         end
+    #         if k >= 100
+    #             break
+    #         end
+    #     end
+
+    #end
+    #close(fmask)
 
     h5writeattr(unw_stack_file, stack_flat_dset, Dict("order" => order))
 
