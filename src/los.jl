@@ -18,15 +18,12 @@ function calculate_los(lat, lon, dbfile=nothing)
     end
     param_dict = load_all_params(dbfile)
 
-    # TODO: do i wanna get rid of this "params" file?
-    dem_file, dem_rsc_file = readlines("params")
-    dem_rsc = sario.load(dem_rsc_file)
-    dem = sario.load(dem_file)
+    xyz = _compute_xyz(lat, lon)
 
     timeorbit, xx, vv = read_orbit_vector(param_dict["orbinfo"])
 
     for idx=1:param_dict["azimuthBursts"]
-        vecr = loop_burst(lat, lon, dem, dem_rsc, param_dict, idx, timeorbit, xx, vv)
+        vecr = loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
         if !isnothing(vecr)
             return vecr
         end
@@ -34,8 +31,32 @@ function calculate_los(lat, lon, dbfile=nothing)
     return nothing
 end
 
+function _compute_xyz(lat, lon)
+    # TODO: do i wanna get rid of this "params" file?
+    dem_file, dem_rsc_file = readlines("params")
+    dem_rsc = sario.load(dem_rsc_file)
+    dem = sario.load(dem_file)
 
-function loop_burst(lat, lon, dem, dem_rsc, param_dict, idx, timeorbit, xx, vv)
+    firstlon, firstlat = dem_rsc["x_first"], dem_rsc["y_first"]
+    deltalon, deltalat = dem_rsc["x_step"], dem_rsc["y_step"]
+
+
+    col = round(Int, (lon-firstlon)/deltalon)
+    row = round(Int, (lat-firstlat)/deltalat)
+    
+    if row < 1 || col < 1 || row > size(dem, 1) || col > size(dem, 2)
+        println("($lat, $lon) out of bounds at ($row, $col) for DEM size $(size(dem))")
+        return
+    else
+        println("($lat, $lon) is at ($row, $col)")
+    end
+
+    llh = [ deg2rad(lat), deg2rad(lon), dem[row, col] ]
+    xyz = llh_to_xyz(llh)
+end
+
+
+function loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
     dtaz = 1.0 / param_dict["prf"]  # Nazlooks / prf
     tstart = param_dict["azimuthTimeSeconds$idx"]
     tend  = tstart + (param_dict["linesPerBurst"] - 1) * dtaz
@@ -59,28 +80,18 @@ function loop_burst(lat, lon, dem, dem_rsc, param_dict, idx, timeorbit, xx, vv)
     xyz_mid, vel_mid = intp_orbit(timeorbit, xx, vv, tmid)
     println("Satellite midpoint time,position,velocity: $tmid $xyz_mid $vel_mid")
 
-    firstlon, firstlat = dem_rsc["x_first"], dem_rsc["y_first"]
-    deltalon, deltalat = dem_rsc["x_step"], dem_rsc["y_step"]
-
-
-    col = round(Int, (lon-firstlon)/deltalon)
-    row = round(Int, (lat-firstlat)/deltalat)
-    
-    if row < 1 || col < 1 || row > size(dem, 1) || col > size(dem, 2)
-        println("($lat, $lon) out of bounds at ($row, $col) for DEM size $(size(dem))")
-        return
-    end
-    llh = [ deg2rad(lat), deg2rad(lon), dem[row, col] ]
-
-    xyz = llh_to_xyz(llh)
 
     satx = xyz_mid
     satv = vel_mid
-    rngpix = orbitrangetime(xyz,timeorbit, xx, vv, tmid, xyz_mid, vel_mid)
+    tline, rngpix = orbitrangetime(xyz,timeorbit, xx, vv, tmid, xyz_mid, vel_mid)
+    if isnothing(tline) || isnothing(rngpix)
+        println("Failed on burst $idx")
+        return nothing
+    end
 
 
-    satx, satv = intp_orbit(timeorbit, xx, vv, tline, xyz_mid,  vel_mid)
-    dr = xyz - xyz_mid
+    satx, satv = intp_orbit(timeorbit, xx, vv, tline)
+    dr = xyz - satx
     vecr = dr / rngpix
 
     println("los vector (away from satellite):, $vecr")
@@ -151,6 +162,7 @@ function read_orbit_vector(orbtiming_file)
     timeorbit = zeros(num_state_vec)
     xx = Array{Float64, 2}(undef, (3, num_state_vec))
     vv = similar(xx)
+    # Note: we don't use the accel
     for i = 1:num_state_vec
 
         floats = map(num -> parse(Float64, num), split(lines[4 + i]))
@@ -158,7 +170,6 @@ function read_orbit_vector(orbtiming_file)
         xx[:, i] = floats[2:4]
         vv[:, i] = floats[5:7]
     end
-    # Note: we don't use the accel
     return timeorbit, xx, vv
 end
 
@@ -191,11 +202,14 @@ function orbitrangetime(xyz, timeorbit, xx, vv, tline0, satx0, satv0)
         rngpix = norm(dr, 2)
 
         fn = dr' * satv
-        fnprime = norm(satv, 2)^2
+        fnprime = -norm(satv, 2)^2
 
         tline = tline - fn / fnprime
 
         satx, satv = intp_orbit(timeorbit, xx, vv, tline)
+        if isnothing(satx) || isnothing(satv)
+            return nothing, nothing
+        end
     end
 
     dr = xyz - satx
