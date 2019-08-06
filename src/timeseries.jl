@@ -22,15 +22,17 @@ function run_inversion(unw_stack_file::String;
                        constant_velocity::Bool=true, 
                        ignore_geo_file=nothing, 
                        max_temporal_baseline::Union{Int, Nothing}=nothing,
-                       alpha::Float32=0.0f0)
+                       alpha::Float32=0.0f0,
+                       order=1)
 
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
+    stack_flat_shifted_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
 
     if use_stackavg
         println("Averaging stack for solution")
-        vstack = run_stackavg(unw_stack_file, geolist, intlist)
+        vstack = run_stackavg(unw_stack_file, stack_flat_shifted_dset, geolist, intlist)
         is_hdf5 = false
     else
         println("Performing SBAS solution")
@@ -41,7 +43,7 @@ function run_inversion(unw_stack_file::String;
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
         h5open(unw_stack_file) do unw_file
-            unw_stack = unw_file[STACK_FLAT_SHIFTED_DSET]
+            unw_stack = unw_file[stack_flat_shifted_dset]
             vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
                               constant_velocity, alpha)
         end
@@ -60,6 +62,7 @@ function run_inversion(unw_stack_file::String;
         println("Saving deformation to $outfile")
         dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
         @time save_deformation(outfile, deformation, geolist, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
+        save_reference(h5file, unw_stack_file="unw_stack.h5", dset_name=STACK_DSET, stack_flat_shifted_dset)
     end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)

@@ -1,11 +1,6 @@
 """Function to calculate a simple stack averaging solution"""
 
-const STACK_DSET = "stack"
-const STACK_FLAT_DSET = "deramped_stack"
-const STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
-
-
-function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1})
+function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1})
 
     # Figure out which of all the igrams we want to use
     # chosen_igrams = pick_igrams(geolist)
@@ -22,7 +17,7 @@ function run_stackavg(unw_stack_file::String, geolist::Array{Date, 1}, valid_igr
 
     # Load only these 
     # stack_dset = STACK_DSET
-    stack_dset = STACK_FLAT_DSET
+    # stack_dset = STACK_FLAT_DSET
     println("Reading $(length(picked_igram_indices)) igrams out of '$stack_dset' dataset from file ")
     @time unw_stack = load_hdf5_stack(unw_stack_file, stack_dset, picked_igram_indices)
 

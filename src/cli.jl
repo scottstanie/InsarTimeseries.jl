@@ -100,7 +100,8 @@ function main()
                                   constant_velocity=parsed_args["constant-velocity"],
                                   ignore_geo_file=parsed_args["ignore-geo-file"],
                                   max_temporal_baseline=parsed_args["max-temporal-baseline"],
-                                  alpha=parsed_args["alpha"])
+                                  alpha=parsed_args["alpha"],
+                                  order=order)
 end
 
 
