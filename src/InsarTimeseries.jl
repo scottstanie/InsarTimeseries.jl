@@ -28,6 +28,7 @@ include("./stackavg.jl")
 include("./sbas.jl")
 include("./timeseries.jl")
 include("./mask.jl")
+include("./projections.jl")
 include("./los.jl")
 
 

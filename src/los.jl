@@ -11,7 +11,33 @@ const SOL = 299792458
 const ELLP = Ellp(6378137.0, 0.0066943799901499996)
 
 
-function calculate_los(lat, lon, dbfile=nothing)
+"""Calculate the LOS vector in ENU from a lat/lon Array
+Can also take in the pre-computed xyz los vectors
+
+Args:
+    lat_lons (Array[float]): list of (lat, lon) coordinates to compute LOS vecs
+    Optional: xyz_los_vecs (list[tuple[float]]): list of xyz LOS vectors
+    Optional: dbfile to read orbit parameters
+
+"""
+function los_to_enu(lat_lons::Array{<:AbstractFloat, 2}; xyz_los_vecs=nothing, dbfile=nothing)
+    if isnothing(xyz_los_vecs)
+        xyz_los_vecs = calculate_los_xyz(lat_lons, dbfile)
+    end
+    # In projections file:
+    return convert_xyz_latlon_to_enu(reshape(lat_lons, 2, :),
+                                     reshape(xyz_los_vecs, 3, :))
+end
+
+function los_to_enu(lat_lons::Array{<:AbstractFloat, 1}; xyz_los_vecs=nothing, dbfile=nothing)
+    return los_to_enu(reshape(lat_lons, :, 1), xyz_los_vecs=xyz_los_vecs, dbfile=dbfile)
+end
+
+
+#
+# Start of fortran converted functions:
+#
+function calculate_los_xyz(lat::T, lon::T, dbfile::Union{String, Nothing}=nothing) where {T<:AbstractFloat}
     if isnothing(dbfile)
         dbfile_list = Glob.glob("*.db*")
         dbfile = dbfile_list[1]
@@ -23,12 +49,28 @@ function calculate_los(lat, lon, dbfile=nothing)
     timeorbit, xx, vv = read_orbit_vector(param_dict["orbinfo"])
 
     for idx=1:param_dict["azimuthBursts"]
-        vecr = loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
+        idx = 9
+        vecr = compute_burst_vec(xyz, param_dict, idx, timeorbit, xx, vv)
         if !isnothing(vecr)
             return vecr
         end
     end
     return nothing
+end
+
+function calculate_los_xyz(lat_lon::Array{<:AbstractFloat, 1}, dbfile=nothing)
+    lat, lon = lat_lon
+    return calculate_los_xyz(lat, lon, dbfile)
+end
+
+function calculate_los_xyz(lat_lon_vecs::Array{<:AbstractFloat, 2}, dbfile=nothing)
+    num_vecs = size(lat_lon_vecs, 2)
+    xyz_vecs = Array{eltype(lat_lon_vecs)}(undef, (3, ))
+    for i=1:num_vecs
+        lat, lon = lat_lon_vecs[:, i]
+        xyz_vecs[:, i] .= calculate_los_xyz(lat, lon, dbfile)
+    end
+    return xyz_vecs
 end
 
 function _compute_xyz(lat, lon)
@@ -56,7 +98,7 @@ function _compute_xyz(lat, lon)
 end
 
 
-function loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
+function compute_burst_vec(xyz, param_dict, idx, timeorbit, xx, vv)
     dtaz = 1.0 / param_dict["prf"]  # Nazlooks / prf
     tstart = param_dict["azimuthTimeSeconds$idx"]
     tend  = tstart + (param_dict["linesPerBurst"] - 1) * dtaz
@@ -69,8 +111,10 @@ function loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
     rngend = rngstart + (param_dict["samplesPerBurst"]-1)*dmrg
     rngmid = 0.50*(rngstart+rngend)
 
+    # TODO: Does it matter if the lat/lon is within this specific burst?
+    # If we interpolate to the middle it seems to always be the same
+    # 
     # latlons = bounds(tstart, tend, rngstart, rngend, timeorbit, xx, vv)
-
     # if lat > latlons[1] || lat < latlons[2]
     #     print("$lat not within bounds $latlons")
     #     return nothing
@@ -78,21 +122,24 @@ function loop_burst(xyz, param_dict, idx, timeorbit, xx, vv)
 
 
     xyz_mid, vel_mid = intp_orbit(timeorbit, xx, vv, tmid)
+
     println("Satellite midpoint time,position,velocity: $tmid $xyz_mid $vel_mid")
 
-
-    satx = xyz_mid
-    satv = vel_mid
-    tline, rngpix = orbitrangetime(xyz,timeorbit, xx, vv, tmid, xyz_mid, vel_mid)
-    if isnothing(tline) || isnothing(rngpix)
+    tline, range = orbitrangetime(xyz,timeorbit, xx, vv, tmid, xyz_mid, vel_mid)
+    if isnothing(tline) || isnothing(range)
         println("Failed on burst $idx")
         return nothing
     end
 
 
     satx, satv = intp_orbit(timeorbit, xx, vv, tline)
+    # TESTING: see how much the East and North change at beginning/end of orbit
+    # satx = xx[:, end]
+    # satv = vv[:, end]
+
+    @show satx, satv
     dr = xyz - satx
-    vecr = dr / rngpix
+    vecr = dr / range
 
     println("los vector (away from satellite):, $vecr")
     return vecr
@@ -199,7 +246,7 @@ function orbitrangetime(xyz, timeorbit, xx, vv, tline0, satx0, satv0)
         tprev = tline
 
         dr = xyz - satx
-        rngpix = norm(dr, 2)
+        range = norm(dr, 2)
 
         fn = dr' * satv
         fnprime = -norm(satv, 2)^2
@@ -237,7 +284,7 @@ end
 
 
 """orbithermite - hermite polynomial interpolation of orbits"""
-function  orbithermite(x,v,t,time)
+function orbithermite(x,v,t,time)
 # inputs
 #  x - 3x4 matrix of positions at four times
 #  v - 3x4 matrix of velocities
@@ -320,3 +367,12 @@ function  orbithermite(x,v,t,time)
     return xout, vout
 end
 
+
+function _find_db_path(geo_path)
+    extra_path = joinpath(geo_path, "extra_files")
+    if isdir(extra_path) and length(Glob.glob(extra_path * "/*.db*")) > 0
+        return extra_path
+    else
+        return geo_path
+    end
+end
