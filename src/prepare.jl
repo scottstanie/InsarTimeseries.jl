@@ -58,7 +58,7 @@ Note: window is size of the group around ref pixel to avg for reference.
 
 # TODO: check later if worth doing one for HDF5Dataset, one for Array
 function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; 
-                     window::Int=3, chunk_layers=100)
+                     window::Int=3)
     half_win = div(window, 2)
     winsize = (2half_win + 1, 2half_win + 1)  # Make sure it is odd sized
     patch = Array{Float32, 2}(undef, winsize)
@@ -70,11 +70,9 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
     @show stack_in
     @show stack_out
 
-    # Read chunks in at a time to limit HDF5 reading latency
-
-    Threads.@sync for k = 1:nlayers
+    @inbounds for k = 1:nlayers
         layer .= view(stack_in, :, :, k)
-        Threads.@spawn layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
+        layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
         stack_out[:, :, k] .= layer_out
 
         if k % 100 == 0
@@ -132,55 +130,23 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
         # Pre allocate buffers
         layer = similar(stack_in[:, :, 1][:, :, 1])
         layer_buf = similar(layer)
-        # layer_out = similar(layer)
+        layer_out = similar(layer)
         mask = similar(Bool.(mask_dset[ :, :, 1][:, :, 1]))
         numel = (order == 1) ? 3 : 6
         A = ones((length(layer), numel))
         coeffs = ones(numel)
         z_fit = similar(layer)
 
-        chunk_layers = Threads.nthreads()
-        chunk =  Array{Float32, 3}(undef, (nrows, ncols, chunk_layers))
-        chunk_out =  similar(chunk)
-        mask_chunk =  Array{Bool, 3}(undef, (nrows, ncols, chunk_layers))
-        k = 1
-        while k < size(stack_in, 3)
-            endk = min(k + chunk_layers - 1, lastindex(stack_in, 3))
-            endc = endk - k + 1
-            println("Shiffting layers $k : $endk")
-            chunk[:, :, 1:endc] .= stack_in[:, :, k:endk]
-            mask_chunk[:, :, 1:endc] .= Bool.(mask_dset[:, :, k:endk])
+        @inbounds for k = 1:size(stack_in, 3)
+            layer .= stack_in[ :, :, k][:, :, 1]
+            mask .= Bool.(mask_dset[:, :, k][:, :, 1])
+            layer_out .= remove_ramp(layer, order, mask, buf=layer_buf, 
+                                     A=A, coeffs=coeffs, z_fit=z_fit)
+            
+            stack_out[:, :, k] .= layer_out
 
-            Threads.@threads for jdx in 1:endc
-                layer = chunk[ :, :, jdx]
-                mask_layer = mask_chunk[:, :, jdx]
-                chunk_out[:, :, jdx] .= remove_ramp(layer, order, mask_layer)
-
-            end
-
-            stack_out[:, :, k:endk] = chunk_out[:, :, 1:endc]
-            println("sum of cunk $k is $(sum(chunk_out))")
-            println("sum of stack_out $k is $(sum(stack_out[:, :, k:endk]))")
-
-        # for k = 1:size(stack_in, 3)
-            # Threads.@spawn remove_ramp(stack_out, k, layer, order, mask)
-            # layer .= stack_in[ :, :, k][:, :, 1]
-            # mask .= Bool.(mask_dset[:, :, k][:, :, 1])
-            # @show size(layer), size(mask), size(stack_out[:,:,k])
-            # Threads.@spawn remove_ramp(stack_out, k, layer, order, mask, buf=layer_buf, 
-            #                                        A=A, coeffs=coeffs, z_fit=z_fit)
-            #
-            # wait(layer_out)
-            # l = fetch(layer_out)
-            # println("sum of layer $k is $(sum(l))")
-            # stack_out[:, :, k] .= l
-
-            k += chunk_layers
-            if (k-1) % (1*chunk_layers) == 0
-                println("Finished with $(k-1) layers")
-            end
-            if k > 100
-                break
+            if k % 100 == 0
+                println("Finished with $k layers")
             end
         end
 
