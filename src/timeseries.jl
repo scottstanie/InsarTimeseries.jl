@@ -62,7 +62,7 @@ function run_inversion(unw_stack_file::String;
         println("Saving deformation to $outfile")
         dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
         @time save_deformation(outfile, deformation, geolist, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
-        save_reference(h5file, unw_stack_file="unw_stack.h5", dset_name=STACK_DSET, stack_flat_shifted_dset)
+        save_reference(outfile, unw_stack_file, STACK_DSET, stack_flat_shifted_dset)
     end
     # Now reshape all outputs that should be in stack form
     return (geolist, phi_arr, deformation)

@@ -73,7 +73,7 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
     @inbounds for k = 1:nlayers
         layer .= view(stack_in, :, :, k)
         layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
-        stack_out[:, :, k] .= layer_out
+        stack_out[:, :, k] = layer_out
 
         if k % 100 == 0
             println("Finished with $k layers")
@@ -100,7 +100,7 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
         elseif order == 2
             stack_flat_dset = STACK_FLAT_DSET2
         end
-        println("Writing flat unws to $stack_flat_dset")
+        println("Writing deramped unws to $stack_flat_dset")
     end
 
     # If we already have this dataset made, skip the function
@@ -123,9 +123,12 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
             datatype(Float32),
             dataspace(size(stack_in)),
         )
+    end
+
+    h5open(unw_stack_file, "cw") do f
+        stack_in = f[STACK_DSET]
         stack_out = f[stack_flat_dset]
         mask_dset = fmask[IGRAM_MASK_DSET]
-    # end
 
         # Pre allocate buffers
         layer = similar(stack_in[:, :, 1][:, :, 1])
@@ -143,9 +146,9 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
             layer_out .= remove_ramp(layer, order, mask, buf=layer_buf, 
                                      A=A, coeffs=coeffs, z_fit=z_fit)
             
-            stack_out[:, :, k] .= layer_out
+            stack_out[:, :, k] = layer_out
 
-            if k % 100 == 0
+            if k % 20 == 0
                 println("Finished with $k layers")
             end
         end
