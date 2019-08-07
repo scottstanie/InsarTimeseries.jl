@@ -370,7 +370,7 @@ end
 
 function _find_db_path(geo_path)
     extra_path = joinpath(geo_path, "extra_files")
-    if isdir(extra_path) and length(Glob.glob(extra_path * "/*.db*")) > 0
+    if isdir(extra_path) && length(Glob.glob(extra_path * "/*.db*")) > 0
         return extra_path
     else
         return geo_path

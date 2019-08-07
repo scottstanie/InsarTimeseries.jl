@@ -4,9 +4,7 @@ Testing docstring
 """
 module InsarTimeseries
 
-using Dates
-
-# Include sario here so it is available to all
+# Include apertools Python modeules here to make available to all
 using PyCall
 const sario = PyNULL()
 const gps = PyNULL()
@@ -21,7 +19,7 @@ end
 const Igram = Tuple{Date, Date}
 
 
-include("./utils.jl")
+include("./common.jl")
 include("./loading.jl")
 include("./prepare.jl")
 include("./stackavg.jl")
@@ -35,7 +33,7 @@ include("./los.jl")
 # TODO: figure out which we care to export
 # export load,
 #     run_inversion,
-#     get_file_ext
+#     ...
 
 end # module
 

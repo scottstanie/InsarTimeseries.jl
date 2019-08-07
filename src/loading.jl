@@ -1,7 +1,6 @@
 import Glob
 using HDF5
 
-const DATE_FMT = "yyyymmdd"
 const SENTINEL_EXTS = [".geo", ".cc", ".int", ".amp", ".unw", ".unwflat"]
 const COMPLEX_EXTS = [".int", ".slc", ".geo", ".cc", ".unw", ".unwflat", ".mlc", ".grd"]
 const REAL_EXTS = [".amp", ".cor", ".mlc", ".grd"]
@@ -12,26 +11,6 @@ const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 
 const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
-
-# dataset names for general 3D stacks
-const STACK_DSET = "stack"
-const STACK_MEAN_DSET = "stack_mean"
-const STACK_FLAT_DSET1 = "stack_deramped_1"
-const STACK_FLAT_DSET2 = "stack_deramped_2"
-const STACK_FLAT_SHIFTED_DSET1 = "stack_deramped_1_shifted"
-const STACK_FLAT_SHIFTED_DSET2 = "stack_deramped_2_shifted"
-
-# Mask file datasets
-const GEO_MASK_DSET = "geo"
-const IGRAM_MASK_DSET = "igram"
-const IGRAM_MASK_SUM_DSET = "igram_sum"
-
-const DEM_RSC_DSET = "dem_rsc"
-const GEOLIST_DSET = "geo_dates"
-const INTLIST_DSET = "int_dates"
-
-const REFERENCE_ATTR = "reference"
-const REFERENCE_STATION_ATTR = "reference_station"
 
 
 """Examines file type for real/complex and runs appropriate load

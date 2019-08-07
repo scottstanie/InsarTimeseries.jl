@@ -1,6 +1,30 @@
 import Base.view
 import Base.lastindex
+using Dates
 using HDF5
+
+const DATE_FMT = "yyyymmdd"
+
+# dataset names for general 3D stacks
+const STACK_DSET = "stack"
+const STACK_MEAN_DSET = "stack_mean"
+const STACK_FLAT_DSET1 = "stack_deramped_1"
+const STACK_FLAT_DSET2 = "stack_deramped_2"
+const STACK_FLAT_SHIFTED_DSET1 = "stack_deramped_1_shifted"
+const STACK_FLAT_SHIFTED_DSET2 = "stack_deramped_2_shifted"
+
+# Mask file datasets
+const GEO_MASK_DSET = "geo"
+const IGRAM_MASK_DSET = "igram"
+const IGRAM_MASK_SUM_DSET = "igram_sum"
+
+const DEM_RSC_DSET = "dem_rsc"
+const GEOLIST_DSET = "geo_dates"
+const INTLIST_DSET = "int_dates"
+
+const REFERENCE_ATTR = "reference"
+const REFERENCE_STATION_ATTR = "reference_station"
+
 
 temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
 temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]
