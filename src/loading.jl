@@ -10,7 +10,7 @@ const ELEVATION_EXTS = [".dem", ".hgt"]
 const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 
-const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
+const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
 
 
 """Examines file type for real/complex and runs appropriate load
@@ -56,6 +56,36 @@ end
 
 # # Make a shorter alias for load_file
 # load = load_file
+#
+"""Loads a digital elevation map from either .hgt file or .dem
+
+.hgt is the NASA SRTM files given. Documentation on format here:
+https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
+Key point: Big-endian 2 byte (16-bit) integers
+
+.dem is format used by Zebker geo-coded and ROI-PAC SAR software
+Only difference is data is stored little-endian (like other SAR data)
+
+Note on both formats: gaps in coverage are given by INT_MIN -32768,
+so either manually set data(data == np.min(data)) = 0,
+or something like 
+    data = clamp(data, -10000, Inf)
+"""
+function load_elevation(filename)
+    ext = splitext(filename)[2]
+    data_type = Int16 
+
+    if ext == ".dem"
+        dem_rsc = sario.load(filename * ".rsc")
+        rows, cols = (dem_rsc["file_length"], dem_rsc["width"])
+        data = Array{data_type, 2}(undef, (cols, rows))
+        read!(filename, data)
+        return transpose(data)
+    else
+        # swap_bytes = (ext == ".hgt")
+        throw("$ext not implemented")
+    end
+end
 
 """Extracts the file extension, including the "." (e.g.: .slc)"""
 get_file_ext(filename::String) = splitext(filename)[end]
