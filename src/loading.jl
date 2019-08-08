@@ -26,27 +26,13 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
     if ext in LOAD_IN_PYTHON
         return sario.load(filename)
     end
+
     if ext in ELEVATION_EXTS
         return load_elevation(filename)
     end
 
-
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    rsc_data = nothing
-    if !isnothing(rsc_file)
-        rsc_data = sario.load(rsc_file)
-    end
-
-    if ext in SENTINEL_EXTS
-        if isnothing(rsc_file)
-            rsc_file = sario.find_rsc_file(filename)
-        end
-        rsc_data = sario.load(rsc_file)
-    end
-
-    if !isnothing(rsc_data)
-        rsc_data = convert(Dict{String, Any}, rsc_data)
-    end
+    rsc_data = _get_rsc_data(filename, rsc_file)
 
     if ext in STACKED_FILES
         return load_stacked_img(filename, rsc_data)
@@ -56,6 +42,52 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
     load_complex(filename, rsc_data)
 
 end
+
+function _get_rsc_data(filename, rsc_file)
+    ext = get_file_ext(filename)
+    rsc_data = nothing
+    if !isnothing(rsc_file)
+        rsc_data = sario.load(rsc_file)
+    elseif ext in SENTINEL_EXTS || ext in ELEVATION_EXTS
+        rsc_file = sario.find_rsc_file(filename)
+        rsc_data = sario.load(rsc_file)
+    end
+
+    if !isnothing(rsc_data)
+        rsc_data = convert(Dict{String, Any}, rsc_data)
+    end
+    return rsc_data
+end
+
+"""For single element reading in binary files, seek to the right row, col"""
+_get_seek_position(row, col, num_cols, data_type) = sizeof(data_type) * ((col - 1) + (num_cols * (row - 1)) )
+
+function _get_data_type(filename)
+    ext = get_file_ext(filename)
+    if ext in ELEVATION_EXTS
+        return Int16
+    elseif ext in STACKED_FILES
+        return Float32
+    else
+        return ComplexF32
+    end
+end
+
+"""Load one element of a file on disk (avoid reading in all of huge file"""
+function load(filename::String, row::Int, col::Int; rsc_file::Union{String, Nothing}=nothing)
+    data_type = _get_data_type(filename)
+
+    rsc_data = _get_rsc_data(filename, rsc_file)
+    num_cols = rsc_data["width"]
+
+    seek_pos = _get_seek_position(row, col, num_cols, data_type)
+    
+    open(filename) do f
+        seek(f, seek_pos)
+        return read(f, data_type)
+    end
+end
+
 
 # # Make a shorter alias for load_file
 # load = load_file
@@ -75,7 +107,7 @@ or something like
     data = clamp(data, -10000, Inf)
 """
 function load_elevation(filename)
-    ext = splitext(filename)[2]
+    ext = get_file_ext(filename)
     data_type = Int16 
 
     if ext == ".dem"
