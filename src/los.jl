@@ -82,7 +82,6 @@ function _compute_xyz(lat, lon)
     firstlon, firstlat = dem_rsc["x_first"], dem_rsc["y_first"]
     deltalon, deltalat = dem_rsc["x_step"], dem_rsc["y_step"]
 
-
     col = round(Int, (lon-firstlon)/deltalon)
     row = round(Int, (lat-firstlat)/deltalat)
     

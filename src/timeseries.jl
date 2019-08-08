@@ -51,7 +51,6 @@ function run_inversion(unw_stack_file::String;
     end
 
 
-    # TODO: make these hdf5 compatible to avoid the mem overhead 
     timediffs = day_diffs(geolist)
     println("Integrating velocities to phases")
     @time phi_arr = integrate_velocities(vstack, timediffs)

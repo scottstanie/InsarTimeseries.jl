@@ -25,6 +25,8 @@ const INTLIST_DSET = "int_dates"
 const REFERENCE_ATTR = "reference"
 const REFERENCE_STATION_ATTR = "reference_station"
 
+# Type alias for commonly used compositite type
+const Igram = Tuple{Date, Date}
 
 temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
 temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]

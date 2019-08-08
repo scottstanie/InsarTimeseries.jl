@@ -15,10 +15,6 @@ function __init__()
 end
 
 
-# Type alias for commonly used compositite type
-const Igram = Tuple{Date, Date}
-
-
 include("./common.jl")
 include("./loading.jl")
 include("./prepare.jl")
