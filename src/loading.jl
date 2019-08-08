@@ -79,7 +79,13 @@ function load_elevation(filename)
         dem_rsc = sario.load(filename * ".rsc")
         rows, cols = (dem_rsc["file_length"], dem_rsc["width"])
         data = Array{data_type, 2}(undef, (cols, rows))
+
         read!(filename, data)
+
+        # TODO: Verify that the min real value will be above -1000
+        min_valid = -10000
+        # Set NaN values to 0
+        @. data[data < min_valid] = 0
         return transpose(data)
     else
         # swap_bytes = (ext == ".hgt")
