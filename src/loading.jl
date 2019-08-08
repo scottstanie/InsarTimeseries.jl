@@ -43,8 +43,30 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
 
 end
 
+"""Load one element of a file on disk (avoid reading in all of huge file"""
+function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String, Nothing}=nothing)
+    data_type = _get_data_type(filename)
+
+    rsc_data = _get_rsc_data(filename, rsc_file)
+    num_rows, num_cols = rsc_data["file_length"], rsc_data["width"]
+
+    row, col = row_col
+    if row > num_rows || col > num_cols
+        throw(BoundsError("$row_col out of bounds for $filename of size ($num_rows, $num_cols)"))
+    end
+    seek_pos = _get_seek_position(row, col, num_cols, data_type)
+    
+    open(filename) do f
+        seek(f, seek_pos)
+        # This read syntax loads single `data_type`
+        return read(f, data_type)
+    end
+end
+
+
 function _get_rsc_data(filename, rsc_file)
     ext = get_file_ext(filename)
+
     rsc_data = nothing
     if !isnothing(rsc_file)
         rsc_data = sario.load(rsc_file)
@@ -73,25 +95,7 @@ function _get_data_type(filename)
     end
 end
 
-"""Load one element of a file on disk (avoid reading in all of huge file"""
-function load(filename::String, row::Int, col::Int; rsc_file::Union{String, Nothing}=nothing)
-    data_type = _get_data_type(filename)
 
-    rsc_data = _get_rsc_data(filename, rsc_file)
-    num_cols = rsc_data["width"]
-
-    seek_pos = _get_seek_position(row, col, num_cols, data_type)
-    
-    open(filename) do f
-        seek(f, seek_pos)
-        return read(f, data_type)
-    end
-end
-
-
-# # Make a shorter alias for load_file
-# load = load_file
-#
 """Loads a digital elevation map from either .hgt file or .dem
 
 .hgt is the NASA SRTM files given. Documentation on format here:
