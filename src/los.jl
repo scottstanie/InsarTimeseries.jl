@@ -77,22 +77,19 @@ function _compute_xyz(lat, lon)
     # TODO: do i wanna get rid of this "params" file?
     dem_file, dem_rsc_file = readlines("params")
     dem_rsc = load(dem_rsc_file)
-    dem = load(dem_file)
 
     firstlon, firstlat = dem_rsc["x_first"], dem_rsc["y_first"]
     deltalon, deltalat = dem_rsc["x_step"], dem_rsc["y_step"]
 
     col = round(Int, (lon-firstlon)/deltalon)
     row = round(Int, (lat-firstlat)/deltalat)
-    
-    if row < 1 || col < 1 || row > size(dem, 1) || col > size(dem, 2)
-        println("($lat, $lon) out of bounds at ($row, $col) for DEM size $(size(dem))")
-        return
-    else
-        println("($lat, $lon) is at ($row, $col)")
-    end
 
-    llh = [ deg2rad(lat), deg2rad(lon), dem[row, col] ]
+    # Load just the 1 value from the DEM
+    dem_height = load(dem_file, (row, col))
+
+    println("($lat, $lon) is at ($row, $col)")
+
+    llh = [ deg2rad(lat), deg2rad(lon), dem_height ]
     xyz = llh_to_xyz(llh)
 end
 

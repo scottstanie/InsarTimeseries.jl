@@ -44,6 +44,7 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
 end
 
 """Load one element of a file on disk (avoid reading in all of huge file"""
+# TODO: Load a chunk of a file now?
 function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String, Nothing}=nothing)
     data_type = _get_data_type(filename)
 
