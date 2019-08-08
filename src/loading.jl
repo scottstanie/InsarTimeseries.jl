@@ -26,6 +26,9 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
     if ext in LOAD_IN_PYTHON
         return sario.load(filename)
     end
+    if ext in ELEVATION_EXTS
+        return load_elevation(filename)
+    end
 
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
@@ -76,16 +79,17 @@ function load_elevation(filename)
     data_type = Int16 
 
     if ext == ".dem"
-        dem_rsc = sario.load(filename * ".rsc")
+        rsc_file = sario.find_rsc_file(filename)
+        dem_rsc = sario.load(rsc_file)
         rows, cols = (dem_rsc["file_length"], dem_rsc["width"])
         data = Array{data_type, 2}(undef, (cols, rows))
 
         read!(filename, data)
 
-        # TODO: Verify that the min real value will be above -1000
-        min_valid = -10000
-        # Set NaN values to 0
-        @. data[data < min_valid] = 0
+        # # TODO: Verify that the min real value will be above -1000
+        # min_valid = -10000
+        # # Set NaN values to 0
+        # @. data[data < min_valid] = 0
         return transpose(data)
     else
         # swap_bytes = (ext == ".hgt")

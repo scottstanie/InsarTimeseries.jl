@@ -76,8 +76,8 @@ end
 function _compute_xyz(lat, lon)
     # TODO: do i wanna get rid of this "params" file?
     dem_file, dem_rsc_file = readlines("params")
-    dem_rsc = sario.load(dem_rsc_file)
-    dem = sario.load(dem_file)
+    dem_rsc = load(dem_rsc_file)
+    dem = load(dem_file)
 
     firstlon, firstlat = dem_rsc["x_first"], dem_rsc["y_first"]
     deltalon, deltalat = dem_rsc["x_step"], dem_rsc["y_step"]
