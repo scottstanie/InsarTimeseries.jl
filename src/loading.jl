@@ -52,7 +52,7 @@ function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String
     num_rows, num_cols = rsc_data["file_length"], rsc_data["width"]
 
     row, col = row_col
-    if row > num_rows || col > num_cols
+    if row < 1 || col < 1 || row > num_rows || col > num_cols
         throw(BoundsError("$row_col out of bounds for $filename of size ($num_rows, $num_cols)"))
     end
     seek_pos = _get_seek_position(row, col, num_cols, data_type)
