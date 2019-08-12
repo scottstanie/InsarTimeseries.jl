@@ -10,7 +10,7 @@ const ELEVATION_EXTS = [".dem", ".hgt"]
 const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 
-const LOAD_IN_PYTHON = vcat(ELEVATION_EXTS, IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
+const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
 
 
 """Examines file type for real/complex and runs appropriate load
@@ -27,23 +27,12 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
         return sario.load(filename)
     end
 
+    if ext in ELEVATION_EXTS
+        return load_elevation(filename)
+    end
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    rsc_data = nothing
-    if !isnothing(rsc_file)
-        rsc_data = sario.load(rsc_file)
-    end
-
-    if ext in SENTINEL_EXTS
-        if isnothing(rsc_file)
-            rsc_file = sario.find_rsc_file(filename)
-        end
-        rsc_data = sario.load(rsc_file)
-    end
-
-    if !isnothing(rsc_data)
-        rsc_data = convert(Dict{String, Any}, rsc_data)
-    end
+    rsc_data = _get_rsc_data(filename, rsc_file)
 
     if ext in STACKED_FILES
         return load_stacked_img(filename, rsc_data)
@@ -54,8 +43,96 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
 
 end
 
-# # Make a shorter alias for load_file
-# load = load_file
+"""Load one element of a file on disk (avoid reading in all of huge file"""
+# TODO: Load a chunk of a file now?
+function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String, Nothing}=nothing)
+    data_type = _get_data_type(filename)
+
+    rsc_data = _get_rsc_data(filename, rsc_file)
+    num_rows, num_cols = rsc_data["file_length"], rsc_data["width"]
+
+    row, col = row_col
+    if row < 1 || col < 1 || row > num_rows || col > num_cols
+        throw(BoundsError("$row_col out of bounds for $filename of size ($num_rows, $num_cols)"))
+    end
+    seek_pos = _get_seek_position(row, col, num_cols, data_type)
+    
+    open(filename) do f
+        seek(f, seek_pos)
+        # This read syntax loads single `data_type`
+        return read(f, data_type)
+    end
+end
+
+
+function _get_rsc_data(filename, rsc_file)
+    ext = get_file_ext(filename)
+
+    rsc_data = nothing
+    if !isnothing(rsc_file)
+        rsc_data = sario.load(rsc_file)
+    elseif ext in SENTINEL_EXTS || ext in ELEVATION_EXTS
+        rsc_file = sario.find_rsc_file(filename)
+        rsc_data = sario.load(rsc_file)
+    end
+
+    if !isnothing(rsc_data)
+        rsc_data = convert(Dict{String, Any}, rsc_data)
+    end
+    return rsc_data
+end
+
+"""For single element reading in binary files, seek to the right row, col"""
+_get_seek_position(row, col, num_cols, data_type) = sizeof(data_type) * ((col - 1) + (num_cols * (row - 1)) )
+
+function _get_data_type(filename)
+    ext = get_file_ext(filename)
+    if ext in ELEVATION_EXTS
+        return Int16
+    elseif ext in STACKED_FILES
+        return Float32
+    else
+        return ComplexF32
+    end
+end
+
+
+"""Loads a digital elevation map from either .hgt file or .dem
+
+.hgt is the NASA SRTM files given. Documentation on format here:
+https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
+Key point: Big-endian 2 byte (16-bit) integers
+
+.dem is format used by Zebker geo-coded and ROI-PAC SAR software
+Only difference is data is stored little-endian (like other SAR data)
+
+Note on both formats: gaps in coverage are given by INT_MIN -32768,
+so either manually set data(data == np.min(data)) = 0,
+or something like 
+    data = clamp(data, -10000, Inf)
+"""
+function load_elevation(filename)
+    ext = get_file_ext(filename)
+    data_type = Int16 
+
+    if ext == ".dem"
+        rsc_file = sario.find_rsc_file(filename)
+        dem_rsc = sario.load(rsc_file)
+        rows, cols = (dem_rsc["file_length"], dem_rsc["width"])
+        data = Array{data_type, 2}(undef, (cols, rows))
+
+        read!(filename, data)
+
+        # # TODO: Verify that the min real value will be above -1000
+        # min_valid = -10000
+        # # Set NaN values to 0
+        # @. data[data < min_valid] = 0
+        return transpose(data)
+    else
+        # swap_bytes = (ext == ".hgt")
+        throw("$ext not implemented")
+    end
+end
 
 """Extracts the file extension, including the "." (e.g.: .slc)"""
 get_file_ext(filename::String) = splitext(filename)[end]
