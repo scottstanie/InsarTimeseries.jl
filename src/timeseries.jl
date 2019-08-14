@@ -23,6 +23,7 @@ function run_inversion(unw_stack_file::String;
                        ignore_geo_file=nothing, 
                        max_temporal_baseline::Union{Int, Nothing}=nothing,
                        alpha::Float32=0.0f0,
+                       L1::Bool=false,
                        order=1)
 
     # the valid igram indices is out of all layers in the stack and mask files 
@@ -45,7 +46,7 @@ function run_inversion(unw_stack_file::String;
         h5open(unw_stack_file) do unw_file
             unw_stack = unw_file[stack_flat_shifted_dset]
             vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
-                              constant_velocity, alpha)
+                              constant_velocity, alpha, L1)
         end
         is_hdf5 = true
     end
@@ -124,4 +125,22 @@ function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::
     phi_arr = cumsum(coalesce.(phi_diffs, 0))
     pushfirst!(phi_arr, 0)
     return phi_arr
+end
+
+function save_line_fit(unreg_fname)
+   geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
+   geolist_nums = [( g - geolist[1]).value for g in geolist]
+   f = h5open(unreg_fname)
+   dset = f["stack"]
+   fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
+   fout = h5open(fname_out, "w")
+   d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
+   dset_out = fout["stack"]
+   for i in 1:size(dset, 1)
+       for j in 1:size(dset, 2)
+           p = polyfit(geolist_nums, reshape(dset[i, j, :], :), 1)
+           dset_out[i, j] = p(geolist_nums[end])
+       end
+   end
+   close(fout); close(f)
 end

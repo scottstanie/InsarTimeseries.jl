@@ -192,7 +192,7 @@ function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_ds
     # Read ref. unfo from unw file, save what was used to deformation result file
     reference = h5readattr(unw_stack_file, stack_flat_shifted_dset)[REFERENCE_ATTR]
     h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR => reference))
-    reference_station = h5readattr(unw_stack_file, stack_flat_shifted_dset)[REFERENCE_STATION_ATTR]
+    reference_station = get(h5readattr(unw_stack_file, stack_flat_shifted_dset), REFERENCE_STATION_ATTR, "")
     h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR => reference_station))
 end
 

@@ -41,6 +41,10 @@ function parse_commandline()
             arg_type = Float32
             range_tester = x-> (x>=0.0f0)
             help = "(SBAS) Strength of Tikhonov regularization"
+        "--L1"
+            default = false
+            arg_type = Bool
+            help = "Use L1 norm for SBAS cost instead of L2 least squares"
         "--ref-station"
             arg_type = String
             help = "Name of a gps reference station to shift the stack to."*
@@ -101,6 +105,7 @@ function main()
                                   ignore_geo_file=parsed_args["ignore-geo-file"],
                                   max_temporal_baseline=parsed_args["max-temporal-baseline"],
                                   alpha=parsed_args["alpha"],
+                                  L1=parsed_args["L1"],
                                   order=order)
 end
 

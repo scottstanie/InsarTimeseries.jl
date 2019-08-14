@@ -1,11 +1,14 @@
 using Printf
+using Convex
+using ECOS
 
 function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
                   geolist,
                   intlist, 
                   valid_igram_indices, 
                   constant_velocity::Bool, 
-                  alpha::Float32) 
+                  alpha::Float32,
+                  L1::Bool=false) 
 
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
@@ -28,20 +31,18 @@ function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}},
         extra_zeros = 0
     end
 
-    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros)
+    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros, L1=L1)
     return vstack
 end
 
 """Solve the problem Bv = d for each pixel in the stack"""
 function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{Float32, 2}, valid_igram_indices;
-                     extra_zeros=0)
+                     extra_zeros=0, L1=true)
     nrows, ncols, nlayers = size(unw_stack)
     total_pixels = nrows*ncols*nlayers
 
     num_timediffs = size(B, 2)
 
-    # Speeds up inversion to precompute pseudo inverse
-    pB = pinv(B)
 
     # Pixel looping method:
     # TODO: maybe this should be an HDF5Dataset too?
@@ -53,6 +54,13 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     step = 1000
     row = 1
     col = 1
+
+    # Speeds up inversion to precompute pseudo inverse for L2 least squares case
+    if L1
+        v = Variable(size(B, 2))
+    else
+        pB = pinv(B)
+    end
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
@@ -68,13 +76,22 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
             # TODO: check that reading all depth, then subselecting is actually better than
             # For-looping and reading one layer at a time
-            println("Reading new chunk")
+            println("Reading new $row_c x $col_c chunk: ($row:$end_row, $col:$end_col)")
             @time chunk[1:row_c, 1:col_c, :] .= unw_stack[row:end_row, col:end_col, :][:, :, valid_igram_indices]
 
-            for j in 1:col_c
-                for i in 1:row_c
-                    vstack[row+i-1, col+j-1, :] .= invert_pixel(pB, chunk[i, j, :], extra_zeros)
-                    log_count!(pix_count, total_pixels, nlayers, every=100_000)
+            @inbounds for j in 1:col_c
+                @inbounds for i in 1:row_c
+                    # print("solving $i, $j")
+                    if L1
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
+                    else
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
+                    end
+                    pix_count += 1
+                    log_count(pix_count, total_pixels, nlayers, every=10000)
+                    # if pix_count > 100000
+                        # return vstack
+                    # end
                 end
             end
             row += step
@@ -96,7 +113,7 @@ end
 
 # In case we make each pixel inversion more complicated (extra penalty functions, etc.)
 # TODO: does a Val type for the case with no extra zeros help here?
-function invert_pixel(pB, pixel::Array{Float32, 1}, extra_zeros=0)
+function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zeros=0)
     if extra_zeros == 0
         return pB * pixel
     else
@@ -104,11 +121,24 @@ function invert_pixel(pB, pixel::Array{Float32, 1}, extra_zeros=0)
     end
 end
 
-function log_count!(pix_count, total_pixels, nlayers; every=100_000)
-    pix_count += 1
+function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.Variable)
+    # Note: these are defined here to allow multithreading and not reuse across threads
+    solver = ECOSSolver(verbose=0)
+    # v = Variable(size(B, 2))
+
+    problem = minimize(norm(B*v - pixel, 1))
+    solve!(problem, solver)
+    if length(v.value) > 1
+        Float32.(reshape(v.value, :))
+    else
+        Float32.([v.value])
+    end
+end
+
+function log_count(pix_count, total_pixels, nlayers; every=100_000)
     if (pix_count % every) == 0
         pct_done = 100*pix_count*nlayers/total_pixels
-        @printf("Processed %.3g pixels out of %.3g ( %.2f %% done)\n", 
+        @printf("Processed %.3g pixels out of %.3g (%.2f%% done)\n", 
                 pix_count*nlayers, total_pixels, pct_done)
     end
 end
