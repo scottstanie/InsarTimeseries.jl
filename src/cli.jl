@@ -15,12 +15,12 @@ function parse_commandline()
 
     @add_arg_table s begin
         "--stack-average", "-s"
+            action = :store_true
             help = "(Average a subset of independent igrams to get a linear solution."*
                    " If not, SBAS is used." 
-            action = :store_true
         "--constant-velocity", "-c"
-            help = "(SBAS) Use constant velocity (linear solution) to invert"
             action = :store_true
+            help = "(SBAS) Use constant velocity (linear solution) to invert"
         "--outfile", "-o"
             default = "deformation.h5"
             help = "Name output .h5 file to save solution stack"
@@ -42,8 +42,7 @@ function parse_commandline()
             range_tester = x-> (x>=0.0f0)
             help = "(SBAS) Strength of Tikhonov regularization"
         "--L1"
-            default = false
-            arg_type = Bool
+            action = :store_true
             help = "Use L1 norm for SBAS cost instead of L2 least squares"
         "--ref-station"
             arg_type = String

@@ -64,6 +64,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
+    clear_mem_every = 50000  # TODO: figure out what causes Convex.jl to grow memory and slow down
     while col <= ncols
         while row <= nrows
             end_row = min(row + step - 1, nrows)
@@ -79,6 +80,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             println("Reading new $row_c x $col_c chunk: ($row:$end_row, $col:$end_col)")
             @time chunk[1:row_c, 1:col_c, :] .= unw_stack[row:end_row, col:end_col, :][:, :, valid_igram_indices]
 
+            last_time = time()
             @inbounds for j in 1:col_c
                 @inbounds for i in 1:row_c
                     # print("solving $i, $j")
@@ -88,10 +90,12 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
                     pix_count += 1
-                    log_count(pix_count, total_pixels, nlayers, every=10000)
-                    # if pix_count > 100000
-                        # return vstack
-                    # end
+                    last_time = log_count(pix_count, total_pixels, nlayers, every=10000, last_time=last_time)
+                    if pix_count % clear_mem_every == 0
+                        # println("CLEARING MEMORY")
+                        Convex.clearmemory()
+                        v = Variable(size(B, 2))
+                    end
                 end
             end
             row += step
@@ -101,13 +105,6 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
         col += step
     end
 
-    # OLd way where we could load all in memory:
-    # for j in 1:ncols
-    #     for i in 1:nrows
-    #         # vstack[i, j, :] .= invert_column(unw_stack, qB, i, j)
-    #         vstack[i, j, :] .= pB * unw_stack[i, j, :][1, 1, :]
-    #     end
-    # end
     return vstack
 end
 
@@ -135,11 +132,21 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     end
 end
 
-function log_count(pix_count, total_pixels, nlayers; every=100_000)
+function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
     if (pix_count % every) == 0
         pct_done = 100*pix_count*nlayers/total_pixels
-        @printf("Processed %.3g pixels out of %.3g (%.2f%% done)\n", 
+        @printf("Processed %.3g pixels out of %.3g (%.2f%% done).", 
                 pix_count*nlayers, total_pixels, pct_done)
+        if !isnothing(last_time)
+            t = time()
+            elapsed = t - last_time
+            @printf(" %.2f seconds elapsed\n", elapsed)
+            return t
+        else
+            @printf("\n")
+        end
+    else
+        return last_time
     end
 end
 
