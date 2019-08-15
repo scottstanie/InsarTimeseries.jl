@@ -29,11 +29,12 @@ function run_inversion(unw_stack_file::String;
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
-    stack_flat_shifted_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
+    # stack_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
+    stack_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
 
     if use_stackavg
         println("Averaging stack for solution")
-        vstack = run_stackavg(unw_stack_file, stack_flat_shifted_dset, geolist, intlist)
+        vstack = run_stackavg(unw_stack_file, stack_dset, geolist, intlist)
         is_hdf5 = false
     else
         println("Performing SBAS solution")
@@ -128,19 +129,19 @@ function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::
 end
 
 function save_line_fit(unreg_fname)
-   geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
-   geolist_nums = [( g - geolist[1]).value for g in geolist]
-   f = h5open(unreg_fname)
-   dset = f["stack"]
-   fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
-   fout = h5open(fname_out, "w")
-   d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
-   dset_out = fout["stack"]
-   for i in 1:size(dset, 1)
-       for j in 1:size(dset, 2)
-           p = polyfit(geolist_nums, reshape(dset[i, j, :], :), 1)
-           dset_out[i, j] = p(geolist_nums[end])
-       end
-   end
-   close(fout); close(f)
+    geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
+    geolist_nums = [( g - geolist[1]).value for g in geolist]
+    f = h5open(unreg_fname)
+    dset = f["stack"]
+    fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
+    fout = h5open(fname_out, "w")
+    d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
+    dset_out = fout["stack"]
+    for i in 1:size(dset, 1)
+        for j in 1:size(dset, 2)
+            p = polyfit(geolist_nums, reshape(dset[i, j, :], :), 1)
+            dset_out[i, j] = p(geolist_nums[end])
+        end
+    end
+    close(fout); close(f)
 end
