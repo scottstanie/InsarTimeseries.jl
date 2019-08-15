@@ -1,13 +1,17 @@
 """Function to calculate a simple stack averaging solution"""
 
-function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1})
+function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1}; stack_all=true)
 
     # Figure out which of all the igrams we want to use
     # chosen_igrams = pick_igrams(geolist)
-    chosen_igrams = pick_igrams(geolist, valid_igram_list)
+    if stack_all
+        chosen_igrams = valid_igram_list
+    else
+        chosen_igrams = pick_igrams(geolist, valid_igram_list)
+    end
 
     # Get the full list including invalid/ignored to figure out indices to pick
-    # from the .h5 file (we dont know this just from valid_igram_list
+    # from the .h5 file (we dont know this just from valid_igram_list, some are ignored)
     full_igram_list = load_intlist_from_h5(unw_stack_file)
 
     picked_igram_indices = indices_from_full(chosen_igrams, full_igram_list)
