@@ -134,6 +134,7 @@ end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
     if (pix_count % every) == 0
+        flush(stdout)
         pct_done = 100*pix_count*nlayers/total_pixels
         @printf("Processed %.3g pixels out of %.3g (%.2f%% done).", 
                 pix_count*nlayers, total_pixels, pct_done)
