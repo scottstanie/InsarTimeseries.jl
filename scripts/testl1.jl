@@ -12,8 +12,7 @@ import Polynomials
 # TODO: USE REFERENCE STATION AND this
 # #df = create_insar_gps_df(geo_path, defo_filename=defo_filename, reference_station=reference_station)
 
-# TODO: Make all ylims equal
-ylims
+YLIMS = (-12, 12)
 const station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", "TXL2",
                            "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
 
@@ -129,7 +128,7 @@ function integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
 end
 
 function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title="")
-    p = plot(geolist, insar_linear_ts, title=title, label="linear insar", ylabel="cm", linewidth=3)
+    p = plot(geolist, insar_linear_ts, title=title, label="linear insar", ylabel="cm", linewidth=3, ylims=YLIMS, legend=:bottomleft)
     plot!(p, geolist, insar_unreg_ts, label="unreg insar", marker=:o, linealpha=0.0)
     return p
 end
@@ -149,7 +148,8 @@ function process_pixel(; station_name=nothing, plotting=false)
     # First solve for the velocities in L1 vs L2 to compare to GPS
     v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name)
 
-    dts, gps_los_data = get_gps_los(station_name, reference_station=REFERENCE_STATION)
+    # dts, gps_los_data = get_gps_los(station_name, reference_station=REFERENCE_STATION)
+    dts, gps_los_data = get_gps_los(station_name)
     # Convert to "days since start" for line fitting
     gps_poly = fit_line(dts, gps_los_data)
     offset, slope = Polynomials.coeffs(gps_poly)
@@ -196,7 +196,7 @@ l1_errors, l2_errors = [], []
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
-plotting = false
+plotting = true
 
 
 # l1_error, l2_error = process_pixel(station_name, UNW_STACK_FILE, GEOLIST, intlist, valid_igram_indices, plotting=plotting)
