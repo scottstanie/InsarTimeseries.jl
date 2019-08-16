@@ -56,13 +56,11 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     col = 1
 
     # Speeds up inversion to precompute pseudo inverse for L2 least squares case
-    if L1
-        # v = Variable(size(B, num_timediffs))
-        # For IRLS:
-        W = zeros(Float64, (num_igrams, num_igrams))
-    else
-        pB = pinv(B)
-    end
+    # if L1
+    #     v = Variable(size(B, num_timediffs))
+    # else
+    pB = pinv(B)
+    # end
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
@@ -83,24 +81,24 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             @time chunk[1:row_c, 1:col_c, :] .= unw_stack[row:end_row, col:end_col, :][:, :, valid_igram_indices]
 
             last_time = time()
-            for j in 1:col_c
-                for i in 1:row_c
+            @inbounds Threads.@threads for j in 1:col_c
+                @inbounds for i in 1:row_c
                     # print("solving $i, $j")
                     if L1
                         # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
-                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, W)
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=10)
                     else
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
                     pix_count += 1
                     last_time = log_count(pix_count, total_pixels, nlayers, every=10000, last_time=last_time)
-                    if pix_count % clear_mem_every == 0
+                    # if pix_count % clear_mem_every == 0
                         # TODO: stupid to do this even when not using Convex...
                         # println("CLEARING MEMORY")
-                        Convex.clearmemory()
-                        GC.gc()
-                        v = Variable(size(B, 2))
-                    end
+                        # Convex.clearmemory()
+                        # GC.gc()
+                        # v = Variable(size(B, 2))
+                    # end
                 end
             end
             row += step
@@ -137,11 +135,8 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     end
 end
 
-function invert_pixel(pixel::Array{T, 1}, B::Array{T,2}; iters=50, p=1) where {T<:AbstractFloat}
+function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; iters=50, p=1) where {T<:AbstractFloat}
     return irls(B, pixel, iters=iters, p=p)
-end
-function invert_pixel(pixel::Array{T, 1}, B::Array{T,2}, W::Array{T, 2}; iters=50, p=1) where {T<:AbstractFloat}
-    return irls(B, pixel, W, iters=iters, p=p)
 end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
@@ -250,33 +245,41 @@ end
 
 """Iteratively reweighted least squares (IRLS), used to solve L1 minimization
 Source: https://en.wikipedia.org/wiki/Iteratively_reweighted_least_squares"""
-function irls(A::Array{<:AbstractFloat, 2}, b::Array{<:AbstractFloat, 1},
+function irls(A::Array{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1},
               W::Array{<:AbstractFloat, 2}; p::Int=1, iters=50)
     M, N = size(A)
 
-    x = Array{Float64, 1}(undef, N)
+    x = Array{eltype(b), 1}(undef, N)
 
     _iterate_irls!(A, b, W, x, p, iters)
     # println("objective: ", l1_obj(A, x, b))
     return x
 end
-function irls(A::Array{<:AbstractFloat, 2}, b::Array{<:AbstractFloat, 1};
+function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1};
               p::Int=1, iters=50)
     M, N = size(A)
 
-    x = Array{Float64, 1}(undef, N)
-    W = zeros(Float64, (size(A, 1), size(A, 1)))
+    x = Array{eltype(b), 1}(undef, N)
+    W = zeros(eltype(b), (size(A, 1), size(A, 1)))
 
     _iterate_irls!(A, b, W, x, p, iters)
     # println("objective: ", l1_obj(A, x, b))
     return x
 end
 
+# function _iterate_irls!(A, b, W, x, p, iters, L1, L2, Wnext)
 function _iterate_irls!(A, b, W, x, p, iters)
-    W = diagm(0 => (abs.(b-A*x) .+ sqrt(eps(eltype(x)))).^(p-2))
+    ep = sqrt(eps(eltype(x)))
+    W .= diagm(0 => (abs.(b-A*x) .+ ep).^(p-2))
+
     for ii in 1:iters
+        # L1 .= (A' * W * A) 
+        # L2 .= (A' * W * b)
+        # x .= L1 \ L2 
+        # Wnext .= (abs.(b-A*x) .+ ep).^(p-2)
+        # W .= diagm(0 => Wnext)
         x .= (A' * W * A) \ (A' * W * b)
-        W .= diagm(0 => (abs.(b-A*x) .+ sqrt(eps())).^(p-2))
+        W .= diagm(0 => (abs.(b-A*x) .+ ep).^(p-2))
     end
 end
 
