@@ -59,7 +59,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     if L1
         # v = Variable(size(B, num_timediffs))
         # For IRLS:
-        W = zeros(eltype(B), (num_igrams, num_igrams))
+        W = zeros(Float64, (num_igrams, num_igrams))
     else
         pB = pinv(B)
     end
@@ -137,7 +137,10 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     end
 end
 
-function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, W; iters=50, p=1)
+function invert_pixel(pixel::Array{T, 1}, B::Array{T,2}; iters=50, p=1) where {T<:AbstractFloat}
+    return irls(B, pixel, iters=iters, p=p)
+end
+function invert_pixel(pixel::Array{T, 1}, B::Array{T,2}, W::Array{T, 2}; iters=50, p=1) where {T<:AbstractFloat}
     return irls(B, pixel, W, iters=iters, p=p)
 end
 
@@ -250,15 +253,31 @@ Source: https://en.wikipedia.org/wiki/Iteratively_reweighted_least_squares"""
 function irls(A::Array{<:AbstractFloat, 2}, b::Array{<:AbstractFloat, 1},
               W::Array{<:AbstractFloat, 2}; p::Int=1, iters=50)
     M, N = size(A)
-    x = Array{eltype(b), 1}(undef, N)
 
-    W .= diagm(0 => (abs.(b-A*x) .+ sqrt(eps())).^(p-2))
+    x = Array{Float64, 1}(undef, N)
+
+    _iterate_irls!(A, b, W, x, p, iters)
+    # println("objective: ", l1_obj(A, x, b))
+    return x
+end
+function irls(A::Array{<:AbstractFloat, 2}, b::Array{<:AbstractFloat, 1};
+              p::Int=1, iters=50)
+    M, N = size(A)
+
+    x = Array{Float64, 1}(undef, N)
+    W = zeros(Float64, (size(A, 1), size(A, 1)))
+
+    _iterate_irls!(A, b, W, x, p, iters)
+    # println("objective: ", l1_obj(A, x, b))
+    return x
+end
+
+function _iterate_irls!(A, b, W, x, p, iters)
+    W = diagm(0 => (abs.(b-A*x) .+ sqrt(eps(eltype(x)))).^(p-2))
     for ii in 1:iters
         x .= (A' * W * A) \ (A' * W * b)
         W .= diagm(0 => (abs.(b-A*x) .+ sqrt(eps())).^(p-2))
     end
-    # println("objective: ", l1_obj(A, x, b))
-    return x
 end
 
 l1_obj(A, x, b) = sum(abs.(A*x-b))
