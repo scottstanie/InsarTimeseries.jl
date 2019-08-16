@@ -64,7 +64,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
-    clear_mem_every = 50000  # TODO: figure out what causes Convex.jl to grow memory and slow down
+    clear_mem_every = 10000  # TODO: figure out what causes Convex.jl to grow memory and slow down
     while col <= ncols
         while row <= nrows
             end_row = min(row + step - 1, nrows)
@@ -81,8 +81,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             @time chunk[1:row_c, 1:col_c, :] .= unw_stack[row:end_row, col:end_col, :][:, :, valid_igram_indices]
 
             last_time = time()
-            @inbounds for j in 1:col_c
-                @inbounds for i in 1:row_c
+            for j in 1:col_c
+                for i in 1:row_c
                     # print("solving $i, $j")
                     if L1
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
@@ -92,8 +92,10 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                     pix_count += 1
                     last_time = log_count(pix_count, total_pixels, nlayers, every=10000, last_time=last_time)
                     if pix_count % clear_mem_every == 0
+                        # TODO: stupid to do this even when not using Convex...
                         # println("CLEARING MEMORY")
                         Convex.clearmemory()
+                        GC.gc()
                         v = Variable(size(B, 2))
                     end
                 end
