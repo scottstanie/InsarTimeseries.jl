@@ -30,7 +30,7 @@ const DSET_NOSHIFT = "stack_deramped_1"
 const ignore_geo_file = "geolist_ignore.txt"
 const max_temporal_baseline = 400
 
-GEOLIST, intlist, valid_igram_indices = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
+GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 
@@ -67,7 +67,7 @@ function _read_unw(unw_stack_file, row, col)
     println("Loading $row, $col from $DSET")
     # Note: swapping the col and row in h5read since julia is col-major
     unw_vals_all = h5read(unw_stack_file, DSET, (col, row, :))[1, 1, :];
-    unw_vals = unw_vals_all[valid_igram_indices];
+    unw_vals = unw_vals_all[VALID_IGRAM_INDICES];
 end
 
 function get_gps_los(station_name, geo_path="../")
@@ -97,7 +97,7 @@ end
 
 function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
 
-    B = InsarTimeseries.build_B_matrix(GEOLIST, intlist)
+    B = InsarTimeseries.build_B_matrix(GEOLIST, INTLIST)
     Blin = sum(B, dims=2)
 
     v_linear_lstsq = Blin \ unw_vals
@@ -105,7 +105,6 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
 
     # solver = SCSSolver()
     solver = ECOSSolver(verbose=0)
-
 
     v_linear_l1 = Variable(1)
     prob_linear = minimize(norm(Blin*v_linear_l1 - unw_vals, 1))
@@ -120,11 +119,11 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
 end
 
 function integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
-    ts_linear_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_lstsq, timediffs)
-    ts_unreg_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_lstsq, timediffs)
-    ts_linear_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_l1, timediffs)
-    ts_unreg_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_l1, timediffs)
-    return ts_linear_lstsq, ts_unreg_lstsq, ts_linear_l1, ts_unreg_l1
+    linear_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_lstsq, timediffs)
+    unreg_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_lstsq, timediffs)
+    linear_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_l1, timediffs)
+    unreg_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_l1, timediffs)
+    return linear_lstsq, unreg_lstsq, linear_l1, unreg_l1
 end
 
 function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title="")
@@ -171,17 +170,17 @@ function process_pixel(; station_name=nothing, plotting=false)
     println("==="^10)
 
     # Now get the full time series of insar by integrating
-    ts_linear_lstsq, ts_unreg_lstsq, ts_linear_l1, ts_unreg_l1 = integrate_velos(v_linear_lstsq,
-                                                                                 v_unreg_lstsq,
-                                                                                 v_linear_l1,
-                                                                                 v_unreg_l1)
+    linear_lstsq, unreg_lstsq, linear_l1, unreg_l1 = integrate_velos(v_linear_lstsq,
+                                                                     v_unreg_lstsq,
+                                                                     v_linear_l1,
+                                                                     v_unreg_l1)
 
     if plotting
         # Plot the solutions vs gps
-        p1 = plot_insar(GEOLIST, ts_linear_lstsq, ts_unreg_lstsq, title="L2 least squares solution")
+        p1 = plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title="L2 least squares solution")
         plot_gps!(p1, dts, gps_los_data, gps_poly)
 
-        p2 = plot_insar(GEOLIST, ts_linear_l1, ts_unreg_l1, title="L1 norm minimization")
+        p2 = plot_insar(GEOLIST, linear_l1, unreg_l1, title="L1 norm minimization")
         plot_gps!(p2, dts, gps_los_data, gps_poly)
 
         plot(p1, p2)
@@ -196,10 +195,10 @@ l1_errors, l2_errors = [], []
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
-plotting = true
+plotting = false
 
 
-# l1_error, l2_error = process_pixel(station_name, UNW_STACK_FILE, GEOLIST, intlist, valid_igram_indices, plotting=plotting)
+# l1_error, l2_error = process_pixel(station_name, UNW_STACK_FILE, GEOLIST, INTLIST, VALID_IGRAM_INDICES, plotting=plotting)
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 for station_name in station_name_list

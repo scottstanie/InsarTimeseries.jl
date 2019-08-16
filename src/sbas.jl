@@ -41,7 +41,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     nrows, ncols, nlayers = size(unw_stack)
     total_pixels = nrows*ncols*nlayers
 
-    num_timediffs = size(B, 2)
+    num_igrams, num_timediffs = size(B)
 
 
     # Pixel looping method:
@@ -57,7 +57,9 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     # Speeds up inversion to precompute pseudo inverse for L2 least squares case
     if L1
-        v = Variable(size(B, 2))
+        # v = Variable(size(B, num_timediffs))
+        # For IRLS:
+        W = zeros(eltype(B), (num_igrams, num_igrams))
     else
         pB = pinv(B)
     end
@@ -85,7 +87,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                 for i in 1:row_c
                     # print("solving $i, $j")
                     if L1
-                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
+                        # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, W)
                     else
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
@@ -132,6 +135,10 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     else
         Float32.([v.value])
     end
+end
+
+function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, W; iters=50, p=1)
+    return irls(B, pixel, W, iters=iters, p=p)
 end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
@@ -238,3 +245,20 @@ function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, al
     return B, unw_stack
 end
 
+"""Iteratively reweighted least squares (IRLS), used to solve L1 minimization
+Source: https://en.wikipedia.org/wiki/Iteratively_reweighted_least_squares"""
+function irls(A::Array{<:AbstractFloat, 2}, b::Array{<:AbstractFloat, 1},
+              W::Array{<:AbstractFloat, 2}; p::Int=1, iters=50)
+    M, N = size(A)
+    x = Array{eltype(b), 1}(undef, N)
+
+    W .= diagm(0 => (abs.(b-A*x) .+ sqrt(eps())).^(p-2))
+    for ii in 1:iters
+        x .= (A' * W * A) \ (A' * W * b)
+        W .= diagm(0 => (abs.(b-A*x) .+ sqrt(eps())).^(p-2))
+    end
+    # println("objective: ", l1_obj(A, x, b))
+    return x
+end
+
+l1_obj(A, x, b) = sum(abs.(A*x-b))
