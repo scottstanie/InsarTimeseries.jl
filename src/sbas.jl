@@ -86,7 +86,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                     # print("solving $i, $j")
                     if L1
                         # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
-                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=10)
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=30)
                     else
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
@@ -249,22 +249,24 @@ function irls(A::Array{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1}
               W::Array{<:AbstractFloat, 2}; p::Int=1, iters=50)
     M, N = size(A)
 
-    x = Array{eltype(b), 1}(undef, N)
+    # Use Float64 to avoid roundoff NaNs
+    x = Array{Float64, 1}(undef, N)
 
     _iterate_irls!(A, b, W, x, p, iters)
     # println("objective: ", l1_obj(A, x, b))
-    return x
+    return Float32.(x)
 end
 function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1};
               p::Int=1, iters=50)
     M, N = size(A)
 
-    x = Array{eltype(b), 1}(undef, N)
-    W = zeros(eltype(b), (size(A, 1), size(A, 1)))
+    # Use Float64 to avoid roundoff NaNs
+    x = Array{Float64, 1}(undef, N)
+    W = zeros(Float64, (size(A, 1), size(A, 1)))
 
     _iterate_irls!(A, b, W, x, p, iters)
     # println("objective: ", l1_obj(A, x, b))
-    return x
+    return Float32.(x)
 end
 
 # function _iterate_irls!(A, b, W, x, p, iters, L1, L2, Wnext)
