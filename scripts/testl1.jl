@@ -1,9 +1,11 @@
-using InsarTimeseries
-using InsarTimeseries: PHASE_TO_CM
+push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
+import InsarTimeseries
+import InsarTimeseries: PHASE_TO_CM
 using Convex
 using Dates
 using ECOS
 using HDF5
+using LinearAlgebra
 using Plots
 using PyCall
 import Polynomials
@@ -20,9 +22,10 @@ latlon = pyimport("apertools.latlon")
 sario = pyimport("apertools.sario")
 gps = pyimport("apertools.gps")
 
-const DEFO_FILENAME = "deformation_unreg_maxtemp400.h5"
-const DEFO_FILENAME_LINEAR = "deformation_linear_maxtemp400.h5"
-println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
+# const DEFO_FILENAME = "deformation_unreg_maxtemp400.h5"
+# const DEFO_FILENAME_LINEAR = "deformation_linear_maxtemp400.h5"
+# const DEFO_FILENAME_L1 = "deformation_linear_maxtemp400_l1.h5"
+# println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
 
 const UNW_STACK_FILE="unw_stack.h5"
 const DSET = "stack_deramped_1_shifted"
