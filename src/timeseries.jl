@@ -31,12 +31,12 @@ function run_inversion(unw_stack_file::String;
 
 
     if use_stackavg
-        stack_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
+        flat_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
         println("Averaging stack for solution")
-        vstack = run_stackavg(unw_stack_file, stack_dset, geolist, intlist)
+        vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
         is_hdf5 = false
     else
-        stack_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
+        flat_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
         println("Performing SBAS solution")
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
@@ -45,7 +45,7 @@ function run_inversion(unw_stack_file::String;
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
         h5open(unw_stack_file) do unw_file
-            unw_stack = unw_file[stack_dset]
+            unw_stack = unw_file[flat_dset]
             vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
                               constant_velocity, alpha, L1)
         end
@@ -63,9 +63,9 @@ function run_inversion(unw_stack_file::String;
         println("Saving deformation to $outfile")
         dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
         @time save_deformation(outfile, deformation, geolist, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
-        save_reference(outfile, unw_stack_file, STACK_DSET, stack_flat_shifted_dset)
+        save_reference(outfile, unw_stack_file, STACK_DSET, flat_dset)
     end
-    # Now reshape all outputs that should be in stack form
+
     return (geolist, phi_arr, deformation)
 end
 
