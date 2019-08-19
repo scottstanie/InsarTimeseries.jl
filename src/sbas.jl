@@ -1,6 +1,8 @@
 using Printf
 using Convex
 using ECOS
+using SparseArrays: sparse
+using LinearAlgebra: cholesky, ldiv!
 
 function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
                   geolist,
@@ -56,11 +58,15 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     col = 1
 
     # Speeds up inversion to precompute pseudo inverse for L2 least squares case
-    # if L1
-    #     v = Variable(size(B, num_timediffs))
-    # else
-    pB = pinv(B)
-    # end
+    if L1
+        # v = Variable(num_timediffs)
+        lu_tuple = factor(B)
+        # Settings found to be good for these problems
+        # TODO: seems to be pretty high variancce for alpha.. figure out which params are best/ how to adjust on fly
+        rho, alpha, abstol = 1.0, 1.6, 1e-3
+    else
+        pB = pinv(B)
+    end
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
@@ -86,7 +92,9 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                     # print("solving $i, $j")
                     if L1
                         # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
-                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=30)
+                        # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=30)
+                        vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, rho=rho, alpha=alpha, 
+                                                                    lu_tuple=lu_tuple, abstol=abstol)
                     else
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
@@ -137,6 +145,12 @@ end
 
 function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; iters=50, p=1) where {T<:AbstractFloat}
     return irls(B, pixel, iters=iters, p=p)
+end
+
+
+function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; 
+                      rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3) where {T<:AbstractFloat}
+    return Float32.(huber_fit(B, pixel, rho, alpha, lu_tuple=lu_tuple, abstol=abstol))
 end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
@@ -253,7 +267,7 @@ function irls(A::Array{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1}
     x = Array{Float64, 1}(undef, N)
 
     _iterate_irls!(A, b, W, x, p, iters)
-    # println("objective: ", l1_obj(A, x, b))
+    # println("objective: ", l1_objective(A, x, b))
     return Float32.(x)
 end
 function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1};
@@ -265,7 +279,7 @@ function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractF
     W = zeros(Float64, (size(A, 1), size(A, 1)))
 
     _iterate_irls!(A, b, W, x, p, iters)
-    # println("objective: ", l1_obj(A, x, b))
+    # println("objective: ", l1_objective(A, x, b))
     return Float32.(x)
 end
 
@@ -285,4 +299,92 @@ function _iterate_irls!(A, b, W, x, p, iters)
     end
 end
 
-l1_obj(A, x, b) = sum(abs.(A*x-b))
+l1_objective(A, x, b) = sum(abs.(A*x-b))
+
+function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=false, max_iter=1000, abstol=1e-4, reltol=1e-2)
+    m, n = size(A)
+    Atb = A'*b
+
+    x = zeros(n)
+    z = zeros(m)
+    zold = zeros(m)
+    u = zeros(m)
+    # If you prefactor the A matrix
+    if !isnothing(lu_tuple)
+        L, U = lu
+    else
+        L, U = factor(A)
+    end
+
+    idx = 0
+
+    kappa = 1 + 1/rho  # For shrinkage
+    r_factor = rho/(1 + rho)
+    s_factor = 1/(1+rho)
+    while idx < max_iter
+        # x update
+        zold .= z
+        q = Atb .+ A' * (z - u)
+        x .= U \ (L \ q)
+
+        # x update with relaxation
+        Ax_hat = alpha .* A * x + (1-alpha) * (z .+ b)
+        tmp = Ax_hat - b + u
+        z .= (r_factor .* tmp) + (s_factor .* shrinkage(tmp, kappa))
+
+        u += (Ax_hat - z - b)
+
+
+        # Stopping check
+        r_norm = norm(A*x - z - b)
+
+        # equivalent to vv below,  but faster
+        # s_norm  = norm(-rho * A' * (z - zold))
+        s_norm = norm(BLAS.gemv('T', -rho, A, (z - zold)))
+
+        eps_pri = sqrt(n)*abstol + reltol*maximum([norm(A*x), norm(-z), norm(b)])
+        eps_dual = sqrt(n)*abstol + reltol*norm(rho*u)
+
+        if !quiet
+            @show r_norm, eps_pri, s_norm, eps_dual, objective(z)
+        end
+
+        if r_norm < eps_pri && s_norm < eps_dual
+            if !quiet
+                println("Number of iterations to converge: $idx")
+            end
+            return x
+        else
+            idx += 1
+        end
+
+    end
+    println("Caution: problem did not converge within $max_iter iterations")
+    return x
+end
+
+
+function huber(x; M=1)
+    y = max.(x, 0)
+    z = min.(y, M);
+    return z .* (2 .* y .- z);
+end
+
+objective(z) =  sum(huber(z)) / 2
+
+
+function factor(A)
+    m, n = size(A)
+    ch = cholesky(A' * A)
+    return sparse(ch.L), sparse(ch.U)
+end
+
+pos(x) = max.(x, 0)
+
+"""Soft threshold operator (section 4.4.3)"""
+function shrinkage(x, kappa) 
+    # @show kappa  #, (kappa ./ abs.(x))
+    return pos(1 .- kappa ./ abs.(x)) .* x
+end
+
+# shrinkage(x, kappa) = pos(1 .- kappa ./ abs.(x)) .* x
