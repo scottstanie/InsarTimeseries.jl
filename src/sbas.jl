@@ -60,7 +60,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     # Speeds up inversion to precompute pseudo inverse for L2 least squares case
     if L1
         # v = Variable(num_timediffs)
-        lu_tuple = factor(B)
+        lu_tuple = factor(Float64.(B))
         # Settings found to be good for these problems
         # TODO: seems to be pretty high variancce for alpha.. figure out which params are best/ how to adjust on fly
         rho, alpha, abstol = 1.0, 1.6, 1e-3
@@ -150,7 +150,7 @@ end
 
 function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; 
                       rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3) where {T<:AbstractFloat}
-    return Float32.(huber_fit(B, pixel, rho, alpha, lu_tuple=lu_tuple, abstol=abstol))
+    return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, lu_tuple=lu_tuple, abstol=abstol))
 end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
@@ -301,7 +301,10 @@ end
 
 l1_objective(A, x, b) = sum(abs.(A*x-b))
 
-function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=false, max_iter=1000, abstol=1e-4, reltol=1e-2)
+"""Fit Ax = b using Huber loss
+Source: https://web.stanford.edu/~boyd/papers/admm/huber/huber_fit.html
+"""
+function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=true, max_iter=1000, abstol=1e-4, reltol=1e-2)
     m, n = size(A)
     Atb = A'*b
 
@@ -311,7 +314,7 @@ function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=false, max_
     u = zeros(m)
     # If you prefactor the A matrix
     if !isnothing(lu_tuple)
-        L, U = lu
+        L, U = lu_tuple
     else
         L, U = factor(A)
     end
@@ -331,9 +334,7 @@ function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=false, max_
         Ax_hat = alpha .* A * x + (1-alpha) * (z .+ b)
         tmp = Ax_hat - b + u
         z .= (r_factor .* tmp) + (s_factor .* shrinkage(tmp, kappa))
-
         u += (Ax_hat - z - b)
-
 
         # Stopping check
         r_norm = norm(A*x - z - b)
@@ -374,17 +375,11 @@ objective(z) =  sum(huber(z)) / 2
 
 
 function factor(A)
-    m, n = size(A)
     ch = cholesky(A' * A)
     return sparse(ch.L), sparse(ch.U)
 end
 
 pos(x) = max.(x, 0)
 
-"""Soft threshold operator (section 4.4.3)"""
-function shrinkage(x, kappa) 
-    # @show kappa  #, (kappa ./ abs.(x))
-    return pos(1 .- kappa ./ abs.(x)) .* x
-end
-
-# shrinkage(x, kappa) = pos(1 .- kappa ./ abs.(x)) .* x
+# Soft threshold operator (section 4.4.3)
+shrinkage(x, kappa) = pos(1 .- kappa ./ abs.(x)) .* x
