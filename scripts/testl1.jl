@@ -11,7 +11,6 @@ using Plots
 using PyCall
 import Polynomials
 # using SCS
-include("./analysis.jl")
 
 # TODO: USE REFERENCE STATION AND this
 # #df = create_insar_gps_df(geo_path, defo_filename=defo_filename, reference_station=reference_station)
@@ -54,9 +53,8 @@ total_abs_error(arr) = sum(abs.(arr))
 function get_unw_vals(unw_stack_file, station_name)
     dem_rsc = sario.load("dem.rsc")
     lon, lat = gps.station_lonlat(station_name)
-    row, col = latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat)
-    row = convert(Int, row)
-    col = convert(Int, col)
+    row, col = map(x-> convert(Int, x), 
+                   latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
 
     println("Getting data at $station_name: row $row, col $col, lon $lon, lat $lat")
     @time unw_vals = _read_unw(unw_stack_file, row, col)
@@ -71,13 +69,13 @@ end
 function _read_unw(unw_stack_file, row, col)
     println("Loading $row, $col from $DSET")
     # Note: swapping the col and row in h5read since julia is col-major
-    unw_vals_all = h5read(unw_stack_file, DSET, (col, row, :))[1, 1, :];
-    unw_vals = unw_vals_all[VALID_IGRAM_INDICES];
+    unw_vals_all = h5read(unw_stack_file, DSET, (col, row, :))[1, 1, :]
+    unw_vals = unw_vals_all[VALID_IGRAM_INDICES]
 end
 
-function get_gps_los(station_name, geo_path="../")
+function get_gps_los(station_name, geo_path="../"; reference_station=nothing)
     dts, gps_los_data = gps.load_gps_los_data(geo_path, station_name, start_year=2015, end_year=2018)
-    dts = convert(Array{Dates.Date, 1}, dts);
+    dts = convert(Array{Dates.Date, 1}, dts)
     return dts, gps_los_data
 end
 
@@ -148,10 +146,9 @@ function plot_gps!(p, dts, gps_los_data, gps_poly)
 end
 
 
-function process_pixel(; station_name=nothing, plotting=false)
+function process_pixel(; station_name=nothing, plotting=false, reference_station=nothing)
     println("Processing $station_name")
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
-
 
     # First solve for the velocities in L1 vs L2 to compare to GPS
     v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name)
@@ -198,7 +195,7 @@ function process_pixel(; station_name=nothing, plotting=false)
     end
     return l1_error, l2_error
 end
-# function main()
+
 
 l1_errors, l2_errors = [], []
 
@@ -212,19 +209,18 @@ plotting = false
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 #
-# for station_name in station_name_list
-#     l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
-#     append!(l2_errors, l2_error)
-#     append!(l1_errors, l1_error)
-# end
-# println("TOTAL ERRORS (all in mm / year of velocity):")
-# println("L2 RMS error for all stations: $(rms(l2_errors))")
-# println("L1 RMS error for all stations: $(rms(l1_errors))")
-# println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
-# println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
-# end
-
-# main()
+for station_name in station_name_list
+    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
+    append!(l2_errors, l2_error)
+    append!(l1_errors, l1_error)
+end
+println("TOTAL ERRORS (all in mm / year of velocity):")
+println("L2 RMS error for all stations: $(rms(l2_errors))")
+println("L1 RMS error for all stations: $(rms(l1_errors))")
+println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
+println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
+println("L2 maximum errors : $(maximum(l2_errors))")
+println("L1 maximum errors : $(maximum(l1_errors))")
 
 
 
