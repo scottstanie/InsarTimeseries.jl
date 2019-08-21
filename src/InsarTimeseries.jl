@@ -24,6 +24,7 @@ include("./timeseries.jl")
 include("./mask.jl")
 include("./projections.jl")
 include("./los.jl")
+include("./analysis.jl")
 
 
 # TODO: figure out which we care to export
