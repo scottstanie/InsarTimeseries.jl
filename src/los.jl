@@ -2,13 +2,10 @@ using SQLite
 using Glob
 using LinearAlgebra
 
-struct Ellp
-    a::Float64
-    e2::Float64
-end
+const EARTH_SMA = 6378137.0
+const EARTH_E2 = 0.0066943799901499996
 
 const SOL = 299792458
-const ELLP = Ellp(6378137.0, 0.0066943799901499996)
 
 
 """Calculate the LOS vector in ENU from a lat/lon Array
@@ -65,8 +62,8 @@ function calculate_los_xyz(lat::T, lon::T; dbfile::Union{String, Nothing}=nothin
 end
 
 
-function calculate_los_xyz(lat::T, lon::T, param_dict, timeorbit, xx, vv) where {T<:AbstractFloat}
-    xyz = _compute_xyz(lat, lon)
+function calculate_los_xyz(lat::T, lon::T, dem, dem_rsc, param_dict, timeorbit, xx, vv) where {T<:AbstractFloat}
+    xyz = _compute_xyz(lat, lon, dem, dem_rsc)
     for idx=1:param_dict["azimuthBursts"]
         idx = 9
         vecr = compute_burst_vec(xyz, param_dict, idx, timeorbit, xx, vv)
@@ -96,6 +93,7 @@ function _compute_xyz(lat, lon)
     # TODO: do i wanna get rid of this "params" file?
     # dem_file, dem_rsc_file = readlines("params")
 
+    # TODO: what directory should this be??
     dem_rsc_file = sario.find_rsc_file(directory="../")
     dem_file = replace(dem_rsc_file, ".rsc" => "")
     dem_rsc = load(dem_rsc_file)
@@ -105,6 +103,16 @@ function _compute_xyz(lat, lon)
 
     # Load just the 1 value from the DEM
     dem_height = load(dem_file, (row, col))
+
+    llh = [ deg2rad(lat), deg2rad(lon), dem_height ]
+    xyz = llh_to_xyz(llh)
+end
+
+function _compute_xyz(lat, lon, dem, dem_rsc)
+    row, col = latlon_to_rowcol(dem_rsc, lat, lon)
+
+    # Load just the 1 value from the DEM
+    dem_height = dem[row, col]
 
     llh = [ deg2rad(lat), deg2rad(lon), dem_height ]
     xyz = llh_to_xyz(llh)
@@ -244,16 +252,14 @@ end
 
 
 function llh_to_xyz(llh::Array{<:AbstractFloat, 1})
-    a = ELLP.a
-    e2 = ELLP.e2
     lat, lon, h = llh
 
-    rad_earth = a/sqrt(1.0 - e2*sin(lat)^2)
+    rad_earth = EARTH_SMA/sqrt(1.0 - EARTH_E2*sin(lat)^2)
 
     xyz = similar(llh)
     xyz[1] = (rad_earth + h)*cos(lat)*cos(lon)
     xyz[2] = (rad_earth + h)*cos(lat)*sin(lon)
-    xyz[3] = (rad_earth*(1.0 - e2) + h) * sin(lat)
+    xyz[3] = (rad_earth*(1.0 - EARTH_E2) + h) * sin(lat)
     return xyz
 end
 
@@ -411,23 +417,38 @@ function grid(dem_rsc)
     return x, y
 end
 
-function los_map(dem_rsc, dbfile)
+function los_map(dem_rsc, dbfile, outfile=nothing)
     param_dict = load_all_params(dbfile)
     orbinfo_filename = param_dict["orbinfo"]  # The .db file doesn't save path
     dbpath = filepath(dbfile)
     orbinfo_file = joinpath(dbpath, orbinfo_filename)
     timeorbit, xorbit, vorbit = read_orbit_vector(orbinfo_file)
 
+    dem_rsc_file = sario.find_rsc_file(directory=".")
+    @show dem_rsc_file
+    dem_rsc = load(dem_rsc_file)
+    dem_file = replace(sario.find_rsc_file(directory=".."), ".rsc" => "")
+    @show dem_file
+    dem = load(dem_file)
+
     xx, yy = InsarTimeseries.grid(dem_rsc)
     out = Array{Float64, 3}(undef, (length(yy), length(xx), 3))
-    for (j, x) in enumerate(xx)
-        println("done")
-        for (i, y) in enumerate(yy)
+    Threads.@threads for j in 1:length(xx)
+        for i in 1:length(yy)
+    # for (j, x) in enumerate(xx)
+        # for (i, y) in enumerate(yy)
             # @show i, j, y, x
-             xyz_los_vecs = calculate_los_xyz(y, x, param_dict, timeorbit, xorbit, vorbit)
+            y = yy[i]
+            x = xx[j]
+            xyz_los_vecs = calculate_los_xyz(y, x, dem, dem_rsc, param_dict, timeorbit, xorbit, vorbit)
             # println("$y $x is at ", InsarTimeseries.latlon_to_rowcol(dem_rsc, y, x))
             out[i, j, :] = InsarTimeseries.los_to_enu([y, x], xyz_los_vecs=xyz_los_vecs)
         end
     end
+    if !isnothing(outfile)
+        println("Writing to $outfile dset 'stack'")
+        h5write(outfile, "stack", permutedims(out, (2, 1, 3)))
+    end
+
     return out
 end
