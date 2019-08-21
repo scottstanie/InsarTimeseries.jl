@@ -45,9 +45,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     num_igrams, num_timediffs = size(B)
 
-
-    # Pixel looping method:
-    # TODO: maybe this should be an HDF5Dataset too?
+    # Output holder
     vstack = Array{Float32, 3}(undef, (nrows, ncols, num_timediffs))
 
     println("Using $(Threads.nthreads()) threads for invert_sbas loop")
@@ -100,8 +98,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                     end
                     pix_count += 1
                     last_time = log_count(pix_count, total_pixels, nlayers, every=10000, last_time=last_time)
+                    # Because of a memory bug in either ECOS or Conved.jl
                     # if pix_count % clear_mem_every == 0
-                        # TODO: stupid to do this even when not using Convex...
                         # println("CLEARING MEMORY")
                         # Convex.clearmemory()
                         # GC.gc()

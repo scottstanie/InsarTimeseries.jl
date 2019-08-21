@@ -28,6 +28,12 @@ const REFERENCE_STATION_ATTR = "reference_station"
 # Type alias for commonly used compositite type
 const Igram = Tuple{Date, Date}
 
+import Base.in
+# To check if either date of an igram is contained with a geo date list
+Base.in(igram::Igram, geo_date_list::AbstractArray{Date}) = ((igram[1] in geo_date_list) || (igram[2] in geo_date_list))
+
+Base.in(date::Date, igram_list::AbstractArray{Igram}) = [date in igram for igram in igram_list]
+
 temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
 temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]
 
