@@ -64,6 +64,9 @@ function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String
     end
 end
 
+"""For single element reading in binary files, seek to the right row, col"""
+_get_seek_position(row, col, num_cols, data_type) = sizeof(data_type) * ((col - 1) + (num_cols * (row - 1)) )
+
 
 function _get_rsc_data(filename, rsc_file)
     ext = get_file_ext(filename)
@@ -81,9 +84,6 @@ function _get_rsc_data(filename, rsc_file)
     end
     return rsc_data
 end
-
-"""For single element reading in binary files, seek to the right row, col"""
-_get_seek_position(row, col, num_cols, data_type) = sizeof(data_type) * ((col - 1) + (num_cols * (row - 1)) )
 
 function _get_data_type(filename)
     ext = get_file_ext(filename)
