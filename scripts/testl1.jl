@@ -1,6 +1,6 @@
 push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
 import InsarTimeseries
-import InsarTimeseries: PHASE_TO_CM
+import InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET
 import Convex
 using Dates
 import ECOS
@@ -29,8 +29,6 @@ gps = pyimport("apertools.gps")
 # println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
 
 const UNW_STACK_FILE="unw_stack.h5"
-const DSET = "stack_deramped_1_shifted"
-const DSET_NOSHIFT = "stack_deramped_1"
 const ignore_geo_file = "geolist_ignore.txt"
 const max_temporal_baseline = 400
 
@@ -50,26 +48,28 @@ rms(arr) = sqrt(mean(arr.^2))
 total_abs_error(arr) = sum(abs.(arr))
 
 
-function get_unw_vals(unw_stack_file, station_name)
+function get_unw_vals(unw_stack_file::String, station_name::String, window=5, dset=STACK_FLAT_SHIFTED_DSET)
     dem_rsc = sario.load("dem.rsc")
     lon, lat = gps.station_lonlat(station_name)
     row, col = map(x-> convert(Int, x), 
                    latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
 
     println("Getting data at $station_name: row $row, col $col, lon $lon, lat $lat")
-    @time unw_vals = _read_unw(unw_stack_file, row, col)
+    @time unw_vals = _read_unw(unw_stack_file, row, col, window, dset)
     return unw_vals
 end
 
-function get_unw_vals(unw_stack_file, row, col)
-    @time unw_vals = _read_unw(unw_stack_file, row, col)
+function get_unw_vals(unw_stack_file::String, row::Int, col::Int, window=5, dset=STACK_FLAT_SHIFTED_DSET)
+    @time unw_vals = _read_unw(unw_stack_file, row, col, window, dset)
     return unw_vals
 end
 
-function _read_unw(unw_stack_file, row, col)
-    println("Loading $row, $col from $DSET")
+function _read_unw(unw_stack_file, row, col, window=5, dset=STACK_FLAT_SHIFTED_DSET)
+    println("Loading $row, $col from $dset")
+    halfwin = div(window, 2)
     # Note: swapping the col and row in h5read since julia is col-major
-    unw_vals_all = h5read(unw_stack_file, DSET, (col, row, :))[1, 1, :]
+    unw_depth = h5read(unw_stack_file, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin, :))
+    unw_vals_all = vec(mean(unw_depth, dims=(1,2)))
     unw_vals = unw_vals_all[VALID_IGRAM_INDICES]
 end
 
@@ -88,13 +88,13 @@ function fit_line(dts, data)
     return p
 end
 
-function solve_insar_ts(station_name::String)
-    unw_vals = get_unw_vals(UNW_STACK_FILE, station_name)
+function solve_insar_ts(station_name::String, window=5)
+    unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window)
     return solve_insar_ts(unw_vals)
 end
 
-function solve_insar_ts(row::Int, col::Int)
-    unw_vals = get_unw_vals(UNW_STACK_FILE, row, col)
+function solve_insar_ts(row::Int, col::Int, window=5)
+    unw_vals = get_unw_vals(UNW_STACK_FILE, row, col, window)
     return solve_insar_ts(unw_vals)
 end
 
@@ -110,8 +110,8 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
     # solver = ECOS.ECOSSolver(verbose=0)
     # prob_linear = Convex.minimize(norm(Blin*v_linear_l1 - unw_vals, 1))
     # prob_unreg = Convex.minimize(norm(B*v_unreg_l1 - unw_vals, 1))
-    # solve!(prob_linear, solver)
-    # solve!(prob_unreg, solver)
+    # Convex.solve!(prob_linear, solver)
+    # Convex.solve!(prob_unreg, solver)
     # # Using functions in module:
     var_linear = Convex.Variable(1)
     v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, var_linear)
@@ -146,12 +146,12 @@ function plot_gps!(p, dts, gps_los_data, gps_poly)
 end
 
 
-function process_pixel(; station_name=nothing, plotting=false, reference_station=nothing)
+function process_pixel(; station_name=nothing, plotting=false, reference_station=nothing, window=5)
     println("Processing $station_name")
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
 
     # First solve for the velocities in L1 vs L2 to compare to GPS
-    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name)
+    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window)
 
     # dts, gps_los_data = get_gps_los(station_name, reference_station=REFERENCE_STATION)
     dts, gps_los_data = get_gps_los(station_name)
@@ -209,11 +209,11 @@ plotting = false
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 #
-for station_name in station_name_list
-    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
-    append!(l2_errors, l2_error)
-    append!(l1_errors, l1_error)
-end
+# for station_name in station_name_list
+#     l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
+#     append!(l2_errors, l2_error)
+#     append!(l1_errors, l1_error)
+# end
 println("TOTAL ERRORS (all in mm / year of velocity):")
 println("L2 RMS error for all stations: $(rms(l2_errors))")
 println("L1 RMS error for all stations: $(rms(l1_errors))")
@@ -228,7 +228,7 @@ println("L1 maximum errors : $(maximum(l1_errors))")
 #     # To check that l2 norm min matches the backslash result
 #     v2linear_test = Convex.Variable(1)
 #     prob_linear_test2 = minimize(norm(Blin*v2linear_test - unw_vals, 2))
-#     solve!(prob_linear_test2, ECOSSolver())
+#     Convex.solve!(prob_linear_test2, ECOSSolver())
 # end
 
 # # The values already solved for:
