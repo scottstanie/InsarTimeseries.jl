@@ -59,8 +59,9 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
     if L1
         # v = Variable(num_timediffs)
         lu_tuple = factor(Float64.(B))
-        # Settings found to be good for these problems
-        # TODO: seems to be pretty high variancce for alpha.. figure out which params are best/ how to adjust on fly
+        # TODO: seems to be pretty high variance for alpha...
+        # figure out which params are best/ how to adjust on fly
+        # Settings found to be okay for now
         rho, alpha, abstol = 1.0, 1.6, 1e-3
     else
         pB = pinv(B)
@@ -68,7 +69,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     chunk = zeros(Float32, (step, step, length(valid_igram_indices)))
     pix_count = 0
-    clear_mem_every = 10000  # TODO: figure out what causes Convex.jl to grow memory and slow down
+    # clear_mem_every = 10000  # TODO: figure out what causes Convex.jl to grow memory and slow down
     while col <= ncols
         while row <= nrows
             end_row = min(row + step - 1, nrows)
@@ -87,10 +88,8 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
             last_time = time()
             @inbounds Threads.@threads for j in 1:col_c
                 @inbounds for i in 1:row_c
-                    # print("solving $i, $j")
                     if L1
                         # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
-                        # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, iters=30)
                         vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, rho=rho, alpha=alpha, 
                                                                     lu_tuple=lu_tuple, abstol=abstol)
                     else
@@ -98,7 +97,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                     end
                     pix_count += 1
                     last_time = log_count(pix_count, total_pixels, nlayers, every=10000, last_time=last_time)
-                    # Because of a memory bug in either ECOS or Conved.jl
+                    # Because of a memory bug in either ECOS or Convex.jl
                     # if pix_count % clear_mem_every == 0
                         # println("CLEARING MEMORY")
                         # Convex.clearmemory()
@@ -130,10 +129,9 @@ end
 function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.Variable)
     # Note: these are defined here to allow multithreading and not reuse across threads
     solver = ECOSSolver(verbose=0)
-    # v = Variable(size(B, 2))
-
     problem = minimize(norm(B*v - pixel, 1))
     solve!(problem, solver)
+
     if length(v.value) > 1
         Float32.(reshape(v.value, :))
     else
@@ -141,14 +139,11 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     end
 end
 
-function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; iters=50, p=1) where {T<:AbstractFloat}
-    return irls(B, pixel, iters=iters, p=p)
-end
-
-
+# Defined in optimize.jl
 function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; 
                       rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3) where {T<:AbstractFloat}
-    return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, lu_tuple=lu_tuple, abstol=abstol))
+    return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, 
+                              lu_tuple=lu_tuple, abstol=abstol))
 end
 
 function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=nothing)
@@ -255,129 +250,3 @@ function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, al
     return B, unw_stack
 end
 
-"""Iteratively reweighted least squares (IRLS), used to solve L1 minimization
-Source: https://en.wikipedia.org/wiki/Iteratively_reweighted_least_squares"""
-function irls(A::Array{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1},
-              W::Array{<:AbstractFloat, 2}; p::Int=1, iters=50)
-    M, N = size(A)
-
-    # Use Float64 to avoid roundoff NaNs
-    x = Array{Float64, 1}(undef, N)
-
-    _iterate_irls!(A, b, W, x, p, iters)
-    # println("objective: ", l1_objective(A, x, b))
-    return Float32.(x)
-end
-function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractFloat, 1};
-              p::Int=1, iters=50)
-    M, N = size(A)
-
-    # Use Float64 to avoid roundoff NaNs
-    x = Array{Float64, 1}(undef, N)
-    W = zeros(Float64, (size(A, 1), size(A, 1)))
-
-    _iterate_irls!(A, b, W, x, p, iters)
-    # println("objective: ", l1_objective(A, x, b))
-    return Float32.(x)
-end
-
-# function _iterate_irls!(A, b, W, x, p, iters, L1, L2, Wnext)
-function _iterate_irls!(A, b, W, x, p, iters)
-    ep = sqrt(eps(eltype(x)))
-    W .= diagm(0 => (abs.(b-A*x) .+ ep).^(p-2))
-
-    for ii in 1:iters
-        # L1 .= (A' * W * A) 
-        # L2 .= (A' * W * b)
-        # x .= L1 \ L2 
-        # Wnext .= (abs.(b-A*x) .+ ep).^(p-2)
-        # W .= diagm(0 => Wnext)
-        x .= (A' * W * A) \ (A' * W * b)
-        W .= diagm(0 => (abs.(b-A*x) .+ ep).^(p-2))
-    end
-end
-
-l1_objective(A, x, b) = sum(abs.(A*x-b))
-
-"""Fit Ax = b using Huber loss
-Source: https://web.stanford.edu/~boyd/papers/admm/huber/huber_fit.html
-"""
-function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=true, max_iter=1000, abstol=1e-4, reltol=1e-2)
-    m, n = size(A)
-    Atb = A'*b
-
-    x = zeros(n)
-    z = zeros(m)
-    zold = zeros(m)
-    u = zeros(m)
-    # If you prefactor the A matrix
-    if !isnothing(lu_tuple)
-        L, U = lu_tuple
-    else
-        L, U = factor(A)
-    end
-
-    idx = 0
-
-    kappa = 1 + 1/rho  # For shrinkage
-    r_factor = rho/(1 + rho)
-    s_factor = 1/(1+rho)
-    while idx < max_iter
-        # x update
-        zold .= z
-        q = Atb .+ A' * (z - u)
-        x .= U \ (L \ q)
-
-        # x update with relaxation
-        Ax_hat = alpha .* A * x + (1-alpha) * (z .+ b)
-        tmp = Ax_hat - b + u
-        z .= (r_factor .* tmp) + (s_factor .* shrinkage(tmp, kappa))
-        u += (Ax_hat - z - b)
-
-        # Stopping check
-        r_norm = norm(A*x - z - b)
-
-        # equivalent to vv below,  but faster
-        # s_norm  = norm(-rho * A' * (z - zold))
-        s_norm = norm(BLAS.gemv('T', -rho, A, (z - zold)))
-
-        eps_pri = sqrt(n)*abstol + reltol*maximum([norm(A*x), norm(-z), norm(b)])
-        eps_dual = sqrt(n)*abstol + reltol*norm(rho*u)
-
-        if !quiet
-            @show r_norm, eps_pri, s_norm, eps_dual, objective(z)
-        end
-
-        if r_norm < eps_pri && s_norm < eps_dual
-            if !quiet
-                println("Number of iterations to converge: $idx")
-            end
-            return x
-        else
-            idx += 1
-        end
-
-    end
-    println("Caution: problem did not converge within $max_iter iterations")
-    return x
-end
-
-
-function huber(x; M=1)
-    y = max.(x, 0)
-    z = min.(y, M);
-    return z .* (2 .* y .- z);
-end
-
-objective(z) =  sum(huber(z)) / 2
-
-
-function factor(A)
-    ch = cholesky(A' * A)
-    return sparse(ch.L), sparse(ch.U)
-end
-
-pos(x) = max.(x, 0)
-
-# Soft threshold operator (section 4.4.3)
-shrinkage(x, kappa) = pos(1 .- kappa ./ abs.(x)) .* x
