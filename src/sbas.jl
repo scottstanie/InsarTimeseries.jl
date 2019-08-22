@@ -133,7 +133,7 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     solve!(problem, solver)
 
     if length(v.value) > 1
-        Float32.(reshape(v.value, :))
+        Float32.(vec(v.value))
     else
         Float32.([v.value])
     end

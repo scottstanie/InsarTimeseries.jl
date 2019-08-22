@@ -138,7 +138,7 @@ function save_line_fit(unreg_fname)
     dset_out = fout["stack"]
     for i in 1:size(dset, 1)
         for j in 1:size(dset, 2)
-            p = polyfit(geolist_nums, reshape(dset[i, j, :], :), 1)
+            p = polyfit(geolist_nums, vec(dset[i, j, :]), 1)
             dset_out[i, j] = p(geolist_nums[end])
         end
     end

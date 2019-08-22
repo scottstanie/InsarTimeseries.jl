@@ -43,10 +43,8 @@ end
 
 """Take the row-deleted A, find columns that lost all igrams to delete"""
 function find_column_masks(A_short)
-    # Now find any columns that are all zero to delete
-    column_sums = sum(abs2, A_short, dims=1)
-    # Make sure it is 1D, not 2D
-    column_sums = reshape(column_sums, :)
+    # Now find any columns that are all zero to delete, make it 1D
+    column_sums = vec(sum(abs2, A_short, dims=1))
 
     # Trues are good columns (nonzero), false is a bad column
     column_masks = .!iszero.(column_sums)
