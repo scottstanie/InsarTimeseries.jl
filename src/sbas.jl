@@ -1,6 +1,6 @@
 using Printf
-using Convex
-using ECOS
+import Convex
+import ECOS
 using SparseArrays: sparse
 using LinearAlgebra: cholesky, ldiv!
 
@@ -57,7 +57,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
 
     # Speeds up inversion to precompute pseudo inverse for L2 least squares case
     if L1
-        # v = Variable(num_timediffs)
+        # v = Convex.Variable(num_timediffs)
         lu_tuple = factor(Float64.(B))
         # TODO: seems to be pretty high variance for alpha...
         # figure out which params are best/ how to adjust on fly
@@ -102,7 +102,7 @@ function invert_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, B::Array{
                         # println("CLEARING MEMORY")
                         # Convex.clearmemory()
                         # GC.gc()
-                        # v = Variable(size(B, 2))
+                        # v = Convex.Variable(size(B, 2))
                     # end
                 end
             end
@@ -128,8 +128,8 @@ end
 
 function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.Variable)
     # Note: these are defined here to allow multithreading and not reuse across threads
-    solver = ECOSSolver(verbose=0)
-    problem = minimize(norm(B*v - pixel, 1))
+    solver = ECOS.ECOSSolver(verbose=0)
+    problem = Convex.minimize(norm(B*v - pixel, 1))
     solve!(problem, solver)
 
     if length(v.value) > 1
