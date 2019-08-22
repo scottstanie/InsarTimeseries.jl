@@ -3,12 +3,12 @@
 window is the size around the reference pixel to average at each layer
 """
 
-function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing, order=2,
-                        ref_row=nothing, ref_col=nothing, window=3, ref_station=nothing, 
+function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
+                        ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
                         overwrite=false)
     """Runs a reference point shift on flattened stack of unw files stored in .h5"""
     if isnothing(stack_flat_dset)
-        stack_flat_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
+        stack_flat_dset = STACK_FLAT_DSET
     end
     stack_flat_shifted_dset = stack_flat_dset * "_shifted"
 
@@ -93,22 +93,18 @@ end
 
 
 """Runs a reference point shift on flattened stack of unw files stored in .h5"""
-function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack_flat_dset=nothing)
+function deramp_unw_file(unw_stack_file::String; overwrite=false, stack_flat_dset=nothing)
     if isnothing(stack_flat_dset)
-        if order == 1
-            stack_flat_dset = STACK_FLAT_DSET1
-        elseif order == 2
-            stack_flat_dset = STACK_FLAT_DSET2
-        end
-        println("Writing deramped unws to $stack_flat_dset")
+        stack_flat_dset = STACK_FLAT_DSET
     end
+    println("Writing deramped unws to $stack_flat_dset")
 
     # If we already have this dataset made, skip the function
     if !sario.check_dset(unw_stack_file, stack_flat_dset, overwrite)
         return nothing
     end
 
-    println("Starting stack deramp : using order $order")
+    println("Starting stack deramp ")
     h5open(unw_stack_file, "cw") do f
         if !(STACK_DSET in names(f))
             throw("Need $STACK_DSET to be created in $unw_stack_file before deramp stack can be run")
@@ -143,7 +139,7 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
         mask_chunk[:, :, 1:numch] .= h5read("masks.h5", IGRAM_MASK_DSET, (:, :, k:kend))
         println("calculating ramp")
         @time @inbounds Threads.@threads for jdx = 1:numch
-            chunk_out[:, :, jdx] .= remove_ramp(view(chunk, :, :, jdx), order, view(mask_chunk, :, :, jdx))
+            chunk_out[:, :, jdx] .= remove_ramp(view(chunk, :, :, jdx), view(mask_chunk, :, :, jdx))
         end
 
         println("writing chunk layers")
@@ -156,12 +152,10 @@ function deramp_unw_file(unw_stack_file::String; order=2, overwrite=false, stack
         k += chunk_size
     end
 
-    h5writeattr(unw_stack_file, stack_flat_dset, Dict("order" => order))
-
     println("Deramping stack complete")
 end
 
-function remove_ramp(z, order, mask; buf=nothing, A=nothing, coeffs=nothing, z_fit=nothing)
+function remove_ramp(z, mask; buf=nothing, A=nothing, coeffs=nothing, z_fit=nothing)
     if isnothing(buf)
         z_masked = copy(z)
     else
@@ -170,21 +164,14 @@ function remove_ramp(z, order, mask; buf=nothing, A=nothing, coeffs=nothing, z_f
     end
 
     z_masked[mask] .= NaN
-    if order == 1
-        return z - estimate_ramp1(z_masked, A, coeffs, z_fit)
-    elseif order == 2
-        return z - estimate_ramp2(z_masked, A, coeffs, z_fit)
-    else
-        println("WARNING: Order $order not supported. Running order 1 ramp removal")
-        return z - estimate_ramp1(z_masked)
-    end
+    return z - estimate_ramp(z_masked, A, coeffs, z_fit)
 end
 
 
 """Takes a 2D array an fits a linear plane to the data
     Ignores pixels that have nan or missing values
 
-For order = 1, it will be 3 numbers, a, b, c from
+Since it is an order 1 surface, it will be 3 numbers, a, b, c from
      ax + by + c = z
 """
 # TODO: Fix the mem-allocations here
@@ -223,48 +210,6 @@ function estimate_ramp1(z::Array{<:AbstractFloat, 2}, A=nothing, coeffs=nothing,
     return z_fit
 end
 
-"""
-For order = 2, it will be 6:
-    a*x + b*y + c*x*y + d*x^2 + ey^2 + f
-"""
-# TODO: Fix the mem-allocations here
-function estimate_ramp2(z::Array{<:AbstractFloat, 2}, A=nothing, coeffs=nothing, z_fit=nothing)
-    good_idxs = .~isnan.(z)
-
-    if isnothing(A)
-        A = ones((length(z), 6))
-    end
-    if isnothing(coeffs)
-        coeffs = Array{eltype(A), 1}(undef, (6,))
-    end
-    if isnothing(z_fit)
-        z_fit = similar(z)
-    end
-
-    Aidx = 1
-
-    for idx in CartesianIndices(z)
-        if good_idxs[idx]
-            # row, col is equiv to y, x, but subtract 1 to start at 0
-            y, x = idx.I .- 1
-            A[Aidx, 1] = x;   A[Aidx, 2] = y;  A[Aidx, 3] = x*y
-            A[Aidx, 4] = x^2; A[Aidx, 5] = y^2
-            Aidx += 1
-        end
-    end
-    qA = qr(A[reshape(good_idxs, :), :])
-    coeffs .=  qA \ z[good_idxs]
-
-    a, b, c, d, e, f = coeffs
-
-    for idx in CartesianIndices(z_fit)
-        # again subtract 1 to keep consistent with the fitting
-        y, x = idx.I .- 1
-        z_fit[idx] = a*x + b*y + c*x*y + d*x^2 + e*y^2 + f
-    end
-
-    return z_fit
-end
 
 function create_mean_hdf5(h5file::String; dset_name::String=STACK_DSET)
     h5open(h5file, "cw") do f
