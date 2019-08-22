@@ -1,16 +1,16 @@
 push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
 import InsarTimeseries
 import InsarTimeseries: PHASE_TO_CM
-using Convex
+import Convex
 using Dates
-using ECOS
+import ECOS
 using HDF5
 using LinearAlgebra
 using Statistics: mean
 using Plots
 using PyCall
 import Polynomials
-# using SCS
+# import SCS
 
 # TODO: USE REFERENCE STATION AND this
 # #df = create_insar_gps_df(geo_path, defo_filename=defo_filename, reference_station=reference_station)
@@ -106,16 +106,16 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
     v_linear_lstsq = Blin \ unw_vals
     v_unreg_lstsq = B \ unw_vals
 
-    # # solver = SCSSolver()
-    # solver = ECOSSolver(verbose=0)
-    # prob_linear = minimize(norm(Blin*v_linear_l1 - unw_vals, 1))
-    # prob_unreg = minimize(norm(B*v_unreg_l1 - unw_vals, 1))
+    # # solver = SCS.SCSSolver()
+    # solver = ECOS.ECOSSolver(verbose=0)
+    # prob_linear = Convex.minimize(norm(Blin*v_linear_l1 - unw_vals, 1))
+    # prob_unreg = Convex.minimize(norm(B*v_unreg_l1 - unw_vals, 1))
     # solve!(prob_linear, solver)
     # solve!(prob_unreg, solver)
     # # Using functions in module:
-    var_linear = Variable(1)
+    var_linear = Convex.Variable(1)
     v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, var_linear)
-    var_unreg = Variable(size(B, 2))
+    var_unreg = Convex.Variable(size(B, 2))
     v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, B, var_unreg)
 
     # v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
@@ -226,7 +226,7 @@ println("L1 maximum errors : $(maximum(l1_errors))")
 
 # function check_convex_l2(Blin, unw_vals)
 #     # To check that l2 norm min matches the backslash result
-#     v2linear_test = Variable(1)
+#     v2linear_test = Convex.Variable(1)
 #     prob_linear_test2 = minimize(norm(Blin*v2linear_test - unw_vals, 2))
 #     solve!(prob_linear_test2, ECOSSolver())
 # end
