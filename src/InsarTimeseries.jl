@@ -30,9 +30,15 @@ include("./analysis.jl")
 
 
 # TODO: figure out which we care to export
-# export load,
-#     run_inversion,
-#     ...
+export STACK_DSET,
+       STACK_DSET,
+       STACK_MEAN_DSET,
+       STACK_FLAT_DSET,
+       STACK_FLAT_SHIFTED_DSET,
+       REFERENCE_ATTR,
+       REFERENCE_STATION_ATTR
+        #     run_inversion,
+    #     ...
 
 end # module
 
