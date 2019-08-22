@@ -62,10 +62,11 @@ function parse_commandline()
             range_tester = x -> (x == 1 || x == 2)
             default = 1
             help = "Order of ramp to use for deramping .unw files"
-        "path"
-            help = "Path to directory with .h5 files"
-            default = "."
-            required = false
+        # TODO: do i care to add this path option? 
+        # "path"
+        #     help = "Path to directory with .h5 files"
+        #     default = "."
+        #     required = false
     end
 
     return parse_args(s)
