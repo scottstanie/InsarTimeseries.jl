@@ -23,20 +23,19 @@ function run_inversion(unw_stack_file::String;
                        ignore_geo_file=nothing, 
                        max_temporal_baseline::Union{Int, Nothing}=nothing,
                        alpha::Float32=0.0f0,
-                       L1::Bool=false,
-                       order=1)
+                       L1::Bool=false)
 
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
 
     if use_stackavg
-        flat_dset = (order == 1) ? STACK_FLAT_DSET1 : STACK_FLAT_DSET2
+        flat_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
         is_hdf5 = false
     else
-        flat_dset = (order == 1) ? STACK_FLAT_SHIFTED_DSET1 : STACK_FLAT_SHIFTED_DSET2
+        flat_dset = STACK_FLAT_SHIFTED_DSET
         println("Performing SBAS solution")
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
