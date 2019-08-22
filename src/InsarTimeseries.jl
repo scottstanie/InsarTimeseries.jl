@@ -1,7 +1,8 @@
 """Module InsarTimeseries
-
-Testing docstring
 """
+
+__precompile__(true)
+
 module InsarTimeseries
 
 # Include apertools Python modeules here to make available to all
@@ -19,6 +20,7 @@ include("./common.jl")
 include("./loading.jl")
 include("./prepare.jl")
 include("./stackavg.jl")
+include("./optimize.jl")
 include("./sbas.jl")
 include("./timeseries.jl")
 include("./mask.jl")

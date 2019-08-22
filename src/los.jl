@@ -235,7 +235,9 @@ end
 
 function read_orbit_vector(orbtiming_file)
     lines = readlines(orbtiming_file)
-    timefirst, timeend, nlines, num_state_vec = map(line -> parse(Int, line), lines[1:4])
+    # timefirst, timeend = map(line -> parse(Float64, line), lines[1:2])
+    nlines, num_state_vec = map(line -> parse(Int, line), lines[3:4])
+
     timeorbit = zeros(num_state_vec)
     xx = Array{Float64, 2}(undef, (3, num_state_vec))
     vv = similar(xx)
