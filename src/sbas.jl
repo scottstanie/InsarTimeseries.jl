@@ -130,7 +130,7 @@ function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.V
     # Note: these are defined here to allow multithreading and not reuse across threads
     solver = ECOS.ECOSSolver(verbose=0)
     problem = Convex.minimize(norm(B*v - pixel, 1))
-    solve!(problem, solver)
+    Convex.solve!(problem, solver)
 
     if length(v.value) > 1
         Float32.(vec(v.value))
