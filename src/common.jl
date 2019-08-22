@@ -8,10 +8,8 @@ const DATE_FMT = "yyyymmdd"
 # dataset names for general 3D stacks
 const STACK_DSET = "stack"
 const STACK_MEAN_DSET = "stack_mean"
-const STACK_FLAT_DSET1 = "stack_deramped_1"
-const STACK_FLAT_DSET2 = "stack_deramped_2"
-const STACK_FLAT_SHIFTED_DSET1 = "stack_deramped_1_shifted"
-const STACK_FLAT_SHIFTED_DSET2 = "stack_deramped_2_shifted"
+const STACK_FLAT_DSET = "stack_flat"
+const STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets
 const GEO_MASK_DSET = "geo"
