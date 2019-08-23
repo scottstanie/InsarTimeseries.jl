@@ -1,3 +1,5 @@
+using Distributed
+
 """Runs a reference point shift on flattened stack of unw files stored in .h5"""
 function deramp_unw_file(unw_stack_file::String; overwrite=false, stack_flat_dset=nothing)
     if isnothing(stack_flat_dset)
@@ -225,4 +227,24 @@ function create_mean_hdf5(h5file::String; dset_name::String=STACK_DSET)
         mean_buf ./= nlayers
         write(f, STACK_MEAN_DSET, mean_buf)
     end
+end
+
+function loop_over_files(f, directory, input_ext, output_ext)
+    file_list = Glob.glob("*"*input_ext, directory)
+    println("Looping over files:")
+    @show file_list
+
+    # Threads.@threads for fname in file_list
+    # @sync @distributed for fname in file_list
+    # pmap(file_list, _load_and_run(f)
+    pmap(fname -> _load_and_run(f, fname, input_ext, output_ext), file_list)
+    # end
+end
+function _load_and_run(f, fname, input_ext, output_ext)
+    # println("On thread id $(Threads.threadid()): Input: $fname, out: $outfile")
+    outfile = replace(fname, input_ext => output_ext)
+    println("On proc id $(Distributed.myid()): Input: $fname, out: $outfile")
+    input_arr = load(fname)
+    out_arr = f(input_arr)
+    save(outfile, out_arr)
 end
