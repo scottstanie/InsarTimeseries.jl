@@ -1,5 +1,6 @@
 import Glob
 using HDF5
+using Statistics: mean
 
 const SENTINEL_EXTS = [".geo", ".cc", ".int", ".amp", ".unw", ".unwflat"]
 const COMPLEX_EXTS = [".int", ".slc", ".geo", ".cc", ".unw", ".unwflat", ".mlc", ".grd"]
@@ -19,16 +20,17 @@ Raises:
     ValueError: if sentinel files loaded without a .rsc file in same path
         to give the file width
 """
-function load(filename::String; rsc_file::Union{String, Nothing}=nothing)
+function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
+              looks::Union{Tuple{Int, Int}, Nothing}=nothing)
     ext = get_file_ext(filename)
 
     # For now, just pass through unimplemented extensions to Python
     if ext in LOAD_IN_PYTHON
-        return sario.load(filename)
+        return take_looks(sario.load(filename), looks...)
     end
 
     if ext in ELEVATION_EXTS
-        return load_elevation(filename)
+        return take_looks(load_elevation(filename), looks...)
     end
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
@@ -354,7 +356,7 @@ function tofile(filename, array, do_permute=true)  #, overwrite=true)
 end
 
 
-# _iscomplex(array) = eltype(array) <: Complex
+_iscomplex(array) = eltype(array) <: Complex
 # _isfloat(array) = eltype(array) <: AbstractFloat
 
 function _force_float32(array) 
@@ -366,3 +368,59 @@ function _force_float32(array)
         return array
     end
 end
+
+"""Downsample a matrix by summing blocks of (row_looks, col_looks)
+
+Cuts off values if the size isn't divisible by num looks
+size = floor(rows / row_looks, cols / col_looks)
+"""
+function take_looks(arr, row_looks, col_looks, separate_complex=false)
+    (row_looks == 1 && col_looks == 1) && return arr
+
+    if _iscomplex(arr) && separate_complex
+        mag_looked = take_looks(abs.(arr), row_looks, col_looks)
+        phase_looked = take_looks(angle.(arr), row_looks, col_looks)
+        return @. mag_looked * exp(im * phase_looked)
+    end
+
+    nrows, ncols = size(arr)
+    row_cutoff = nrows % row_looks
+    col_cutoff = ncols % col_looks
+    if row_cutoff > 0
+        arr = view(arr, 1:nrows-row_cutoff, :)
+    end
+    if col_cutoff > 0
+        arr = view(arr, :, 1:ncols-col_cutoff)
+    end
+
+    new_rows, new_cols = map(Int, (size(arr, 1) / row_looks, size(arr, 2) / col_looks))
+    if eltype(arr) <: Int
+        arr = Float64.(arr)
+    end
+
+    return mean(reshape(arr, (row_looks, new_rows, col_looks, new_cols)),
+                            dims=(1, 3))[1, :, 1, :]
+end
+
+
+# # This is slow? :(
+# function take_looks(arr, row_looks, col_looks)
+#     # Output size is integer division (chop off not full looks)
+#     out_size = (div(size(arr, 1), row_looks), div(size(arr, 2), col_looks))
+#     out = Array{eltype(arr), 2}(undef, out_size)
+# 
+#     i, j, i2, j2 = 1, 1, 1, 1
+#     while j2 <= out_size[2]
+#         while i2 <= out_size[1]
+#             out[i2, j2] = mean(arr[i:i+row_looks-1, j:j+col_looks-1])
+#             i2 += 1
+#             i += row_looks
+#         end
+#         i = 1
+#         i2 = 1
+#         j += col_looks
+#         j2 += 1
+#     end
+#     return out
+# end
+
