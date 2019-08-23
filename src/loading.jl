@@ -154,12 +154,12 @@ function load_intlist_from_h5(h5file)
     end
 end
 
-
 function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true)
+    # TODO: is there a way to combine this with normal saving of files?
     if overwrite
         mode = "w"
     else
-        mode = "cw"  # Append mode
+        mode = "cw"  # Append mode  (why different than "a"?)
     end
     h5open(h5file, mode) do f 
         if do_permute
@@ -332,6 +332,37 @@ end
 # end
 
 
-# function save(filename::String, arr::Array{T, } ; kwargs...)
-# sario.save(filename, arr, kwargs...)
-# end
+function save(filename::String, array ; kwargs...)
+    ext = get_file_ext(filename)
+
+    if (ext in vcat(COMPLEX_EXTS, REAL_EXTS, ELEVATION_EXTS)) && (!(ext in STACKED_FILES))
+        tofile(filename, _force_float32(array))
+    elseif ext in STACKED_FILES
+        ndims(array) != 3 && throw(DimensionMismatch("array must be 3D [amp; data] to save as $filename"))
+        tofile(filename, _force_float32(hcat(array[:, :, 1], array[:, :, 2])))
+    else
+        sario.save(filename, array, kwargs...)
+    end
+end
+
+function tofile(filename, array, do_permute=true)  #, overwrite=true)
+    # mode = overwrite ? "w" : "a"
+    mode = "w"
+    open(filename, mode) do f 
+        do_permute ? write(f, transpose(array)) : write(f, array)
+    end
+end
+
+
+# _iscomplex(array) = eltype(array) <: Complex
+# _isfloat(array) = eltype(array) <: AbstractFloat
+
+function _force_float32(array) 
+    if eltype(array) <: Complex
+        return ComplexF32.(array)
+    elseif eltype(array) <: AbstractFloat
+        return Float32.(array)
+    else
+        return array
+    end
+end
