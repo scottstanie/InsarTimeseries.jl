@@ -1,6 +1,5 @@
 using Distributed: pmap, myid, workers, WorkerPool
 
-find_files(ext, directory=".") = sort(Glob.glob("*"*ext, directory))
 
 """Runs a reference point shift on flattened stack of unw files stored in .h5"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
@@ -51,7 +50,8 @@ function create_mask_stacks(igram_path, mask_filename=nothing, geo_path=nothing,
 
     # TODO: do the overwrite check
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
-                    looks=(row_looks, col_looks))
+                    looks=(row_looks, col_looks), out_dir=igram_path,
+                    max_procs=6)
 
     compute_int_masks(
         mask_file=mask_file,
@@ -279,10 +279,15 @@ Pass a function `f` to operate on each image
     runs in 1 second, vs about 8 seconds serially
 """
 function loop_over_files(f, directory::String, input_ext::String, output_ext::String;
-                         looks=(1, 1), max_procs::Union{Nothing, Int}=nothing)
+                         looks=(1, 1), out_dir=nothing,
+                         max_procs::Union{Nothing, Int}=nothing)
     in_files = find_files(input_ext, directory)
     println("Looping over files: $in_files")
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
+    if !isnothing(out_dir)
+        # Redo the path out if specified
+        out_files = [joinpath(out_dir, splitpath(f)[end]) for f in out_files]
+    end
 
     wp = _get_workerpool(max_procs)
     pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks),
