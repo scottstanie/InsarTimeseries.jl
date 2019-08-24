@@ -5,6 +5,10 @@ using HDF5
 
 const DATE_FMT = "yyyymmdd"
 
+const MASK_FILENAME = "masks.h5"
+const UNW_FILENAME = "unw_stack.h5"
+const CC_FILENAME = "cc_stack.h5"
+
 # dataset names for general 3D stacks
 const STACK_DSET = "stack"
 const STACK_MEAN_DSET = "stack_mean"
