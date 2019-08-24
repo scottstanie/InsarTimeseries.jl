@@ -21,7 +21,7 @@ Raises:
         to give the file width
 """
 function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
-              looks::Union{Tuple{Int, Int}, Nothing}=nothing)
+              looks::Tuple{Int, Int}=(1, 1))
     ext = get_file_ext(filename)
 
     # For now, just pass through unimplemented extensions to Python
@@ -37,11 +37,11 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
     rsc_data = _get_rsc_data(filename, rsc_file)
 
     if ext in STACKED_FILES
-        return load_stacked_img(filename, rsc_data)
+        return take_looks(load_stacked_img(filename, rsc_data), looks...)
     end
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     # TODO: haven"t transferred over UAVSAR functions, so no load_real yet
-    load_complex(filename, rsc_data)
+    return take_looks(load_complex(filename, rsc_data), looks...)
 
 end
 
@@ -369,58 +369,32 @@ function _force_float32(array)
     end
 end
 
+
 """Downsample a matrix by summing blocks of (row_looks, col_looks)
 
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(arr, row_looks, col_looks, separate_complex=false)
-    (row_looks == 1 && col_looks == 1) && return arr
-
-    if _iscomplex(arr) && separate_complex
-        mag_looked = take_looks(abs.(arr), row_looks, col_looks)
-        phase_looked = take_looks(angle.(arr), row_looks, col_looks)
-        return @. mag_looked * exp(im * phase_looked)
-    end
-
+function take_looks(arr, row_looks, col_looks)
+    # Output size is integer division (chop off not full looks)
     nrows, ncols = size(arr)
+    out_size = (div(nrows, row_looks), div(ncols, col_looks))
+    out = zeros(eltype(arr), out_size)
+
     row_cutoff = nrows % row_looks
     col_cutoff = ncols % col_looks
-    if row_cutoff > 0
-        arr = view(arr, 1:nrows-row_cutoff, :)
-    end
-    if col_cutoff > 0
-        arr = view(arr, :, 1:ncols-col_cutoff)
-    end
 
-    new_rows, new_cols = map(Int, (size(arr, 1) / row_looks, size(arr, 2) / col_looks))
-    if eltype(arr) <: Int
-        arr = Float64.(arr)
+    i2, j2 = 1, 1
+    @inbounds for j = 1:(ncols-col_cutoff)
+        @inbounds for i = 1:(nrows-row_cutoff)
+            # @show i, j, i2, j2
+            out[i2, j2] += arr[i, j]
+            i2 += (i % row_looks == 0) ? 1 : 0  # increment every `row_looks`
+        end
+        i2 = 1
+        j2 += (j % col_looks == 0) ? 1 : 0
     end
-
-    return mean(reshape(arr, (row_looks, new_rows, col_looks, new_cols)),
-                            dims=(1, 3))[1, :, 1, :]
+    total_looks = row_looks * col_looks
+    return out ./ total_looks 
 end
-
-
-# # This is slow? :(
-# function take_looks(arr, row_looks, col_looks)
-#     # Output size is integer division (chop off not full looks)
-#     out_size = (div(size(arr, 1), row_looks), div(size(arr, 2), col_looks))
-#     out = Array{eltype(arr), 2}(undef, out_size)
-# 
-#     i, j, i2, j2 = 1, 1, 1, 1
-#     while j2 <= out_size[2]
-#         while i2 <= out_size[1]
-#             out[i2, j2] = mean(arr[i:i+row_looks-1, j:j+col_looks-1])
-#             i2 += 1
-#             i += row_looks
-#         end
-#         i = 1
-#         i2 = 1
-#         j += col_looks
-#         j2 += 1
-#     end
-#     return out
-# end
 
