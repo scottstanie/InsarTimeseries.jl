@@ -229,7 +229,8 @@ function load_complex(filename::String, rsc_data::Dict{String, Any})
     out = Array{ComplexF32, 2}(undef, (cols, rows))
 
     read!(filename, out)
-    return permutedims(out)
+    # return permutedims(out)
+    return transpose(out)
 end
 
 
@@ -254,7 +255,8 @@ function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
 
     # TODO: port over rest of code for handling amp (if we care about that)
     # out_left = out[1:cols, :]
-    return permutedims(out[cols+1:end, :])
+    # return permutedims(out[cols+1:end, :])
+    return transpose(out[cols+1:end, :])
 end
 
 
@@ -337,7 +339,9 @@ end
 function save(filename::String, array ; kwargs...)
     ext = get_file_ext(filename)
 
-    if (ext in vcat(COMPLEX_EXTS, REAL_EXTS, ELEVATION_EXTS)) && (!(ext in STACKED_FILES))
+    if ext == ".mask"
+        tofile(filename, array, kwargs...)
+    elseif (ext in vcat(COMPLEX_EXTS, REAL_EXTS, ELEVATION_EXTS)) && (!(ext in STACKED_FILES))
         tofile(filename, _force_float32(array))
     elseif ext in STACKED_FILES
         ndims(array) != 3 && throw(DimensionMismatch("array must be 3D [amp; data] to save as $filename"))
@@ -369,32 +373,63 @@ function _force_float32(array)
     end
 end
 
-
 """Downsample a matrix by summing blocks of (row_looks, col_looks)
-
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(arr, row_looks, col_looks)
-    # Output size is integer division (chop off not full looks)
-    nrows, ncols = size(arr)
-    out_size = (div(nrows, row_looks), div(ncols, col_looks))
-    out = zeros(eltype(arr), out_size)
+function take_looks(arr, row_looks, col_looks, separate_complex=false)
+    (row_looks == 1 && col_looks == 1) && return arr
 
+    if _iscomplex(arr) && separate_complex
+        mag_looked = take_looks(abs.(arr), row_looks, col_looks)
+        phase_looked = take_looks(angle.(arr), row_looks, col_looks)
+        return @. mag_looked * exp(im * phase_looked)
+    end
+
+    nrows, ncols = size(arr)
     row_cutoff = nrows % row_looks
     col_cutoff = ncols % col_looks
-
-    i2, j2 = 1, 1
-    @inbounds for j = 1:(ncols-col_cutoff)
-        @inbounds for i = 1:(nrows-row_cutoff)
-            # @show i, j, i2, j2
-            out[i2, j2] += arr[i, j]
-            i2 += (i % row_looks == 0) ? 1 : 0  # increment every `row_looks`
-        end
-        i2 = 1
-        j2 += (j % col_looks == 0) ? 1 : 0
+    if row_cutoff > 0
+        arr = view(arr, 1:nrows-row_cutoff, :)
     end
-    total_looks = row_looks * col_looks
-    return out ./ total_looks 
+    if col_cutoff > 0
+        arr = view(arr, :, 1:ncols-col_cutoff)
+    end
+
+    new_rows, new_cols = map(Int, (size(arr, 1) / row_looks, size(arr, 2) / col_looks))
+    if eltype(arr) <: Int
+        arr = Float64.(arr)
+    end
+
+    return mean(reshape(arr, (row_looks, new_rows, col_looks, new_cols)),
+                            dims=(1, 3))[1, :, 1, :]
 end
+
+# """Downsample a matrix by summing blocks of (row_looks, col_looks)
+# 
+# Cuts off values if the size isn't divisible by num looks
+# size = floor(rows / row_looks, cols / col_looks)
+# """
+# function take_looks(arr, row_looks, col_looks)
+#     # Output size is integer division (chop off not full looks)
+#     nrows, ncols = size(arr)
+#     out_size = (div(nrows, row_looks), div(ncols, col_looks))
+#     out = zeros(eltype(arr), out_size)
+# 
+#     row_cutoff = nrows % row_looks
+#     col_cutoff = ncols % col_looks
+# 
+#     i2, j2 = 1, 1
+#     @inbounds for j = 1:(ncols-col_cutoff)
+#         @inbounds @simd for i = 1:(nrows-row_cutoff)
+#             # @show i, j, i2, j2
+#             out[i2, j2] += arr[i, j]
+#             i2 += (i % row_looks == 0) ? 1 : 0  # increment every `row_looks`
+#         end
+#         i2 = 1
+#         j2 += (j % col_looks == 0) ? 1 : 0
+#     end
+#     total_looks = row_looks * col_looks
+#     return out ./ total_looks 
+# end
 
