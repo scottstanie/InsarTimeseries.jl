@@ -9,10 +9,12 @@ module InsarTimeseries
 using PyCall
 const sario = PyNULL()
 const gps = PyNULL()
+const utils = PyNULL()
 
 function __init__()
     copy!(sario, pyimport("apertools.sario"))
     copy!(gps, pyimport("apertools.gps"))
+    copy!(utils, pyimport("apertools.utils"))
 end
 
 
