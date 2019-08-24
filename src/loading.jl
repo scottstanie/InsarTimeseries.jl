@@ -10,9 +10,12 @@ const ELEVATION_EXTS = [".dem", ".hgt"]
 # .unwflat are same as .unw, but with a linear ramp removed
 const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
+const BOOL_EXTS = [".mask"]
 
 const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
 
+
+find_files(ext, directory=".") = sort(Glob.glob("*"*ext, directory))
 
 """Examines file type for real/complex and runs appropriate load
 
@@ -27,9 +30,7 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
     # For now, just pass through unimplemented extensions to Python
     if ext in LOAD_IN_PYTHON
         return take_looks(sario.load(filename), looks...)
-    end
-
-    if ext in ELEVATION_EXTS
+    elseif ext in ELEVATION_EXTS
         return take_looks(load_elevation(filename), looks...)
     end
 
@@ -38,10 +39,13 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
 
     if ext in STACKED_FILES
         return take_looks(load_stacked_img(filename, rsc_data), looks...)
-    end
+    elseif ext in BOOL_EXTS
+        return take_looks(load_bool(filename, rsc_data), looks...)
+    else
+        return take_looks(load_complex(filename, rsc_data), looks...)
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     # TODO: haven"t transferred over UAVSAR functions, so no load_real yet
-    return take_looks(load_complex(filename, rsc_data), looks...)
+    end
 
 end
 
@@ -76,7 +80,7 @@ function _get_rsc_data(filename, rsc_file)
     rsc_data = nothing
     if !isnothing(rsc_file)
         rsc_data = sario.load(rsc_file)
-    elseif ext in SENTINEL_EXTS || ext in ELEVATION_EXTS
+    elseif ext in vcat(SENTINEL_EXTS, ELEVATION_EXTS, BOOL_EXTS)
         rsc_file = sario.find_rsc_file(filename)
         rsc_data = sario.load(rsc_file)
     end
@@ -223,10 +227,18 @@ end
 
 
 function load_complex(filename::String, rsc_data::Dict{String, Any})
+    return _load_bin_matrix(filename, rsc_data, ComplexF32)
+end
+
+function load_bool(filename::String, rsc_data::Dict{String, Any})
+    return _load_bin_matrix(filename, rsc_data, Bool)
+end
+
+function _load_bin_matrix(filename, rsc_data, dtype)
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
     # Note: must be saved in c/row-major order, so loading needs a transpose
-    out = Array{ComplexF32, 2}(undef, (cols, rows))
+    out = Array{dtype, 2}(undef, (cols, rows))
 
     read!(filename, out)
     # return permutedims(out)
@@ -266,9 +278,8 @@ function load_stack(; file_list::Union{Array{String}, Nothing}=nothing,
                     directory::Union{String, Nothing}=nothing,
                     file_ext::Union{String, Nothing}=nothing)
     if isnothing(file_list)
-        file_list = sort(Glob.glob("*$file_ext", directory))
+        file_list = find_files(file_ext, directory)
     end
-
 
     # rsc_data = sario.load(sario.find_rsc_file(basepath=directory))
     test_arr = load(file_list[1])
@@ -287,7 +298,7 @@ function load_stack(; file_list::Union{Array{String}, Nothing}=nothing,
 end
 
 # Using multiple dispatch to avoid if statements for 2 types of images
-function _return_array(T::Type{ComplexF32}, rows::Int, cols::Int, file_len::Int)
+function _return_array(T::Union{Type{ComplexF32}, Type{Bool}}, rows::Int, cols::Int, file_len::Int)
     stack = Array{T, 3}(undef, (cols, rows, file_len))
     buffer = Array{T, 2}(undef, (cols, rows))
     stack, buffer
@@ -299,8 +310,8 @@ function _return_array(T::Type{Float32}, rows::Int, cols::Int, file_len::Int)
     stack, buffer
 end
 
-# For normal .int, .geo complex, just transpose stack
-function _permute(stack::Array{ComplexF32, 3}, cols::Int)
+# For normal .int, .geo complex/ masks, just transpose stack
+function _permute(stack::Array{T, 3}, cols::Int) where {T <: Number}
     return permutedims(stack, (2, 1, 3))
 end
 
@@ -339,7 +350,7 @@ end
 function save(filename::String, array ; kwargs...)
     ext = get_file_ext(filename)
 
-    if ext == ".mask"
+    if ext in BOOL_EXTS
         tofile(filename, array, kwargs...)
     elseif (ext in vcat(COMPLEX_EXTS, REAL_EXTS, ELEVATION_EXTS)) && (!(ext in STACKED_FILES))
         tofile(filename, _force_float32(array))
