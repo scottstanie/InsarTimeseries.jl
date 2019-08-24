@@ -1,4 +1,4 @@
-using Distributed: pmap, myid, workers, WorkerPool
+using Distributed: pmap, myid, workers, WorkerPool, @sync, @spawn, @async
 
 
 """Runs a reference point shift on flattened stack of unw files stored in .h5"""
@@ -42,26 +42,23 @@ function create_mask_stacks(igram_path, mask_filename=nothing, geo_path=nothing,
 
     row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
     dem_rsc = load(sario.find_rsc_file(directory=igram_path))
-    # TODO: make sure the masks geo/intlists are togeher...
-    # Maybe just lump them with the unw file
-    # sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    # save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
-    # save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
 
     # TODO: do the overwrite check
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
                     max_procs=6)
+                  
+    # Now with bigger geo files read in parallel, 
+    # write all to hdf5 file as stack
+    save_masks(geo_mask_stack, igram_path,
+               geo_path, overwrite=overwrite)
 
-    compute_int_masks(
-        mask_file=mask_file,
-        igram_path=igram_path,
-        geo_path=geo_path,
-        row_looks=row_looks,
-        col_looks=col_looks,
-        dem_rsc=dem_rsc,
-        overwrite=overwrite,
-    )
+    # Finall, add the aux. information
+    dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
+    sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET,
+                         overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
 end
 
 _get_geo_mask(arr) = (arr .== 0)
@@ -70,37 +67,50 @@ _get_geo_mask(arr) = (arr .== 0)
 
 Assumes save_geo_masks already run
 """
-function compute_int_masks(
-        igram_path=None,
-        geo_path=None,
-        dem_rsc=None,
-        dset_name=IGRAM_MASK_DSET,
-        overwrite=False,
-)
-    # TODO: add checks for overwrite
+function save_masks(igram_path, geo_path; overwrite=false,
+                    mask_file=MASK_FILENAME,
+                    geo_dset_name=GEO_MASK_DSET,
+                    igram_dset_name=IGRAM_MASK_DSET)
+    # TODO?: add checks for overwrite
+    if !sario.check_dset(mask_file, geo_dset_name, overwrite)
+        return
+    elseif !sario.check_dset(mask_file, igram_dset_name, overwrite)
+        return
+    elseif !sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite)
+        return
+    end
 
+    geo_mask_stack = load_stack(directory=igram_path,
+                                file_ext=".geo.mask")
+
+    save_hdf5_stack(mask_file, geo_dset_name, geo_mask_stack)  #TODO: chunks...
+    # Also create one image of the total masks
+    # TODO: any way to have sum reduce the dims?
+    h5write(mask_file, GEO_MASK_SUM_DSET, permutedims(sum(geo_mask_stack, dims=1)[:, :, 1]))
+
+    # _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
     int_date_list = sario.find_igrams(directory=igram_path)
     int_file_list = sario.find_igrams(directory=igram_path, parse=false)
-
     geo_date_list = sario.find_geos(directory=geo_path)
 
-
-    geo_mask_stack = f[GEO_MASK_DSET]
-    int_mask_dset = f[dset_name]
-    # TODO: fix/pass to parallel
+    nrows, ncols, _ = size(geo_mask_stack)
+    int_mask_stack = Array{eltype(geo_mask_stack), 3}(undef, (nrows, ncols, length(int_file_list)))
     for (idx, (early, late)) in enumerate(int_date_list)
-        early_idx = geo_date_list.index(early)
-        late_idx = geo_date_list.index(late)
-        early_mask = geo_mask_stack[early_idx]
-        late_mask = geo_mask_stack[late_idx]
+        early_idx = findfirst(isequal(early), geo_date_list)
+        late_idx = findfirst(isequal(late), geo_date_list)
+        early_mask = geo_mask_stack[:, :, early_idx]
+        late_mask = geo_mask_stack[:, :, late_idx]
+
+        out_filename = int_file_list[idx] * ".mask"
 
         new_mask = early_mask .| late_mask
-        int# _mask_sum .+= new_mask
-
+        int_mask_stack[:, :, idx] .= new_mask
+        # save(out_filename, new_mask)
     end
-    # # Also create one image of the total masks
-    # f[IGRAM_MASK_SUM_DSET] = sum(int_mask_dset, dims=0)
+    save_hdf5_stack(mask_file, igram_dset_name, int_mask_stack)
 end
+
+# function _make_int_mask(geo_mask_stack, igram, out_filename)
 
 
 """Subtracts reference pixel group from each layer
@@ -157,7 +167,7 @@ end
 
 """
 Note: window is size of the group around ref pixel to avg for reference.
-    if window=1 or None, only the single pixel used to shift the group.
+    if window=1 or nothing, only the single pixel used to shift the group.
 """
 
 # TODO: check later if worth doing one for HDF5Dataset, one for Array
