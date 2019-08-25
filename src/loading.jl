@@ -137,7 +137,7 @@ function load_elevation(filename; do_permute=true)
         # min_valid = -10000
         # # Set NaN values to 0
         # @. data[data < min_valid] = 0
-        return do_permute? permutedims(data) : data
+        return do_permute ? permutedims(data) : data
     else
         # swap_bytes = (ext == ".hgt")
         throw("$ext not implemented")
@@ -172,7 +172,7 @@ Format is two stacked matrices:
 For .unw height files, the first is amplitude, second is phase (unwrapped)
 For .cc correlation files, first is amp, second is correlation (0 to 1)
 """
-function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
+function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
     # Note: must be saved in c/row-major order, so loading needs a transpose
@@ -185,7 +185,7 @@ function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
 
     # TODO: port over rest of code for handling amp (if we care about that)
     # out_left = out[1:cols, :]
-    return permutedims(out[cols+1:end, :])
+    return do_permute ? permutedims(out[cols+1:end, :]) : out[cols+1:end, :]
 end
 
 function load_geolist_from_h5(h5file::String)
