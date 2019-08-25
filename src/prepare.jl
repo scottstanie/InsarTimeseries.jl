@@ -12,9 +12,12 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
         println("Output Files, overwrite = $overwrite. Skipping")
         return nothing
     end
+    mask_stack = load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET)
 
+    wp = _get_workerpool(8)
     println("Starting stack deramp ")
-    loop_over_files((arr, mask) -> remove_ramp(arr, mask), in_files, out_files)
+    pmap((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
+         wp, in_files, out_files)
     println("Deramping stack complete")
 end
 
@@ -43,10 +46,9 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
     dem_rsc = load(sario.find_rsc_file(directory=igram_path))
 
-    # TODO: do the overwrite check
-    # loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
-    #                 looks=(row_looks, col_looks), out_dir=igram_path,
-    #                 max_procs=6)
+    loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
+                    looks=(row_looks, col_looks), out_dir=igram_path,
+                    max_procs=6)
                   
     # Now with bigger geo files read in parallel, 
     # write all to hdf5 file as stack
@@ -102,8 +104,8 @@ function save_masks(igram_path, geo_path; overwrite=false,
         int_mask_stack[:, :, idx] .= new_mask
         # save(out_filename, new_mask)
     end
-    save_hdf5_stack(mask_file, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false, dtype=Bool)
-    save_hdf5_stack(mask_file, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false, dtype=Bool)  #TODO: chunks...
+    save_hdf5_stack(mask_file, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false)
+    save_hdf5_stack(mask_file, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)  #TODO: chunks...
             # write(f, dset_name, permutedims(stack, (2, 1, 3)))
     # Also create one image of the total masks
     # TODO: any way to have sum reduce the dims?
@@ -313,12 +315,13 @@ function loop_over_files(f, in_files::Array{String, 1}, out_files::Array{String,
          wp, in_files, out_files)
 end
 
-function _load_and_run(f, name_in, name_out; looks=(1, 1))
+function _load_and_run(f, name_in, name_out args...; looks=(1, 1), kwargs...)
     println("Input: $name_in, out: $name_out")
     input_arr = load(name_in, looks=looks)
-    out_arr = f(input_arr)
+    out_arr = f(input_arr, args..., kwargs...)
     save(name_out, out_arr)
 end
+
 function _get_workerpool(max_procs)
     if isnothing(max_procs)
         return WorkerPool(workers())
