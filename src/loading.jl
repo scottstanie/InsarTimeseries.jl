@@ -133,7 +133,7 @@ function load_elevation(filename)
         # min_valid = -10000
         # # Set NaN values to 0
         # @. data[data < min_valid] = 0
-        return transpose(data)
+        return permutedims(data)
     else
         # swap_bytes = (ext == ".hgt")
         throw("$ext not implemented")
@@ -238,8 +238,7 @@ function _load_bin_matrix(filename, rsc_data, dtype)
     out = Array{dtype, 2}(undef, (cols, rows))
 
     read!(filename, out)
-    # return permutedims(out)
-    return transpose(out)
+    return permutedims(out)
 end
 
 
@@ -264,8 +263,7 @@ function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
 
     # TODO: port over rest of code for handling amp (if we care about that)
     # out_left = out[1:cols, :]
-    # return permutedims(out[cols+1:end, :])
-    return transpose(out[cols+1:end, :])
+    return permutedims(out[cols+1:end, :])
 end
 
 
@@ -352,8 +350,16 @@ function save(filename::String, array ; kwargs...)
     elseif (ext in vcat(COMPLEX_EXTS, REAL_EXTS, ELEVATION_EXTS)) && (!(ext in STACKED_FILES))
         tofile(filename, _force_float32(array))
     elseif ext in STACKED_FILES
-        ndims(array) != 3 && throw(DimensionMismatch("array must be 3D [amp; data] to save as $filename"))
-        tofile(filename, _force_float32(hcat(array[:, :, 1], array[:, :, 2])))
+        # ndims(array) != 3 && throw(DimensionMismatch("array must be 3D [amp; data] to save as $filename"))
+        if ndims(array) == 3
+            amp = view(array, :, :, 1)
+            data = view(array, :, :, 2)
+        else
+            println("Warning: saving $filename with 1s for amplitude")
+            data = array
+            amp = ones(size(array))
+        end
+        tofile(filename, _force_float32(hcat(amp, data)))
     else
         sario.save(filename, array, kwargs...)
     end
