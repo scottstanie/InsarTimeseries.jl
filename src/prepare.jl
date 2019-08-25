@@ -5,7 +5,8 @@ function prepare_stacks(igram_path; overwrite=false)
     cc_stack_file = joinpath(igram_path, CC_FILENAME)
     mask_stack_file = joinpath(igram_path, MASK_FILENAME)
 
-    create_mask_stacks(igram_path, mask_filename=mask_stack_file, overwrite=overwrite)
+    # Step 1: create the masks.h5 file
+    create_mask_stacks(igram_path, mask_filename=mask_stack_file, overwrite=overwrite) 
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
@@ -205,6 +206,8 @@ function create_hdf5_stack(filename::String,
     # Now save dem rsc as well
     dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
     sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    sario.save_geolist_to_h5(directory, filename, overwrite=overwrite)
+    sario.save_intlist_to_h5(directory, filename, overwrite=overwrite)
 
     !sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
     mean_buf ./= length(file_list)
