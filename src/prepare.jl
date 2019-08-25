@@ -95,9 +95,8 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
-    map((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
-        #  wp, 
-        in_files, out_files, sliceview(mask_stack))
+    pmap((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
+        wp, in_files, out_files, sliceview(mask_stack))
     println("Deramping stack complete")
 end
 
