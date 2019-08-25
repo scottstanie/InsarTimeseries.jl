@@ -39,19 +39,14 @@ function save_masks(igram_path, geo_path; overwrite=false,
                     geo_dset_name=GEO_MASK_DSET,
                     igram_dset_name=IGRAM_MASK_DSET)
     # TODO?: add checks for overwrite
-    if !sario.check_dset(mask_file, geo_dset_name, overwrite)
-        return
-    elseif !sario.check_dset(mask_file, igram_dset_name, overwrite)
-        return
-    elseif !sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite)
-        return
-    end
+    !sario.check_dset(mask_file, geo_dset_name, overwrite) && return
+    !sario.check_dset(mask_file, igram_dset_name, overwrite) && return
+    !sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite) && return
 
     geo_mask_stack = load_stack(directory=igram_path,
                                 file_ext=".geo.mask")
 
 
-    # _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
     int_date_list = sario.find_igrams(directory=igram_path)
     int_file_list = sario.find_igrams(directory=igram_path, parse=false)
     geo_date_list = sario.find_geos(directory=geo_path)
@@ -80,7 +75,7 @@ function save_masks(igram_path, geo_path; overwrite=false,
 end
 
 
-"""Runs a reference point shift on flattened stack of unw files stored in .h5"""
+"""Remove a linear ramp from .unw files, save as .unwflat"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
     println("Writing deramped unws to $output_ext files")
     in_files = find_files(input_ext, directory)
@@ -102,108 +97,6 @@ end
 
 sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
 
-function _create_dset(h5file, dset_name, shape, dtype)
-    # TODO: add a chunking option for ones we access depth-wise vs layer-wise
-    # dset = d_create(g, "B", datatype(Float64), dataspace(1000,100,10), "chunk", (100,100,1))
-    h5open(h5file, "cw") do f
-        d_create(f,
-            dset_name,
-            datatype(dtype),
-            dataspace(shape),
-        )
-    end
-end
-
-"""Subtracts reference pixel group from each layer
-
-window is the size around the reference pixel to 
-average at each layer"""
-function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
-                        ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
-                        overwrite=false)
-    """Runs a reference point shift on flattened stack of unw files stored in .h5"""
-    if isnothing(stack_flat_dset)
-        stack_flat_dset = STACK_FLAT_DSET
-    end
-    stack_flat_shifted_dset = stack_flat_dset * "_shifted"
-
-    if !sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite)
-        return nothing
-    end
-
-    if (isnothing(ref_row) || isnothing(ref_col))
-        println("Using $ref_station as reference")
-        rsc_data = sario.load_dem_from_h5(unw_stack_file)
-        ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
-    end
-    println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
-
-    h5open(unw_stack_file, "cw") do f
-        if !(stack_flat_dset in names(f))
-            throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
-        end
-
-        stack_in = f[stack_flat_dset]
-        d_create(f,
-            stack_flat_shifted_dset,
-            datatype(Float32),
-            dataspace(size(stack_in)),
-        )
-        stack_out = f[stack_flat_shifted_dset]
-
-        # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
-        # Note: switching these so we don't have to permute dims upon loading HDF5Dset
-        shift_stack(stack_in, stack_out, ref_col, ref_row, window=window)
-
-    end
-
-    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
-    # Make sure we don't write Nothing
-    station_str = isnothing(ref_station) ? "" : ref_station
-    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_STATION_ATTR => station_str))
-
-    println("Shifting stack complete")
-end
-
-
-"""
-Note: window is size of the group around ref pixel to avg for reference.
-    if window=1 or nothing, only the single pixel used to shift the group.
-"""
-
-# TODO: check later if worth doing one for HDF5Dataset, one for Array
-function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; 
-                     window::Int=5)
-    half_win = div(window, 2)
-    winsize = (2half_win + 1, 2half_win + 1)  # Make sure it is odd sized
-    patch = Array{Float32, 2}(undef, winsize)
-
-    nrows, ncols, nlayers = size(stack_in)
-    layer = Array{Float32, 2}(undef, (nrows, ncols))
-    layer_out = similar(layer)
-
-    @show stack_in
-    @show stack_out
-
-    @inbounds for k = 1:nlayers
-        layer .= view(stack_in, :, :, k)
-        layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
-        stack_out[:, :, k] = layer_out
-
-        if k % 100 == 0
-            println("Finished with $k layers")
-        end
-    end
-    return stack_out
-end
-
-function _shift_layer(layer, patch, ref_row, ref_col, half_win)
-    patch .= layer[ref_row - half_win:ref_row + half_win, 
-                   ref_col - half_win:ref_col + half_win]
-
-    # Adding the `view` to eliminate extra singleton dimension from HDF5
-    return view(layer .- mean(patch), :, :)
-end
 
 
 function remove_ramp(z, mask)
@@ -248,6 +141,140 @@ function estimate_ramp(z::Array{<:AbstractFloat, 2})
     return z_fit
 end
 
+"""Make stack as hdf5 file from a group of existing files"""
+function create_hdf5_stack(filename,
+                           file_ext=nothing,
+                           directory=".",
+                           save_rsc=true,
+                           overwrite=false)
+
+    mean_buf = np.zeros((dset.shape[1], dset.shape[2]), dset.dtype)
+        fname = "{fext}_stack.h5".format(fext=file_ext.strip("."))
+    filename = abspath(joinpath(directory, fname))
+    println("Creating stack file $filename")
+
+    get_file_ext(filename) in (".h5", ".hdf5") || ArgumentError("filename must end in .h5 or .hdf5")
+    !sario.check_dset(filename, STACK_DSET, overwrite) && return
+
+    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
+
+    testf = sario.load(file_list[1])
+    rows, cols = size(testf)
+    # Note: since we're just loading/saving, don't permute on way in or way out
+    shape = (cols, rows, length(file_list))
+    _create_dset(filename, STACK_DSET, shape, dtype=eltype(testf))
+    arr_buf = zeros(eltype(testf), cols, rows)
+    mean_buf = zeros(eltype(testf), cols, rows)
+
+    h5open(filename, "r+") do hf
+        dset = hf[STACK_DSET]
+        for (idx, f) in enumerate(file_list)
+            arr .= load(f, do_permute=false)
+            dset[idx] = arr
+            mean_buf += arr
+        end
+    end
+    h5writeattr(filename, STACK_DSET, Dict("filenames" => file_list))
+
+    # Now save dem rsc as well
+    dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
+    sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+
+    !sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
+    mean_buf ./= length(file_list)
+    h5write(filename, STACK_MEAN_DSET, mean_buf)
+
+    return filename
+
+
+"""Subtracts reference pixel group from each layer
+
+window is the size around the reference pixel to 
+average at each layer"""
+function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
+                        ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
+                        overwrite=false)
+    """Runs a reference point shift on flattened stack of unw files stored in .h5"""
+    if isnothing(stack_flat_dset)
+        stack_flat_dset = STACK_FLAT_DSET
+    end
+    stack_flat_shifted_dset = stack_flat_dset * "_shifted"
+
+    !sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite) && return
+
+    if (isnothing(ref_row) || isnothing(ref_col))
+        println("Using $ref_station as reference")
+        rsc_data = sario.load_dem_from_h5(unw_stack_file)
+        ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
+    end
+    println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
+
+    h5open(unw_stack_file, "cw") do f
+        if !(stack_flat_dset in names(f))
+            throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
+        end
+
+        stack_in = f[stack_flat_dset]
+        d_create(f,
+            stack_flat_shifted_dset,
+            datatype(Float32),
+            dataspace(size(stack_in)),
+        )
+        stack_out = f[stack_flat_shifted_dset]
+
+        # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
+        # Note: switching these so we don't have to permute dims upon loading HDF5Dset
+        shift_stack(stack_in, stack_out, ref_col, ref_row, window=window)
+
+    end
+
+    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
+    # Make sure we don't write Nothing
+    station_str = isnothing(ref_station) ? "" : ref_station
+    h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_STATION_ATTR => station_str))
+
+    println("Shifting stack complete")
+end
+
+
+"""
+Note: window is size of the group around ref pixel to avg for reference.
+    if window=1 or nothing, only the single pixel used to shift the group.
+"""
+# TODO: check later if worth doing one for HDF5Dataset, one for Array
+function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int; 
+                     window::Int=5)
+    half_win = div(window, 2)
+    winsize = (2half_win + 1, 2half_win + 1)  # Make sure it is odd sized
+    patch = Array{Float32, 2}(undef, winsize)
+
+    nrows, ncols, nlayers = size(stack_in)
+    layer = Array{Float32, 2}(undef, (nrows, ncols))
+    layer_out = similar(layer)
+
+    @show stack_in
+    @show stack_out
+
+    @inbounds for k = 1:nlayers
+        layer .= view(stack_in, :, :, k)
+        layer_out .=  _shift_layer(layer, patch, ref_row, ref_col, half_win)
+        stack_out[:, :, k] = layer_out
+
+        if k % 100 == 0
+            println("Finished with $k layers")
+        end
+    end
+    return stack_out
+end
+
+function _shift_layer(layer, patch, ref_row, ref_col, half_win)
+    patch .= layer[ref_row - half_win:ref_row + half_win, 
+                   ref_col - half_win:ref_col + half_win]
+
+    # Adding the `view` to eliminate extra singleton dimension from HDF5
+    return view(layer .- mean(patch), :, :)
+end
+
 
 function create_mean_hdf5(h5file::String; dset_name::String=STACK_DSET)
     h5open(h5file, "cw") do f
@@ -265,6 +292,20 @@ function create_mean_hdf5(h5file::String; dset_name::String=STACK_DSET)
         write(f, STACK_MEAN_DSET, mean_buf)
     end
 end
+
+
+function _create_dset(h5file, dset_name, shape, dtype)
+    # TODO: add a chunking option for ones we access depth-wise vs layer-wise
+    # dset = d_create(g, "B", datatype(Float64), dataspace(1000,100,10), "chunk", (100,100,1))
+    h5open(h5file, "cw") do f
+        d_create(f,
+            dset_name,
+            datatype(dtype),
+            dataspace(shape),
+        )
+    end
+end
+
 
 
 """Parallel way to run over many image files
