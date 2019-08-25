@@ -1,24 +1,26 @@
 using Distributed: pmap, workers, WorkerPool
 
-function prepare_stacks(igram_path, overwrite=false)
+function prepare_stacks(igram_path; overwrite=false)
     unw_stack_file = joinpath(igram_path, UNW_FILENAME)
     cc_stack_file = joinpath(igram_path, CC_FILENAME)
     mask_stack_file = joinpath(igram_path, MASK_FILENAME)
 
-    create_mask_stacks(igram_path; mask_filename=mask_stack_file, overwrite=overwrite)
+    create_mask_stacks(igram_path, mask_filename=mask_stack_file, overwrite=overwrite)
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
     create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
-    create_hdf5_stack(cc_stack_file ".cc", overwrite=overwrite)
+    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite)
 
-    ref_row, ref_col, ref_station = find_reference_location(
-        unw_stack_file=unw_stack_file,
-        cc_stack_file=cc_stack_file,
-        mask_stack_file=mask_stack_file,
-    )
+    # TODO: auto pick, redo that logic here
+    # ref_row, ref_col, ref_station = find_reference_location(
+    #     unw_stack_file=unw_stack_file,
+    #     cc_stack_file=cc_stack_file,
+    #     mask_stack_file=mask_stack_file,
+    # )
+    ref_row, ref_col, ref_station = (50, 50, "")
 
-    shift_unw_file(unw_stack_file=unw_stack_file,
+    shift_unw_file(unw_stack_file,
                    ref_row=ref_row,
                    ref_col=ref_col,
                    ref_station=ref_station,
@@ -29,7 +31,7 @@ end
 # More and they thrash while reading
 function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing, overwrite=false)
     if isnothing(mask_filename)
-        mask_file = joinpath(igram_path, MASK_FILENAME)
+        mask_filename = joinpath(igram_path, MASK_FILENAME)
     end
     if isnothing(geo_path)
         geo_path = utils.get_parent_dir(igram_path)
@@ -40,7 +42,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
-                    max_procs=6)
+                    max_procs=6, overwrite=overwrite)
                   
     # Now with bigger geo files read in parallel, 
     # write all to hdf5 file as stack
@@ -48,10 +50,10 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
 
     # Finall, add the aux. information
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
-    sario.save_dem_to_h5(mask_file, dem_rsc, dset_name=DEM_RSC_DSET,
+    sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
                          overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path, mask_file, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path, mask_file, overwrite=overwrite)
+    sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
 end
 
 _get_geo_mask(arr) = (arr .== 0)
@@ -60,13 +62,13 @@ _get_geo_mask(arr) = (arr .== 0)
 
 Assumes save_geo_masks already run"""
 function save_masks(igram_path, geo_path; overwrite=false,
-                    mask_file=MASK_FILENAME,
+                    mask_filename=MASK_FILENAME,
                     geo_dset_name=GEO_MASK_DSET,
                     igram_dset_name=IGRAM_MASK_DSET)
     # TODO?: add checks for overwrite
-    !sario.check_dset(mask_file, geo_dset_name, overwrite) && return
-    !sario.check_dset(mask_file, igram_dset_name, overwrite) && return
-    !sario.check_dset(mask_file, GEO_MASK_SUM_DSET, overwrite) && return
+    !sario.check_dset(mask_filename, geo_dset_name, overwrite) && return
+    !sario.check_dset(mask_filename, igram_dset_name, overwrite) && return
+    !sario.check_dset(mask_filename, GEO_MASK_SUM_DSET, overwrite) && return
 
     geo_mask_stack = load_stack(directory=igram_path,
                                 file_ext=".geo.mask")
@@ -90,15 +92,16 @@ function save_masks(igram_path, geo_path; overwrite=false,
         int_mask_stack[:, :, idx] .= new_mask
         # save(out_filename, new_mask)
     end
-    save_hdf5_stack(mask_file, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false)
-    save_hdf5_stack(mask_file, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)  #TODO: chunks...
+    save_hdf5_stack(mask_filename, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false)
+    save_hdf5_stack(mask_filename, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)  #TODO: chunks...
             # write(f, dset_name, permutedims(stack, (2, 1, 3)))
     # Also create one image of the total masks
     # TODO: any way to have sum reduce the dims?
-    h5write(mask_file, GEO_MASK_SUM_DSET, 
+    h5write(mask_filename, GEO_MASK_SUM_DSET, 
             permutedims(sum(geo_mask_stack, dims=3)[:, :, 1]))
 end
 
+_should_skip(out_files, overwrite) = all(isfile(f) for f in out_files) && !overwrite
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
@@ -107,7 +110,7 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
 
     # If we already have these files made, skip the function
-    if all(isfile(f) for f in out_files) && !overwrite
+    if _should_skip(out_files, overwrite)
         println("Output Files, overwrite = $overwrite. Skipping")
         return nothing
     end
@@ -227,13 +230,14 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     !sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite) && return
 
     if (isnothing(ref_row) || isnothing(ref_col))
+        isnothing(ref_station) && throw(ArgumentError("Need ref_station if no ref_row/ref_col"))
         println("Using $ref_station as reference")
         rsc_data = sario.load_dem_from_h5(unw_stack_file)
         ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
     end
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
-    h5open(unw_stack_file, "cw") do f
+    h5open(unw_stack_file, "r+") do f
         if !(stack_flat_dset in names(f))
             throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
         end
@@ -343,13 +347,18 @@ Pass a function `f` to operate on each image
 """
 function loop_over_files(f, directory::String, input_ext::String, output_ext::String;
                          looks=(1, 1), out_dir=nothing,
-                         max_procs::Union{Nothing, Int}=nothing)
+                         max_procs::Union{Nothing, Int}=nothing,
+                        overwrite=false)
     in_files = find_files(input_ext, directory)
     println("Looping over files: $in_files")
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
     if !isnothing(out_dir)
         # Redo the path out if specified
         out_files = [joinpath(out_dir, splitpath(f)[end]) for f in out_files]
+    end
+    if _should_skip(out_files, overwrite)
+        println("Output files exist and overwrite = $overwrite, skipping")
+        return
     end
 
     wp = _get_workerpool(max_procs)
