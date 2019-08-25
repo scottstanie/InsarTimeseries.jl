@@ -17,6 +17,10 @@ const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
 
 find_files(ext, directory=".") = sort(Glob.glob("*"*ext, directory))
 
+"""Extracts the file extension, including the "." (e.g.: .slc)"""
+get_file_ext(filename::String) = splitext(filename)[end]
+
+
 """Examines file type for real/complex and runs appropriate load
 
 Raises:
@@ -24,7 +28,7 @@ Raises:
         to give the file width
 """
 function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
-              looks::Tuple{Int, Int}=(1, 1))
+              looks::Tuple{Int, Int}=(1, 1), do_permute=true)
     ext = get_file_ext(filename)
 
     # For now, just pass through unimplemented extensions to Python
@@ -38,11 +42,11 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
     rsc_data = _get_rsc_data(filename, rsc_file)
 
     if ext in STACKED_FILES
-        return take_looks(load_stacked_img(filename, rsc_data), looks...)
+        return take_looks(load_stacked_img(filename, rsc_data, do_permute=do_permute), looks...)
     elseif ext in BOOL_EXTS
-        return take_looks(load_bool(filename, rsc_data), looks...)
+        return take_looks(load_bool(filename, rsc_data, do_permute=do_permute), looks...)
     else
-        return take_looks(load_complex(filename, rsc_data), looks...)
+        return take_looks(load_complex(filename, rsc_data, do_permute=do_permute), looks...)
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     # TODO: haven"t transferred over UAVSAR functions, so no load_real yet
     end
@@ -117,7 +121,7 @@ so either manually set data(data == np.min(data)) = 0,
 or something like 
     data = clamp(data, -10000, Inf)
 """
-function load_elevation(filename)
+function load_elevation(filename; do_permute=true)
     ext = get_file_ext(filename)
     data_type = Int16 
 
@@ -133,15 +137,56 @@ function load_elevation(filename)
         # min_valid = -10000
         # # Set NaN values to 0
         # @. data[data < min_valid] = 0
-        return permutedims(data)
+        return do_permute? permutedims(data) : data
     else
         # swap_bytes = (ext == ".hgt")
         throw("$ext not implemented")
     end
 end
 
-"""Extracts the file extension, including the "." (e.g.: .slc)"""
-get_file_ext(filename::String) = splitext(filename)[end]
+
+function load_complex(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
+    return _load_bin_matrix(filename, rsc_data, ComplexF32, do_permute)
+end
+
+function load_bool(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
+    return _load_bin_matrix(filename, rsc_data, Bool, do_permute)
+end
+
+function _load_bin_matrix(filename, rsc_data, dtype, do_permute::Bool)
+    rows = rsc_data["file_length"]
+    cols = rsc_data["width"]
+    # Note: must be saved in c/row-major order, so loading needs a transpose
+    out = Array{dtype, 2}(undef, (cols, rows))
+
+    read!(filename, out)
+    return do_permute ? permutedims(out) : out
+end
+
+
+"""load_stacked_img is for weirdly formatted images:
+
+Format is two stacked matrices:
+    [[first], [second]] where the first "cols" number of floats
+    are the first matrix, next "cols" are second, etc.
+For .unw height files, the first is amplitude, second is phase (unwrapped)
+For .cc correlation files, first is amp, second is correlation (0 to 1)
+"""
+function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
+    rows = rsc_data["file_length"]
+    cols = rsc_data["width"]
+    # Note: must be saved in c/row-major order, so loading needs a transpose
+    # out_left usually is amplitude data
+    # Usually we are interested in out_right
+    #
+    # First make container for all of data
+    out = Array{Float32, 2}(undef, (2cols, rows))
+    read!(filename, out)
+
+    # TODO: port over rest of code for handling amp (if we care about that)
+    # out_left = out[1:cols, :]
+    return permutedims(out[cols+1:end, :])
+end
 
 function load_geolist_from_h5(h5file::String)
     h5open(h5file) do f
@@ -220,50 +265,6 @@ function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
         end
         return permutedims(out, (2, 1, 3))
     end
-end
-
-
-function load_complex(filename::String, rsc_data::Dict{String, Any})
-    return _load_bin_matrix(filename, rsc_data, ComplexF32)
-end
-
-function load_bool(filename::String, rsc_data::Dict{String, Any})
-    return _load_bin_matrix(filename, rsc_data, Bool)
-end
-
-function _load_bin_matrix(filename, rsc_data, dtype)
-    rows = rsc_data["file_length"]
-    cols = rsc_data["width"]
-    # Note: must be saved in c/row-major order, so loading needs a transpose
-    out = Array{dtype, 2}(undef, (cols, rows))
-
-    read!(filename, out)
-    return permutedims(out)
-end
-
-
-"""load_stacked_img is for weirdly formatted images:
-
-Format is two stacked matrices:
-    [[first], [second]] where the first "cols" number of floats
-    are the first matrix, next "cols" are second, etc.
-For .unw height files, the first is amplitude, second is phase (unwrapped)
-For .cc correlation files, first is amp, second is correlation (0 to 1)
-"""
-function load_stacked_img(filename::String, rsc_data::Dict{String, Any})
-    rows = rsc_data["file_length"]
-    cols = rsc_data["width"]
-    # Note: must be saved in c/row-major order, so loading needs a transpose
-    # out_left usually is amplitude data
-    # Usually we are interested in out_right
-    #
-    # First make container for all of data
-    out = Array{Float32, 2}(undef, (2cols, rows))
-    read!(filename, out)
-
-    # TODO: port over rest of code for handling amp (if we care about that)
-    # out_left = out[1:cols, :]
-    return permutedims(out[cols+1:end, :])
 end
 
 
