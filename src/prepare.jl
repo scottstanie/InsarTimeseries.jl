@@ -1,4 +1,4 @@
-using Distributed: pmap, myid, workers, WorkerPool, @sync, @spawn, @async
+using Distributed: pmap, workers, WorkerPool
 
 
 """Runs a reference point shift on flattened stack of unw files stored in .h5"""
@@ -32,7 +32,7 @@ end
 
 # Note: 6 workers for the .geo.mask file creation seems fastest
 # More and they thrash while reading
-function create_mask_stacks(igram_path, mask_filename=nothing, geo_path=nothing, overwrite=false)
+function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing, overwrite=false)
     if isnothing(mask_filename)
         mask_file = joinpath(igram_path, MASK_FILENAME)
     end
@@ -44,14 +44,13 @@ function create_mask_stacks(igram_path, mask_filename=nothing, geo_path=nothing,
     dem_rsc = load(sario.find_rsc_file(directory=igram_path))
 
     # TODO: do the overwrite check
-    loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
-                    looks=(row_looks, col_looks), out_dir=igram_path,
-                    max_procs=6)
+    # loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
+    #                 looks=(row_looks, col_looks), out_dir=igram_path,
+    #                 max_procs=6)
                   
     # Now with bigger geo files read in parallel, 
     # write all to hdf5 file as stack
-    save_masks(geo_mask_stack, igram_path,
-               geo_path, overwrite=overwrite)
+    save_masks(igram_path, geo_path, overwrite=overwrite)
 
     # Finall, add the aux. information
     dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
@@ -83,10 +82,6 @@ function save_masks(igram_path, geo_path; overwrite=false,
     geo_mask_stack = load_stack(directory=igram_path,
                                 file_ext=".geo.mask")
 
-    save_hdf5_stack(mask_file, geo_dset_name, geo_mask_stack)  #TODO: chunks...
-    # Also create one image of the total masks
-    # TODO: any way to have sum reduce the dims?
-    h5write(mask_file, GEO_MASK_SUM_DSET, permutedims(sum(geo_mask_stack, dims=1)[:, :, 1]))
 
     # _create_dset(mask_file, dset_name, shape=shape, dtype=bool)
     int_date_list = sario.find_igrams(directory=igram_path)
@@ -107,10 +102,14 @@ function save_masks(igram_path, geo_path; overwrite=false,
         int_mask_stack[:, :, idx] .= new_mask
         # save(out_filename, new_mask)
     end
-    save_hdf5_stack(mask_file, igram_dset_name, int_mask_stack)
+    save_hdf5_stack(mask_file, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false, dtype=Bool)
+    save_hdf5_stack(mask_file, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false, dtype=Bool)  #TODO: chunks...
+            # write(f, dset_name, permutedims(stack, (2, 1, 3)))
+    # Also create one image of the total masks
+    # TODO: any way to have sum reduce the dims?
+    h5write(mask_file, GEO_MASK_SUM_DSET, 
+            permutedims(sum(geo_mask_stack, dims=1)[:, :, 1]))
 end
-
-# function _make_int_mask(geo_mask_stack, igram, out_filename)
 
 
 """Subtracts reference pixel group from each layer
@@ -315,7 +314,7 @@ function loop_over_files(f, in_files::Array{String, 1}, out_files::Array{String,
 end
 
 function _load_and_run(f, name_in, name_out; looks=(1, 1))
-    println("On proc id $(myid()): Input: $name_in, out: $name_out")
+    println("Input: $name_in, out: $name_out")
     input_arr = load(name_in, looks=looks)
     out_arr = f(input_arr)
     save(name_out, out_arr)
@@ -324,6 +323,7 @@ function _get_workerpool(max_procs)
     if isnothing(max_procs)
         return WorkerPool(workers())
     else
-        return WorkerPool(workers()[1:max_procs])
+        m = min(max_procs, length(workers()))
+        return WorkerPool(workers()[1:m])
     end
 end

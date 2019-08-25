@@ -17,8 +17,8 @@ const STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets
 const GEO_MASK_DSET = "geo"
+const GEO_MASK_SUM_DSET = "geo_sum"
 const IGRAM_MASK_DSET = "igram"
-const IGRAM_MASK_SUM_DSET = "igram_sum"
 
 const DEM_RSC_DSET = "dem_rsc"
 const GEOLIST_DSET = "geo_dates"

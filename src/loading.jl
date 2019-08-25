@@ -160,16 +160,20 @@ function load_intlist_from_h5(h5file)
     end
 end
 
-function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true)
+function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true, dtype=nothing)
     # TODO: is there a way to combine this with normal saving of files?
     if overwrite
         mode = "w"
     else
         mode = "cw"  # Append mode  (why different than "a"?)
     end
+    dtype = isnothing(dtype) ? eltype(stack) : dtype
     h5open(h5file, mode) do f 
+        d_create(f, dset_name, datatype(dtype), dataspace(size(stack)))
+        dset = d_open(f, dset_name)
         if do_permute
-            write(f, dset_name, permutedims(stack, (2, 1, 3)))
+            # write(f, dset_name, permutedims(stack, (2, 1, 3)))
+            dset = permutedims(stack, (2, 1, 3))
         else
             write(f, dset_name, stack)
         end
