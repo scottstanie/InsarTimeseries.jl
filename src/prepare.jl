@@ -1,5 +1,30 @@
 using Distributed: pmap, workers, WorkerPool
 
+function prepare_stacks(igram_path, overwrite=false)
+    unw_stack_file = joinpath(igram_path, UNW_FILENAME)
+    cc_stack_file = joinpath(igram_path, CC_FILENAME)
+    mask_stack_file = joinpath(igram_path, MASK_FILENAME)
+
+    create_mask_stacks(igram_path; mask_filename=mask_stack_file, overwrite=overwrite)
+
+    deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
+
+    create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
+    create_hdf5_stack(cc_stack_file ".cc", overwrite=overwrite)
+
+    ref_row, ref_col, ref_station = find_reference_location(
+        unw_stack_file=unw_stack_file,
+        cc_stack_file=cc_stack_file,
+        mask_stack_file=mask_stack_file,
+    )
+
+    shift_unw_file(unw_stack_file=unw_stack_file,
+                   ref_row=ref_row,
+                   ref_col=ref_col,
+                   ref_station=ref_station,
+                   overwrite=overwrite)
+end
+
 # Note: 6 workers for the .geo.mask file creation seems fastest
 # More and they thrash while reading
 function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing, overwrite=false)
@@ -142,39 +167,37 @@ function estimate_ramp(z::Array{<:AbstractFloat, 2})
 end
 
 """Make stack as hdf5 file from a group of existing files"""
-function create_hdf5_stack(filename,
-                           file_ext=nothing,
+function create_hdf5_stack(filename::String,
+                           file_ext::String;
+                           dset_name=STACK_DSET,
                            directory=".",
-                           save_rsc=true,
                            overwrite=false)
 
-    mean_buf = np.zeros((dset.shape[1], dset.shape[2]), dset.dtype)
-        fname = "{fext}_stack.h5".format(fext=file_ext.strip("."))
-    filename = abspath(joinpath(directory, fname))
+    filename = isabspath(filename) ? filename : abspath(joinpath(directory, filename))
     println("Creating stack file $filename")
 
     get_file_ext(filename) in (".h5", ".hdf5") || ArgumentError("filename must end in .h5 or .hdf5")
-    !sario.check_dset(filename, STACK_DSET, overwrite) && return
+    !sario.check_dset(filename, dset_name, overwrite) && return
 
-    file_list = sario.find_files(directory=directory, search_term="*" + file_ext)
+    file_list = find_files(file_ext, directory)
 
     testf = sario.load(file_list[1])
     rows, cols = size(testf)
     # Note: since we're just loading/saving, don't permute on way in or way out
     shape = (cols, rows, length(file_list))
-    _create_dset(filename, STACK_DSET, shape, dtype=eltype(testf))
-    arr_buf = zeros(eltype(testf), cols, rows)
-    mean_buf = zeros(eltype(testf), cols, rows)
+    _create_dset(filename, dset_name, shape, eltype(testf))
+    arr_buf = zeros(eltype(testf), (cols, rows))
+    mean_buf = zeros(eltype(testf), (cols, rows))
 
     h5open(filename, "r+") do hf
-        dset = hf[STACK_DSET]
+        dset = hf[dset_name]
         for (idx, f) in enumerate(file_list)
-            arr .= load(f, do_permute=false)
-            dset[idx] = arr
-            mean_buf += arr
+            arr_buf .= load(f, do_permute=false)
+            dset[:, :, idx] = arr_buf
+            mean_buf += arr_buf
         end
     end
-    h5writeattr(filename, STACK_DSET, Dict("filenames" => file_list))
+    h5writeattr(filename, dset_name, Dict("filenames" => file_list))
 
     # Now save dem rsc as well
     dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
@@ -185,6 +208,7 @@ function create_hdf5_stack(filename,
     h5write(filename, STACK_MEAN_DSET, mean_buf)
 
     return filename
+end
 
 
 """Subtracts reference pixel group from each layer
@@ -297,7 +321,7 @@ end
 function _create_dset(h5file, dset_name, shape, dtype)
     # TODO: add a chunking option for ones we access depth-wise vs layer-wise
     # dset = d_create(g, "B", datatype(Float64), dataspace(1000,100,10), "chunk", (100,100,1))
-    h5open(h5file, "cw") do f
+    h5open(h5file, "r+") do f
         d_create(f,
             dset_name,
             datatype(dtype),
