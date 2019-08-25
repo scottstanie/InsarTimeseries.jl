@@ -1,38 +1,5 @@
 using Distributed: pmap, workers, WorkerPool
 
-
-"""Runs a reference point shift on flattened stack of unw files stored in .h5"""
-function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
-    println("Writing deramped unws to $output_ext files")
-    in_files = find_files(input_ext, directory)
-    out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
-
-    # If we already have these files made, skip the function
-    if all(isfile(f) for f in out_files) && !overwrite
-        println("Output Files, overwrite = $overwrite. Skipping")
-        return nothing
-    end
-    mask_stack = load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET)
-
-    wp = _get_workerpool(8)
-    println("Starting stack deramp ")
-    pmap((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
-         wp, in_files, out_files)
-    println("Deramping stack complete")
-end
-
-function _create_dset(h5file, dset_name, shape, dtype)
-    # TODO: add a chunking option for ones we access depth-wise vs layer-wise
-    # dset = d_create(g, "B", datatype(Float64), dataspace(1000,100,10), "chunk", (100,100,1))
-    h5open(h5file, "cw") do f
-        d_create(f,
-            dset_name,
-            datatype(dtype),
-            dataspace(shape),
-        )
-    end
-end
-
 # Note: 6 workers for the .geo.mask file creation seems fastest
 # More and they thrash while reading
 function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing, overwrite=false)
@@ -66,8 +33,7 @@ _get_geo_mask(arr) = (arr .== 0)
 
 """Creates igram masks by taking the logical-or of the two .geo files
 
-Assumes save_geo_masks already run
-"""
+Assumes save_geo_masks already run"""
 function save_masks(igram_path, geo_path; overwrite=false,
                     mask_file=MASK_FILENAME,
                     geo_dset_name=GEO_MASK_DSET,
@@ -110,14 +76,49 @@ function save_masks(igram_path, geo_path; overwrite=false,
     # Also create one image of the total masks
     # TODO: any way to have sum reduce the dims?
     h5write(mask_file, GEO_MASK_SUM_DSET, 
-            permutedims(sum(geo_mask_stack, dims=1)[:, :, 1]))
+            permutedims(sum(geo_mask_stack, dims=3)[:, :, 1]))
 end
 
 
+"""Runs a reference point shift on flattened stack of unw files stored in .h5"""
+function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
+    println("Writing deramped unws to $output_ext files")
+    in_files = find_files(input_ext, directory)
+    out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
+
+    # If we already have these files made, skip the function
+    if all(isfile(f) for f in out_files) && !overwrite
+        println("Output Files, overwrite = $overwrite. Skipping")
+        return nothing
+    end
+    mask_stack = load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET)
+
+    wp = _get_workerpool(8)
+    println("Starting stack deramp ")
+    map((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
+        #  wp, 
+        in_files, out_files, sliceview(mask_stack))
+    println("Deramping stack complete")
+end
+
+sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
+
+function _create_dset(h5file, dset_name, shape, dtype)
+    # TODO: add a chunking option for ones we access depth-wise vs layer-wise
+    # dset = d_create(g, "B", datatype(Float64), dataspace(1000,100,10), "chunk", (100,100,1))
+    h5open(h5file, "cw") do f
+        d_create(f,
+            dset_name,
+            datatype(dtype),
+            dataspace(shape),
+        )
+    end
+end
+
 """Subtracts reference pixel group from each layer
 
-window is the size around the reference pixel to average at each layer
-"""
+window is the size around the reference pixel to 
+average at each layer"""
 function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
                         ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
                         overwrite=false)
@@ -206,16 +207,10 @@ function _shift_layer(layer, patch, ref_row, ref_col, half_win)
 end
 
 
-function remove_ramp(z, mask; buf=nothing, A=nothing, coeffs=nothing, z_fit=nothing)
-    if isnothing(buf)
-        z_masked = copy(z)
-    else
-        z_masked = buf
-        z_masked .= z
-    end
-
+function remove_ramp(z, mask)
+    z_masked = copy(z)
     z_masked[mask] .= NaN
-    return z - estimate_ramp(z_masked, A, coeffs, z_fit)
+    return z - estimate_ramp(z_masked)
 end
 
 
@@ -226,30 +221,23 @@ Since it is an order 1 surface, it will be 3 numbers, a, b, c from
      ax + by + c = z
 """
 # TODO: Fix the mem-allocations here
-function estimate_ramp(z::Array{<:AbstractFloat, 2}, A=nothing, coeffs=nothing, z_fit=nothing)
+function estimate_ramp(z::Array{<:AbstractFloat, 2})
+    A = ones((length(z), 3))
+    coeffs = Array{eltype(A), 1}(undef, (3,))
+    z_fit = similar(z)
+
+    zidxs = CartesianIndices(z)
+    for idx in 1:size(A, 1)
+        # if good_idxs[idx]
+        # row, col is equiv to y, x, but subtract 1 to start at 0
+        y, x = zidxs[idx].I .- 1
+        A[idx, 1] = x
+        A[idx, 2] = y
+        # end
+    end
+
     good_idxs = .~isnan.(z)
-
-    if isnothing(A)
-        A = ones((length(z), 3))
-    end
-    if isnothing(coeffs)
-        coeffs = Array{eltype(A), 1}(undef, (3,))
-    end
-    if isnothing(z_fit)
-        z_fit = similar(z)
-    end
-    Aidx = 1
-
-    for idx in CartesianIndices(z)
-        if good_idxs[idx]
-            # row, col is equiv to y, x, but subtract 1 to start at 0
-            y, x = idx.I .- 1
-            A[Aidx, 1] = x
-            A[Aidx, 2] = y
-            Aidx += 1
-        end
-    end
-    coeffs .= A[good_idxs, :] \ z[good_idxs]
+    coeffs .= A[vec(good_idxs), :] \ z[vec(good_idxs)]
     a, b, c = coeffs
 
     for idx in CartesianIndices(z_fit)
@@ -315,10 +303,10 @@ function loop_over_files(f, in_files::Array{String, 1}, out_files::Array{String,
          wp, in_files, out_files)
 end
 
-function _load_and_run(f, name_in, name_out args...; looks=(1, 1), kwargs...)
+function _load_and_run(f, name_in, name_out, args...; looks=(1, 1))
     println("Input: $name_in, out: $name_out")
     input_arr = load(name_in, looks=looks)
-    out_arr = f(input_arr, args..., kwargs...)
+    out_arr = f(input_arr, args...)
     save(name_out, out_arr)
 end
 
