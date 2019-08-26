@@ -45,7 +45,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
-                    max_procs=6, overwrite=overwrite)
+                    max_procs=4, overwrite=overwrite)
                   
     # Now with bigger geo files read in parallel, 
     # write all to hdf5 file as stack
@@ -252,6 +252,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
             stack_flat_shifted_dset,
             datatype(Float32),
             dataspace(size(stack_in)),
+            "chunks", (10, 10, size(stack_in, 3)),
         )
         stack_out = f[stack_flat_shifted_dset]
 
