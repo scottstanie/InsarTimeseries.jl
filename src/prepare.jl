@@ -1,9 +1,11 @@
 using Distributed: pmap, workers, WorkerPool
 
 function prepare_stacks(igram_path; overwrite=false)
-    unw_stack_file = joinpath(igram_path, UNW_FILENAME)
-    cc_stack_file = joinpath(igram_path, CC_FILENAME)
-    mask_stack_file = joinpath(igram_path, MASK_FILENAME)
+    igram_path = abspath(igram_path)
+
+    unw_stack_file = abspath(joinpath(igram_path, UNW_FILENAME))
+    cc_stack_file = abspath(joinpath(igram_path, CC_FILENAME))
+    mask_stack_file = abspath(joinpath(igram_path, MASK_FILENAME))
 
     # Step 1: create the masks.h5 file
     create_mask_stacks(igram_path, mask_filename=mask_stack_file, overwrite=overwrite) 
@@ -32,10 +34,10 @@ end
 # More and they thrash while reading
 function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing, overwrite=false)
     if isnothing(mask_filename)
-        mask_filename = joinpath(igram_path, MASK_FILENAME)
+        mask_filename = abspath(joinpath(igram_path, MASK_FILENAME))
     end
     if isnothing(geo_path)
-        geo_path = utils.get_parent_dir(igram_path)
+        geo_path = abspath(utils.get_parent_dir(igram_path))
     end
 
     row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
