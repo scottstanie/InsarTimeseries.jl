@@ -1,5 +1,5 @@
 push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
-import InsarTimeseries
+# import InsarTimeseries
 import InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET
 import Convex
 using Dates
@@ -22,6 +22,7 @@ station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM",
 latlon = pyimport("apertools.latlon")
 sario = pyimport("apertools.sario")
 gps = pyimport("apertools.gps")
+plt = pyimport("matplotlib.pyplot")
 
 # const DEFO_FILENAME = "deformation_unreg_maxtemp400.h5"
 # const DEFO_FILENAME_LINEAR = "deformation_linear_maxtemp400.h5"
@@ -74,7 +75,7 @@ function _read_unw(unw_stack_file, row, col, window=5, dset=STACK_FLAT_SHIFTED_D
 end
 
 function get_gps_los(station_name, geo_path="../"; reference_station=nothing)
-    dts, gps_los_data = gps.load_gps_los_data(geo_path, station_name, start_year=2015, end_year=2018)
+    dts, gps_los_data = gps.load_gps_los_data(geo_path, station_name, start_year=2015, end_year=2018, zero_mean=true)
     dts = convert(Array{Dates.Date, 1}, dts)
     return dts, gps_los_data
 end
@@ -108,18 +109,15 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1})
 
     # # solver = SCS.SCSSolver()
     # solver = ECOS.ECOSSolver(verbose=0)
-    # prob_linear = Convex.minimize(norm(Blin*v_linear_l1 - unw_vals, 1))
-    # prob_unreg = Convex.minimize(norm(B*v_unreg_l1 - unw_vals, 1))
-    # Convex.solve!(prob_linear, solver)
-    # Convex.solve!(prob_unreg, solver)
     # # Using functions in module:
-    var_linear = Convex.Variable(1)
-    v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, var_linear)
-    var_unreg = Convex.Variable(size(B, 2))
-    v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, B, var_unreg)
+    # var_linear = Convex.Variable(1)
+    # v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, var_linear)
+    # var_unreg = Convex.Variable(size(B, 2))
+    # v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, B, var_unreg)
 
-    # v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
-    # v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
+    # Using Huber Loss in ADMM
+    v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
+    v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
 
     return v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1
 end
@@ -203,17 +201,17 @@ plotting = false
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
-# station_name_list = ["TXOZ"]
+station_name_list = ["TXMH"]
 
 # l1_error, l2_error = process_pixel(station_name, UNW_STACK_FILE, GEOLIST, INTLIST, VALID_IGRAM_INDICES, plotting=plotting)
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 #
-# for station_name in station_name_list
-#     l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
-#     append!(l2_errors, l2_error)
-#     append!(l1_errors, l1_error)
-# end
+for station_name in station_name_list
+    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
+    append!(l2_errors, l2_error)
+    append!(l1_errors, l1_error)
+end
 println("TOTAL ERRORS (all in mm / year of velocity):")
 println("L2 RMS error for all stations: $(rms(l2_errors))")
 println("L1 RMS error for all stations: $(rms(l1_errors))")
@@ -237,3 +235,14 @@ println("L1 maximum errors : $(maximum(l1_errors))")
 # p1 = plot(GEOLIST, ts_linear)
 # plot!(p1, GEOLIST, ts_unreg)
 
+function plotunws(B1, B2, unw1, unw2)
+    fig, axes = plt.subplots(1, 2)
+    yh = maximum(vcat(unw1, unw2)) + 1
+    yl = minimum(vcat(unw1, unw2)) - 1
+    axes[1].plot(B1, unw1, "b.")
+    axes[1].set_ylim((yl, yh))
+    axes[2].plot(B2, unw2, "b.")
+    axes[2].set_ylim((yl, yh))
+    plt.show()
+    return fig, axes
+end
