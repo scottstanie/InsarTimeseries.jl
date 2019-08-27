@@ -96,7 +96,7 @@ function save_masks(igram_path, geo_path; overwrite=false,
         # save(out_filename, new_mask)
     end
     save_hdf5_stack(mask_filename, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false)
-    save_hdf5_stack(mask_filename, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)  #TODO: chunks...
+    save_hdf5_stack(mask_filename, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)
             # write(f, dset_name, permutedims(stack, (2, 1, 3)))
     # Also create one image of the total masks
     # TODO: any way to have sum reduce the dims?
@@ -252,7 +252,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
             stack_flat_shifted_dset,
             datatype(Float32),
             dataspace(size(stack_in)),
-            "chunks", (10, 10, size(stack_in, 3)),
+            "chunk", (10, 10, size(stack_in, 3)),
         )
         stack_out = f[stack_flat_shifted_dset]
 
