@@ -24,7 +24,7 @@ YLIMS = (-12, 12)
 station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
                      "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
 # PATH 85
-station_name_list = ["TXKM", "TXMH", "TXPC", "TXFS", "TXAL"]
+# station_name_list = ["TXKM", "TXMH", "TXPC", "TXFS", "TXAL"]
 # BAD: MDO1 (nothing 2014-2017), TXVH (started 2018)
 
 # REFERENCE_STATION = "TXKM"
@@ -233,14 +233,14 @@ end
 
 # Reminder: error matrix rows correspond to 1 single reference station
 function print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
-    println("Errors compared to GPS when using <station name> as the referene point")
-    for (mat, lname) in zip((l1_error_matrix, l2_error_matrix), ("L1", "L2"))
+    println("Errors compared to GPS when using <station name> as the reference point")
+    for (mat, lname) in zip((l2_error_matrix, l1_error_matrix), ("L2", "L1"))
         println("$lname RESULTS:")
         println("Name | RMS error | Total abs | Max abs")
         for i in 1:length(station_name_list)
             row = mat[i, :]
             a, b, c, d = station_name_list[i], rms(row), total_abs_error(row), maximum(abs.(row))
-            @printf("%s :    %.2f     |   %.2f   |     %.2f \n", a, b, c, d)
+            @printf("%s :    %.2f     |   %.2f   |    %.2f \n", a, b, c, d)
         end
     end
 end
@@ -257,7 +257,7 @@ l1_errors, l2_errors = [], []
 plotting = false
 
 # Compute all combos:
-# @time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
+@time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
