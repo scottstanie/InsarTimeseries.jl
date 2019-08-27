@@ -1,6 +1,6 @@
 using Printf
-import Convex
-import ECOS
+# import Convex
+# import ECOS
 using SparseArrays: sparse
 using LinearAlgebra: cholesky, ldiv!
 
@@ -126,18 +126,18 @@ function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zero
     end
 end
 
-function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.Variable)
-    # Note: these are defined here to allow multithreading and not reuse across threads
-    solver = ECOS.ECOSSolver(verbose=0)
-    problem = Convex.minimize(norm(B*v - pixel, 1))
-    Convex.solve!(problem, solver)
-
-    if length(v.value) > 1
-        Float32.(vec(v.value))
-    else
-        Float32.([v.value])
-    end
-end
+# function invert_pixel(pixel::Array{Float32, 1}, B::Array{Float32,2}, v::Convex.Variable)
+#     # Note: these are defined here to allow multithreading and not reuse across threads
+#     solver = ECOS.ECOSSolver(verbose=0)
+#     problem = Convex.minimize(norm(B*v - pixel, 1))
+#     Convex.solve!(problem, solver)
+# 
+#     if length(v.value) > 1
+#         Float32.(vec(v.value))
+#     else
+#         Float32.([v.value])
+#     end
+# end
 
 # Defined in optimize.jl
 function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; 
