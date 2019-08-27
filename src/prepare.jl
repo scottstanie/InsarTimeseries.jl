@@ -225,8 +225,10 @@ window is the size around the reference pixel to
 average at each layer"""
 function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
                         ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
-                        overwrite=false)
-    """Runs a reference point shift on flattened stack of unw files stored in .h5"""
+                        overwrite::Bool=false, repack::Bool=true)
+    """Runs a reference point shift on flattened stack of unw files stored in .h5
+    
+    repack will run h5repack to chunk"""
     if isnothing(stack_flat_dset)
         stack_flat_dset = STACK_FLAT_DSET
     end
@@ -242,6 +244,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     end
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
+    stack_size = h5open(unw_stack_file, "r")[stack_flat_dset]
     h5open(unw_stack_file, "r+") do f
         if !(stack_flat_dset in names(f))
             throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
@@ -251,8 +254,9 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
         d_create(f,
             stack_flat_shifted_dset,
             datatype(Float32),
-            dataspace(size(stack_in)),
-            "chunk", (10, 10, size(stack_in, 3)),
+            dataspace(stack_size),
+            # "chunk", (10, 10, size(stack_in, 3)),  # Seems better to repack?
+            # Chunking here and writing by images is real slow
         )
         stack_out = f[stack_flat_shifted_dset]
 
@@ -260,6 +264,18 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
         # Note: switching these so we don't have to permute dims upon loading HDF5Dset
         shift_stack(stack_in, stack_out, ref_col, ref_row, window=window)
 
+    end
+
+    if repack
+        # Now repack so that chunks are depth-wise (pixels for quick loading)
+        nrows, ncols, nlayers = stack_size
+        tmp_stack_file = "tmp_" * unw_stack_file
+        println("Repacking to chunk shifted stack")
+        cmd = `h5repack -v -f NONE -l stack_flat_shifted:CHUNK=$(nlayers)x10x10 $unw_stack_file $tmp_stack_file`
+        println("Running:")
+        println(cmd)
+        @time run(cmd)
+        run(`mv $tmp_stack_file $unw_stack_file`)
     end
 
     h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
