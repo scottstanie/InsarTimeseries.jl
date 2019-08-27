@@ -244,7 +244,10 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     end
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
-    stack_size = h5open(unw_stack_file, "r")[stack_flat_dset]
+    stack_size = nothing
+    h5open(unw_stack_file, "r") do f
+        stack_size = size(f[stack_flat_dset])
+    end
     h5open(unw_stack_file, "r+") do f
         if !(stack_flat_dset in names(f))
             throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
