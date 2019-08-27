@@ -14,6 +14,8 @@ builddir/
 *.unw
 *.unwflat
 *.npy
+*.db.*
+*.h5
 
 
 # Julia profiling files
