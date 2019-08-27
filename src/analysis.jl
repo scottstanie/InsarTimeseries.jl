@@ -49,7 +49,7 @@ function geos_with_good_mean(geolist, intlist, unw_vals; cutoff=12)
 end
 
 import Base.-
-Base.-(x::Igram) = (x[2], x[1])
+-(x::Igram) = (x[2], x[1])
 
 function phase_triplets(intlist, unw_vals)
     # triplets = Array{Tuple{Igram, eltype(unw_vals)}}(undef, ())
