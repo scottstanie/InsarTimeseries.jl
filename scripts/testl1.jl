@@ -9,6 +9,7 @@ using Plots
 using PyCall
 import Polynomials
 import NaNMath
+using    Printf: @printf
 nm = NaNMath
 # import Convex
 # import ECOS
@@ -18,8 +19,13 @@ nm = NaNMath
 # #df = create_insar_gps_df(geo_path, defo_filename=defo_filename, reference_station=reference_station)
 
 YLIMS = (-12, 12)
+# TODO: maybe get these names automatically?
+# PATH 78 
 station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
                      "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
+# PATH 85
+station_name_list = ["TXKM", "TXMH", "TXPC", "TXFS", "TXAL"]
+# BAD: MDO1 (nothing 2014-2017), TXVH (started 2018)
 
 # REFERENCE_STATION = "TXKM"
 # REFERENCE_STATION = "TXAD"
@@ -213,7 +219,9 @@ function calc_error_matrix(station_name_list, plotting=false)
     l2_error_matrix = zeros(length(station_name_list), length(station_name_list))
 
     for (i, ref_name) in enumerate(station_name_list)
+        println("Calculating errors for $ref_name")
         for (j, station_name) in enumerate(station_name_list)
+            # println("Processing $station_name")
             l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, 
                                                reference_station=ref_name, verbose=false)
             l1_error_matrix[i, j] = l1_error
@@ -223,14 +231,33 @@ function calc_error_matrix(station_name_list, plotting=false)
     return l1_error_matrix, l2_error_matrix
 end
 
+# Reminder: error matrix rows correspond to 1 single reference station
+function print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
+    println("Errors compared to GPS when using <station name> as the referene point")
+    for (mat, lname) in zip((l1_error_matrix, l2_error_matrix), ("L1", "L2"))
+        println("$lname RESULTS:")
+        println("Name | RMS error | Total abs | Max abs")
+        for i in 1:length(station_name_list)
+            row = mat[i, :]
+            a, b, c, d = station_name_list[i], rms(row), total_abs_error(row), maximum(abs.(row))
+            @printf("%s :    %.2f     |   %.2f   |     %.2f \n", a, b, c, d)
+        end
+    end
+end
+
 # Functions for error evaluation
-rms(arr) = sqrt(nm.mean(arr.^2))
-total_abs_error(arr) = nm.sum(abs.(arr))
+rms(arr::AbstractArray{<:Number, 1}) = sqrt(mean(arr.^2))
+rms(arr::AbstractArray{<:Number, 2}) = [rms(arr[i, :]) for i in 1:size(arr, 1)]
+total_abs_error(arr::AbstractArray{<:Number, 1}) = sum(abs.(arr))
+total_abs_error(arr::AbstractArray{<:Number, 2}) = sum(abs.(arr), dims=2)
 
 
 l1_errors, l2_errors = [], []
 
 plotting = false
+
+# Compute all combos:
+# @time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
@@ -254,7 +281,6 @@ plotting = false
 # println("L2 maximum errors : $(maximum(l2_errors))")
 # println("L1 maximum errors : $(maximum(l1_errors))")
 
-@time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
 
 
 # function check_convex_l2(Blin, unw_vals)
