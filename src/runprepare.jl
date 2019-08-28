@@ -11,12 +11,12 @@ function parse_commandline()
         "--overwrite"
             action = :store_true
             help = "Erase previous processed stack files"
-        "--unw-stack-file"
-            default = "unw_stack.h5"
-            help = "name of .h5 file with unwrapped data"
-        "--mask-stack-file"
-            default = "masks.h5"
-            help = "name of .h5 file with mask data"
+        "--igram-path"
+            default = "."
+            help = "Path containing .int files"
+        "--geo-path"
+            default = "../"
+            help = "Path containing .geo files"
         "--ref-station"
             arg_type = String
             help = "Name of a gps reference station to shift the stack to."*
@@ -42,20 +42,19 @@ function main()
         @show arg, val
     end
 
-    unw_file = parsed_args["unw-stack-file"]
-    println("Deramping:")
-    @time InsarTimeseries.deramp_unw_file(unw_file, overwrite=false)
-
+    overwrite = parsed_args["overwrite"]
+    igram_path = parsed_args["igram_path"]
+    geo_path = parsed_args["geo_path"]
     ref_station = parsed_args["ref-station"]
     ref_row = parsed_args["ref-row"]
     ref_col = parsed_args["ref-col"]
-    if !isnothing(ref_station) || !(isnothing(ref_row) || isnothing(ref_col))
-        println("Shifting stack:")
-        window = parsed_args["window"]
-        @time InsarTimeseries.shift_unw_file(unw_file, ref_station=ref_station, ref_row=ref_col, 
-                                             ref_col=ref_col, overwrite=true, window=window)
-    end
+    window = parsed_args["window"]
+
+    @time InsarTimeseries.prepare_stacks(igram_path, overwrite=overwrite, geo_path=geo_path, 
+                                         ref_row=ref_row, ref_col=ref_col, ref_station=ref_station, 
+                                         window=window)
 
 end
 
 
+main()
