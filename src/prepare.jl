@@ -110,7 +110,17 @@ function save_masks(igram_path, geo_path; overwrite=false,
             permutedims(sum(geo_mask_stack, dims=3)[:, :, 1]))
 end
 
-_should_skip(out_files, overwrite) = all(isfile(f) for f in out_files) && !overwrite
+function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1})
+    in_todo = Array{String, 1}()
+    out_todo = similar(in_todo)
+    for (i, o) in zip(in_files, out_files)
+        if !isfile(o)
+            push!(in_todo, i)
+            push!(out_todo, o)
+        end
+    end
+    return in_todo, out_todo
+end
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
@@ -119,16 +129,18 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
 
     # If we already have these files made, skip the function
-    if _should_skip(out_files, overwrite)
-        println("Output Files, overwrite = $overwrite. Skipping")
+    in_todo, out_todo = _remaining_files(in_files, out_files)
+    println("$(length(out_todo)) files remain, overwrite = $overwrite")
+    if length(out_todo) == 0 && !overwrite
+        println("skipping")
         return nothing
     end
-    mask_stack = load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET)
+    mask_stack = Bool.(load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET))
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
     pmap((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
-        wp, in_files, out_files, sliceview(mask_stack))
+        wp, in_todo, out_todo, sliceview(mask_stack))
     println("Deramping stack complete")
 end
 
@@ -387,9 +399,12 @@ function loop_over_files(f, directory::String, input_ext::String, output_ext::St
         # Redo the path out if specified
         out_files = [joinpath(out_dir, splitpath(f)[end]) for f in out_files]
     end
-    if _should_skip(out_files, overwrite)
-        println("Output files exist and overwrite = $overwrite, skipping")
-        return
+
+    in_todo, out_todo = _remaining_files(in_files, out_files)
+    println("$(length(out_todo)) files remain, overwrite = $overwrite")
+    if length(out_todo) == 0 && !overwrite
+        println("skipping")
+        return nothing
     end
 
     wp = _get_workerpool(max_procs)
