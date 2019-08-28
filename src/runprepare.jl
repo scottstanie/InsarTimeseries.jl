@@ -43,8 +43,8 @@ function main()
     end
 
     overwrite = parsed_args["overwrite"]
-    igram_path = parsed_args["igram_path"]
-    geo_path = parsed_args["geo_path"]
+    igram_path = parsed_args["igram-path"]
+    geo_path = parsed_args["geo-path"]
     ref_station = parsed_args["ref-station"]
     ref_row = parsed_args["ref-row"]
     ref_col = parsed_args["ref-col"]
