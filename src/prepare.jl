@@ -1,6 +1,8 @@
 using Distributed: pmap, workers, WorkerPool
 
-function prepare_stacks(igram_path; overwrite=false)
+function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
+                        ref_col=nothing, ref_station=nothing, 
+                        geo_path=nothing, window=5)
     igram_path = abspath(igram_path)
 
     unw_stack_file = abspath(joinpath(igram_path, UNW_FILENAME))
@@ -8,25 +10,29 @@ function prepare_stacks(igram_path; overwrite=false)
     mask_stack_file = abspath(joinpath(igram_path, MASK_FILENAME))
 
     # Step 1: create the masks.h5 file
-    create_mask_stacks(igram_path, mask_filename=mask_stack_file, overwrite=overwrite) 
+    create_mask_stacks(igram_path, mask_filename=mask_stack_file,
+                       overwrite=overwrite, geo_path=geo_path) 
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
     create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
     create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite)
 
+    if isnothing(ref_station) && isnothing(ref_row) && isnothing(ref_col)
     # TODO: auto pick, redo that logic here
     # ref_row, ref_col, ref_station = find_reference_location(
     #     unw_stack_file=unw_stack_file,
     #     cc_stack_file=cc_stack_file,
     #     mask_stack_file=mask_stack_file,
     # )
-    ref_row, ref_col, ref_station = (50, 50, "")
+        ref_row, ref_col, ref_station = (50, 50, "")
+    end
 
     shift_unw_file(unw_stack_file,
                    ref_row=ref_row,
                    ref_col=ref_col,
                    ref_station=ref_station,
+                   window=window,
                    overwrite=overwrite)
 end
 
