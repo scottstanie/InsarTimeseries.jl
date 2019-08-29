@@ -408,5 +408,4 @@ function take_looks(image, nlooks)
     end
 
     return out
-
 end

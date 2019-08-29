@@ -31,11 +31,12 @@ function run_inversion(unw_stack_file::String;
 
 
     if use_stackavg
+        is_hdf5 = false
         flat_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
-        is_hdf5 = false
     else
+        is_hdf5 = true
         flat_dset = STACK_FLAT_SHIFTED_DSET
         println("Performing SBAS solution")
         println("Reading unw stack")
@@ -49,11 +50,12 @@ function run_inversion(unw_stack_file::String;
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
         #                       constant_velocity, alpha, L1)
         # end
-        velo_file_out = run_sbas(unw_stack_file, flat_dset, geolist, intlist, 
-                                 valid_igram_indices, constant_velocity, alpha, L1)
-        is_hdf5 = true
+        outdset = "velos"
+        velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
+                                 geolist, intlist, valid_igram_indices, constant_velocity, alpha, L1)
     end
     return
+    ####################33
 
     timediffs = day_diffs(geolist)
     println("Integrating velocities to phases")
