@@ -15,17 +15,19 @@ nm = NaNMath
 # import ECOS
 # import SCS
 
-# TODO: USE REFERENCE STATION AND this
-# #df = create_insar_gps_df(geo_path, defo_filename=defo_filename, reference_station=reference_station)
-
+# TODO: find the shift to match insar to gps best
+# insar_arr_txmc = [365 * 10 * PHASE_TO_CM * solve_insar_ts(station_name, 5, "TXMC")[3][1] for station_name in  station_name_list]
+# [ rms(gps_arr78 - (insar_arr_txmc .+ cc)) for cc in range(1, stop=3, length=10)]
+#
 YLIMS = (-12, 12)
 # TODO: maybe get these names automatically?
 # PATH 78 
 station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
                      "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
+#
 # PATH 85
-# station_name_list = ["TXKM", "TXMH", "TXPC", "TXFS", "TXAL"]
-# BAD: MDO1 (nothing 2014-2017), TXVH (started 2018)
+# station_name_list = ["TXKM", "TXMH", "TXFS", "TXAL"]
+# BAD: MDO1 (nothing 2014-2017), TXVH (started 2018), TXPC (ended 2017)
 
 # REFERENCE_STATION = "TXKM"
 # REFERENCE_STATION = "TXAD"
@@ -99,12 +101,12 @@ end
 
 function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing)
     unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window, reference_station)
+    return solve_insar_ts(unw_vals, window)
 end
 
 function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing)
     unw_vals = get_unw_vals(UNW_STACK_FILE, row, col, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window, reference_station)
+    return solve_insar_ts(unw_vals, window)
 end
 
 function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5)
@@ -160,6 +162,19 @@ function fit_line(dts, data)
     return p
 end
 
+"""Find the linear fit of MM per year of the gps station"""
+function solve_gps_ts(station_name, reference_station=nothing)
+    dts, gps_los_data = get_gps_los(station_name, reference_station=nothing)
+    # If we wanna compare with GPS subtracted too, do this:
+    # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
+
+    # Convert to "days since start" for line fitting
+    gps_poly = fit_line(dts, gps_los_data)
+    slope = length(gps_poly) == 2 ? Polynomials.coeffs(gps_poly)[2] : Polynomials.coeffs(gps_poly)[1]
+    # offset, slope = Polynomials.coeffs(gps_poly)
+    slope_gps_mm_yr = 365 * 10 * slope
+end
+
 function process_pixel(; station_name=nothing, plotting=false, reference_station=REFERENCE_STATION,
                        window=5, verbose=true)
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
@@ -167,12 +182,7 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
     # First solve for the velocities in L1 vs L2 to compare to GPS
     v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station)
 
-    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
-    # Convert to "days since start" for line fitting
-    gps_poly = fit_line(dts, gps_los_data)
-    slope = length(gps_poly) == 2 ? Polynomials.coeffs(gps_poly)[2] : Polynomials.coeffs(gps_poly)[1]
-    # offset, slope = Polynomials.coeffs(gps_poly)
-    slope_gps_mm_yr = 365 * 10 * slope
+    slope_gps_mm_yr = solve_gps_ts(station_name, reference_station)
 
     slope_insar_l2_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_lstsq)[1] # solution currently in phase
     slope_insar_l1_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_l1)[1]
