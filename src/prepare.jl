@@ -277,7 +277,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
             datatype(Float32),
             dataspace(stack_size),
             # "chunk", (10, 10, size(stack_in, 3)),  # Seems better to repack?
-            # Chunking here and writing by images is real slow
+            # Chunking here and writing by images is like 100x slower
         )
         stack_out = f[stack_flat_shifted_dset]
 
@@ -290,7 +290,8 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     if repack
         # Now repack so that chunks are depth-wise (pixels for quick loading)
         nrows, ncols, nlayers = stack_size
-        tmp_stack_file = "tmp_" * unw_stack_file
+        fparts = splitpath(unw_stack_file)
+        tmp_stack_file = joinpath(fparts[1:end-1]..., "tmp_" * fparts[end])
         println("Repacking to chunk shifted stack")
         cmd = `h5repack -v -f NONE -l stack_flat_shifted:CHUNK=$(nlayers)x10x10 $unw_stack_file $tmp_stack_file`
         println("Running:")
