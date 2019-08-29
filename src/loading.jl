@@ -389,62 +389,24 @@ function _force_float32(array)
 end
 
 """Downsample a matrix by summing blocks of (row_looks, col_looks)
+
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(arr, row_looks, col_looks, separate_complex=false)
-    (row_looks == 1 && col_looks == 1) && return arr
-
-    if _iscomplex(arr) && separate_complex
-        mag_looked = take_looks(abs.(arr), row_looks, col_looks)
-        phase_looked = take_looks(angle.(arr), row_looks, col_looks)
-        return @. mag_looked * exp(im * phase_looked)
-    end
-
+function take_looks(image, nlooks)
     nrows, ncols = size(arr)
-    row_cutoff = nrows % row_looks
-    col_cutoff = ncols % col_looks
-    if row_cutoff > 0
-        arr = view(arr, 1:nrows-row_cutoff, :)
-    end
-    if col_cutoff > 0
-        arr = view(arr, :, 1:ncols-col_cutoff)
+    nr = div(nrows, nlooks)
+    nc = div(ncols, nlooks)
+    out = zeros(ComplexF32, nr, naz)
+
+    @inbounds Threads.@threads for j = 1:nc
+        @inbounds for i = 1:nr
+            indx_i = 1+(i-1)*nlooks:i*nlooks
+            indx_j = 1+(j-1)*nlooks:j*nlooks
+            @views out[i, j] = sum(image[indx_i, indx_j])
+        end
     end
 
-    new_rows, new_cols = map(Int, (size(arr, 1) / row_looks, size(arr, 2) / col_looks))
-    if eltype(arr) <: Int
-        arr = Float64.(arr)
-    end
+    return out
 
-    return mean(reshape(arr, (row_looks, new_rows, col_looks, new_cols)),
-                            dims=(1, 3))[1, :, 1, :]
 end
-
-# """Downsample a matrix by summing blocks of (row_looks, col_looks)
-# 
-# Cuts off values if the size isn't divisible by num looks
-# size = floor(rows / row_looks, cols / col_looks)
-# """
-# function take_looks(arr, row_looks, col_looks)
-#     # Output size is integer division (chop off not full looks)
-#     nrows, ncols = size(arr)
-#     out_size = (div(nrows, row_looks), div(ncols, col_looks))
-#     out = zeros(eltype(arr), out_size)
-# 
-#     row_cutoff = nrows % row_looks
-#     col_cutoff = ncols % col_looks
-# 
-#     i2, j2 = 1, 1
-#     @inbounds for j = 1:(ncols-col_cutoff)
-#         @inbounds @simd for i = 1:(nrows-row_cutoff)
-#             # @show i, j, i2, j2
-#             out[i2, j2] += arr[i, j]
-#             i2 += (i % row_looks == 0) ? 1 : 0  # increment every `row_looks`
-#         end
-#         i2 = 1
-#         j2 += (j % col_looks == 0) ? 1 : 0
-#     end
-#     total_looks = row_looks * col_looks
-#     return out ./ total_looks 
-# end
-
