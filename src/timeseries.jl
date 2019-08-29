@@ -16,6 +16,7 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
+unw_stack
 function run_inversion(unw_stack_file::String; 
                        outfile::Union{String,Nothing}=nothing, 
                        use_stackavg::Bool=false, 
@@ -43,14 +44,16 @@ function run_inversion(unw_stack_file::String;
         # TODO: also do this for the masks
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
-        h5open(unw_stack_file) do unw_file
-            unw_stack = unw_file[flat_dset]
-            vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
-                              constant_velocity, alpha, L1)
-        end
+        # h5open(unw_stack_file) do unw_file
+        #     unw_stack = unw_file[flat_dset]
+        #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
+        #                       constant_velocity, alpha, L1)
+        # end
+        velo_file_out = run_sbas(unw_stack_file, flat_dset, geolist, intlist, 
+                                 valid_igram_indices, constant_velocity, alpha, L1)
         is_hdf5 = true
     end
-
+    return
 
     timediffs = day_diffs(geolist)
     println("Integrating velocities to phases")

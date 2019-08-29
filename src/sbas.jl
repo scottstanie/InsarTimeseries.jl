@@ -3,8 +3,33 @@ using Printf
 # import ECOS
 using SparseArrays: sparse
 using LinearAlgebra: cholesky, ldiv!
+using Distributed
 
-function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
+# function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
+#                   geolist,
+#                   intlist, 
+#                   valid_igram_indices, 
+#                   constant_velocity::Bool, 
+#                   alpha::Float32,
+#                   L1::Bool=false) 
+# 
+#     B = prepB(geolist, intlist, constant_velocity, alpha)
+#     @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros, L1=L1)
+#     return vstack
+# end
+
+function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
+                    outfile, out_dset, B, rho, alpha, lu_tuple, abstol)
+    pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    h5open(outfile, "r+") do f
+        # f[out_dset][row, col] = invert_pixel(pixel, B, rho=rho, alpha=alpha, 
+                                             # lu_tuple=lu_tuple, abstol=abstol)
+        f[out_dset][row, col] = Float32.(365 * 10 * PHASE_TO_CM * invert_pixel(pixel, B, rho=rho, alpha=alpha, lu_tuple=lu_tuple, abstol=abstol))
+    end
+end
+
+function run_sbas(unw_stack_file::String,
+                  dset::String,
                   geolist,
                   intlist, 
                   valid_igram_indices, 
@@ -12,6 +37,28 @@ function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}},
                   alpha::Float32,
                   L1::Bool=false) 
 
+    B = prepB(geolist, intlist, constant_velocity, alpha)
+    lu_tuple = factor(Float64.(B))
+    rho, alpha, abstol = 1.0, 1.6, 1e-3
+    nrows, ncols = 1, 1
+    h5open(unw_stack_file) do f
+        nrows, ncols, _ = size(f[dset])
+    end
+    outfile, out_dset = "velocities.h5", "velos"
+
+    h5open(outfile, "w") do fout
+        d_create(fout, out_dset, datatype(Float32), dataspace(nrows, ncols))
+    end
+
+    @time @sync @distributed for (row, col) in collect(Iterators.product(1:nrows, 1:ncols))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:1000))
+        proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
+                   out_dset, B, rho, alpha, lu_tuple, abstol)
+    end
+    return outfile, out_dset
+end
+
+function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
@@ -24,17 +71,16 @@ function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}},
         println("Using constant velocity for inversion solution")
         B = sum(B, dims=2)
     end
-    if alpha > 0
-        println("Regularizing solution with alpha = $alpha")
-        B = augment_B(B, alpha)
-        extra_zeros = size(B, 1) - size(unw_stack, 3)
-    else
-        # No regularization added to pixels
-        extra_zeros = 0
-    end
-
-    @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros, L1=L1)
-    return vstack
+    # TODO: solve for stacks too big for memory
+    # if alpha > 0
+    #     println("Regularizing solution with alpha = $alpha")
+    #     B = augment_B(B, alpha)
+    #     extra_zeros = size(B, 1) - length(intlist)
+    # else
+    #     # No regularization added to pixels
+    #     extra_zeros = 0
+    # end
+    return B  # , extra_zeros
 end
 
 """Solve the problem Bv = d for each pixel in the stack"""
@@ -241,6 +287,7 @@ function augment_B(B::Array{Float32, 2}, alpha::Float32)
     return Float32.(vcat(B, alpha*I))
 end
 
+# TODO: this can't work for huge stacks
 function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Float32)
     B = Float32.(vcat(B, alpha*I))
     # Now make num rows match
