@@ -393,19 +393,19 @@ end
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(image, nlooks)
+function take_looks(image, row_looks, col_looks)
     nrows, ncols = size(arr)
-    nr = div(nrows, nlooks)
-    nc = div(ncols, nlooks)
+    nr = div(nrows, row_looks)
+    nc = div(ncols, col_looks)
     out = zeros(ComplexF32, nr, naz)
 
     @inbounds Threads.@threads for j = 1:nc
         @inbounds for i = 1:nr
-            indx_i = 1+(i-1)*nlooks:i*nlooks
-            indx_j = 1+(j-1)*nlooks:j*nlooks
+            indx_i = 1+(i-1)*row_looks:i*row_looks
+            indx_j = 1+(j-1)*col_looks:j*col_looks
             @views out[i, j] = sum(image[indx_i, indx_j])
         end
     end
 
-    return out
+    return out ./ (row_looks * col_looks)
 end
