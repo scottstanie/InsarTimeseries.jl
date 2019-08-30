@@ -119,7 +119,7 @@ function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1
             push!(out_todo, o)
         end
     end
-    return in_todo, out_todo, indexin(in_todo, infiles)
+    return in_todo, out_todo, indexin(in_todo, in_files)
 end
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
@@ -156,7 +156,7 @@ function remove_ramp(z, mask::AbstractArray{<:Number})
 end
 
 function remove_ramp(z, mask_idx::Int)
-    mask = permutedims(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx)))
+    mask = permutedims(Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx))[:, :, 1]))
     remove_ramp(z, mask)
 end
 

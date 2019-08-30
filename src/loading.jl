@@ -394,7 +394,9 @@ Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
 function take_looks(image, row_looks, col_looks)
-    nrows, ncols = size(arr)
+    (row_looks == 1 && col_looks == 1) && return image
+
+    nrows, ncols = size(image)
     nr = div(nrows, row_looks)
     nc = div(ncols, col_looks)
     out = zeros(ComplexF32, nr, naz)
