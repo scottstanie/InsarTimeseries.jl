@@ -119,7 +119,7 @@ function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1
             push!(out_todo, o)
         end
     end
-    return in_todo, out_todo
+    return in_todo, out_todo, indexin(in_todo, infiles)
 end
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
@@ -129,29 +129,35 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
 
     # If we already have these files made, skip the function
-    in_todo, out_todo = _remaining_files(in_files, out_files)
+    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
+
     println("$(length(out_todo)) files remain, overwrite = $overwrite")
     if length(out_todo) == 0 && !overwrite
         println("skipping")
         return nothing
     end
-    mask_stack = Bool.(load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET))
+    # TODO: Dont load all this... it's 30+ GB now, will be huge later
+    # mask_stack = Bool.(load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET))
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
-    pmap((name_in, name_out, mask) -> _load_and_run(remove_ramp, name_in, name_out, mask),
-        wp, in_todo, out_todo, sliceview(mask_stack))
+    pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx),
+        wp, in_todo, out_todo, idxs_todo)
     println("Deramping stack complete")
 end
 
 sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
 
 
-
-function remove_ramp(z, mask)
+function remove_ramp(z, mask::AbstractArray{<:Number})
     z_masked = copy(z)
     z_masked[mask] .= NaN
     return z - estimate_ramp(z_masked)
+end
+
+function remove_ramp(z, mask_idx::Int)
+    mask = permutedims(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx)))
+    remove_ramp(z, mask)
 end
 
 
@@ -401,7 +407,7 @@ function loop_over_files(f, directory::String, input_ext::String, output_ext::St
         out_files = [joinpath(out_dir, splitpath(f)[end]) for f in out_files]
     end
 
-    in_todo, out_todo = _remaining_files(in_files, out_files)
+    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
     println("$(length(out_todo)) files remain, overwrite = $overwrite")
     if length(out_todo) == 0 && !overwrite
         println("skipping")
