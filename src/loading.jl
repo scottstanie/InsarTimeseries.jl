@@ -415,3 +415,6 @@ function take_looks(image::Array{T}, row_looks, col_looks) where {T <: Number}
     out ./= (row_looks * col_looks)
     return T == Bool ? Bool.(out .> 0) : out
 end
+
+# If we pass something else like a dem_rsc
+take_looks(other, row_looks, col_looks) = other
