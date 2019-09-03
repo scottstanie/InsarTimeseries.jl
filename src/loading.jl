@@ -393,13 +393,16 @@ end
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(image, row_looks, col_looks)
+function take_looks(image::Array{T}, row_looks, col_looks) where {T <: Number}
     (row_looks == 1 && col_looks == 1) && return image
 
     nrows, ncols = size(image)
     nr = div(nrows, row_looks)
     nc = div(ncols, col_looks)
-    out = zeros(ComplexF32, nr, naz)
+
+    # Can't sum into a Bool array
+    T == Bool ? outtype = Float32 : outtype = T
+    out = zeros(outtype, nr, nc)
 
     @inbounds Threads.@threads for j = 1:nc
         @inbounds for i = 1:nr
@@ -409,5 +412,6 @@ function take_looks(image, row_looks, col_looks)
         end
     end
 
-    return out ./ (row_looks * col_looks)
+    out ./= (row_looks * col_looks)
+    return T == Bool ? Bool.(out .> 0) : out
 end
