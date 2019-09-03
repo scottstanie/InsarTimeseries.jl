@@ -45,7 +45,8 @@ plt = pyimport("matplotlib.pyplot")
 
 const UNW_STACK_FILE="unw_stack.h5"
 const ignore_geo_file = "geolist_ignore.txt"
-const max_temporal_baseline = 400
+# max_temporal_baseline = 400
+max_temporal_baseline = 500
 
 GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
@@ -56,6 +57,7 @@ timediffs = InsarTimeseries.day_diffs(GEOLIST)
 row, col = 1838, 1367
 # well uplift
 row, col = 1223, 943
+# row, col = 244, 188
 
 
 function get_unw_vals(unw_stack_file::String, station_name::String, window=5,
