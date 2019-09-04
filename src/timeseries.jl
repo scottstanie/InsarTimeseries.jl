@@ -98,7 +98,7 @@ Arguments:
     timediffs are the days between each SAR acquisitions
         length will be 1 less than num SAR acquisitions
 """
-function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1})
+function integrate_velocities(vstack::Array{<:AbstractFloat, 3}, timediffs::Array{Int, 1})
     nrows, ncols, _ = size(vstack)
     num_geos = length(timediffs) + 1
     phi_stack = zeros(nrows, ncols, num_geos)
@@ -114,7 +114,7 @@ function integrate_velocities(vstack::Array{Float32, 3}, timediffs::Array{Int, 1
     return phi_stack
 end
 
-function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
+function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
     # multiply each column of vel array: each col is a separate solution
     phi_diffs .= velocities .* timediffs
 
@@ -125,7 +125,7 @@ function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{Float32, 1},
 end
 
 # Older 1D version with allocations
-function integrate_velocities(velocities::AbstractArray{Float32, 1}, timediffs::Array{Int, 1})
+function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
     phi_diffs = velocities .* timediffs
     phi_arr = cumsum(coalesce.(phi_diffs, 0))
     pushfirst!(phi_arr, 0)
