@@ -35,6 +35,8 @@ function run_inversion(unw_stack_file::String;
         flat_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
+        outdset = "stack"
+        is_3d = true  # TODO: stack avg should really be 2d velo
     else
         is_hdf5 = true
         flat_dset = STACK_FLAT_SHIFTED_DSET
@@ -45,6 +47,7 @@ function run_inversion(unw_stack_file::String;
         # TODO: also do this for the masks
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
+        # outdset = "stack"
         # h5open(unw_stack_file) do unw_file
         #     unw_stack = unw_file[flat_dset]
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
@@ -52,7 +55,9 @@ function run_inversion(unw_stack_file::String;
         # end
         outdset = "velos"
         velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
-                                 geolist, intlist, valid_igram_indices, constant_velocity, alpha, L1)
+                                 geolist, intlist, valid_igram_indices, 
+                                 constant_velocity, alpha, L1)
+        is_3d = false
     end
     ####################33
 
@@ -66,18 +71,18 @@ function run_inversion(unw_stack_file::String;
 
     dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
     if !isnothing(outfile)
-        if !is_3d
+        if is_3d
             println("Saving deformation to $outfile")
             @time save_deformation(outfile, deformation, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
         else
             sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
         end
 
-        save_geolist_to_h5(outfile, geolist)
-        save_reference(outfile, unw_stack_file, STACK_DSET, flat_dset)
+        save_geolist_to_h5(outfile, geolist, overwrite=true)
+        save_reference(outfile, unw_stack_file, outdset, flat_dset)
     end
 
-    return (geolist, phi_arr, deformation)
+    # return (geolist, phi_arr, deformation)
 end
 
 
