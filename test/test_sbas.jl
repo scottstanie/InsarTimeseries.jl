@@ -47,6 +47,8 @@ v_hat = B \ dphis
 phi_hat = InsarTimeseries.integrate_velocities(v_hat, timediffs)
 @test isapprox(phi_hat, truth_phi, rtol=1e-7)
 
-
-
+dpr = dphis .+ rand(eltype(dphis), size(dphis))
+@test isapprox(A \ dpr,
+               InsarTimeseries.integrate_velocities(B \ dpr, timediffs)[2:end],
+               rtol=1e-7)
 # TODO: make the const. vel into a function to test it
