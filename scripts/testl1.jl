@@ -1,6 +1,6 @@
 push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
 # import InsarTimeseries
-import InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET
+using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET
 using Dates
 using HDF5
 using LinearAlgebra
@@ -248,20 +248,49 @@ plotting = false
 # Try and remove a day, check all GPS errors
 ############
 
-l1_diff_matrix = zeros(length(station_name_list), length(GEOLIST))
-base_errors = zeros(length(station_name_list))
-for (idx, station_name) in enumerate(station_name_list)
+num_geos = length(GEOLIST)
+num_stations = length(station_name_list)
 
+l1_diff_matrix = zeros(num_stations, num_geos)
+base_errors = zeros(num_stations)
+
+for (idx, station_name) in enumerate(station_name_list)
     window = 5
     # I'm assuming TXKM is the best based on other analysis here
     ref_stat = "TXKM"
     unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
 
+    # The "diff" being positive means an improvement (new error off GPS is lower), while
+    # negative means the new err from GPS is bigger than before
     l1_diffs, l2_diffs, base_l1_error = InsarTimeseries.compare_solutions_with_gps(GEOLIST, INTLIST, unw_vals, station_name)
 
     l1_diff_matrix[idx, :] = l1_diffs
     base_errors[idx] = base_l1_error
 end
+
+# top row is RMS, bottom row is max
+new_errs = zeros(2, num_geos)
+for idx in 1:num_geos
+    # if l1_diff_matrix entry is positive, it is an improvement, 
+    # so we subtract from base.
+    new_err = abs.(abs.(base_errors) .- l1_diff_matrix[:, idx])
+    # reminder: l1_diffs[idx] = abs(base_l1_error) - abs(l1d)
+    # which means we are getting back to `l1d = l1 - slope_gps_mm_yr`
+
+    # println("$(rms(new_err)) , $(maximum(new_err))")
+    new_errs[:, idx] = [rms(new_err) , maximum(new_err)]
+end
+
+bases = [rms(abs.(base_errors)), maximum(abs.(base_errors))]
+err_diffs = new_errs .- bases;
+
+function plot_errs(err_diffs, geolist)
+    scatter(geolist, err_diffs[1, :], label="RMS", title="difference in errors (negative=improvement)")
+    scatter!(geolist, err_diffs[2, :], label="maximum")
+end
+
+
+###### 
 
 l1_errors, l2_errors = [], []
 
