@@ -205,8 +205,11 @@ function load_intlist_from_h5(h5file)
     end
 end
 
-function save_geolist_to_h5(h5file, geolist)
+function save_geolist_to_h5(h5file, geolist; overwrite=false)
     h5open(h5file, "cw") do f
+        # Delete if exists
+        overwrite && GEOLIST_DSET in names(f) && o_delete(f, GEOLIST_DSET)
+
         geo_strings = Dates.format.(geolist, DATE_FMT)
         write(f, GEOLIST_DSET, geo_strings)
         # Note: using the sario python version since for some reason (as of 7.21.2019)
@@ -238,7 +241,18 @@ function save_deformation(h5file,
     sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 end
 
-function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_dset)
+function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_dset, overwrite=true)
+    # Delete if exists
+    if overwrite
+        h5open(h5file) do f
+            if exists(attrs(f[dset_name]), REFERENCE_ATTR)
+                a_delete(f[dset_name], REFERENCE_ATTR)
+            end
+            if exists(attrs(f[dset_name]), REFERENCE_STATION_ATTR)
+                a_delete(f[dset_name], REFERENCE_STATION_ATTR)
+            end
+        end
+    end
     # Read ref. unfo from unw file, save what was used to deformation result file
     reference = h5readattr(unw_stack_file, stack_flat_shifted_dset)[REFERENCE_ATTR]
     h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR => reference))
