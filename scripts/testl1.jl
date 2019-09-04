@@ -6,10 +6,13 @@ using HDF5
 using LinearAlgebra
 using Statistics: mean
 using Plots
+using PyCall: pyimport
 import Polynomials
 import NaNMath
 using Printf: @printf
 pyplot()
+# import PyPlot
+# plt = PyPlot
 
 nm = NaNMath
 # import Convex
@@ -37,7 +40,6 @@ REFERENCE_STATION = nothing
 latlon = pyimport("apertools.latlon")
 sario = pyimport("apertools.sario")
 gps = pyimport("apertools.gps")
-# plt = pyimport("matplotlib.pyplot")
 
 # const DEFO_FILENAME = "deformation_unreg_maxtemp400.h5"
 # const DEFO_FILENAME_LINEAR = "deformation_linear_maxtemp400.h5"
@@ -95,12 +97,6 @@ function _subtract_reference(unw_vals, reference_station, unw_stack_file, window
     return unw_vals - get_unw_vals(unw_stack_file, reference_station, window, dset, valid_indices)
 end
 
-function get_gps_los(station_name, geo_path="../"; reference_station=nothing)
-    dts, gps_los_data = gps.load_gps_los_data(geo_path, station_name, start_year=2015, end_year=2018,
-                                              zero_mean=true, reference_station=reference_station)
-    
-    return [convert(Date, d) for d in dts], gps_los_data
-end
 
 function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing)
     unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
@@ -158,26 +154,6 @@ end
 
 _get_day_nums(dts) = [( d - dts[1]).value for d in dts]
 
-function fit_line(dts, data)
-    day_nums = _get_day_nums(dts)
-    p = Polynomials.polyfit(day_nums, data, 1)
-    # p(day_nums[end])
-    return p
-end
-
-"""Find the linear fit of MM per year of the gps station"""
-function solve_gps_ts(station_name, reference_station=nothing)
-    dts, gps_los_data = get_gps_los(station_name, reference_station=nothing)
-    # If we wanna compare with GPS subtracted too, do this:
-    # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
-
-    # Convert to "days since start" for line fitting
-    gps_poly = fit_line(dts, gps_los_data)
-    slope = length(gps_poly) == 2 ? Polynomials.coeffs(gps_poly)[2] : Polynomials.coeffs(gps_poly)[1]
-    # offset, slope = Polynomials.coeffs(gps_poly)
-    slope_gps_mm_yr = 365 * 10 * slope
-end
-
 function process_pixel(; station_name=nothing, plotting=false, reference_station=REFERENCE_STATION,
                        window=5, verbose=true)
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
@@ -185,7 +161,7 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
     # First solve for the velocities in L1 vs L2 to compare to GPS
     v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station)
 
-    slope_gps_mm_yr = solve_gps_ts(station_name, reference_station)
+    slope_gps_mm_yr = InsarTimeserie.solve_gps_ts(station_name, reference_station)
 
     slope_insar_l2_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_lstsq)[1] # solution currently in phase
     slope_insar_l1_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_l1)[1]
@@ -265,13 +241,33 @@ total_abs_error(arr::AbstractArray{<:Number, 1}) = sum(abs.(arr))
 total_abs_error(arr::AbstractArray{<:Number, 2}) = sum(abs.(arr), dims=2)
 
 
-l1_errors, l2_errors = [], []
 
 plotting = false
 
+############
+# Try and remove a day, check all GPS errors
+############
+
+l1_diff_matrix = zeros(length(station_name_list), length(GEOLIST))
+base_errors = zeros(length(station_name_list))
+for (idx, station_name) in enumerate(station_name_list)
+
+    window = 5
+    # I'm assuming TXKM is the best based on other analysis here
+    ref_stat = "TXKM"
+    unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
+
+    l1_diffs, l2_diffs, base_l1_error = InsarTimeseries.compare_solutions_with_gps(GEOLIST, INTLIST, unw_vals, station_name)
+
+    l1_diff_matrix[idx, :] = l1_diffs
+    base_errors[idx] = base_l1_error
+end
+
+l1_errors, l2_errors = [], []
+
 # Compute all combos:
-@time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
-print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
+# @time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
+# print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
@@ -318,4 +314,3 @@ function plotunws(B1, B2, unw1, unw2)
     plot(p1, p2)
 end
 
-# function shift_and_compare(ref_station)
