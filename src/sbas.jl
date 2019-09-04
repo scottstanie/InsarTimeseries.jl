@@ -73,7 +73,7 @@ function run_sbas(unw_stack_file::String,
     # h5open(outfile, "w") do fout
     #     d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
     # end
-    println("Making new writing file for each of $length(Distributed.workers())")
+    println("Making new writing file for each of $(length(Distributed.workers()))")
     @time @sync @distributed for id in Distributed.workers()
         h5open(string(id)*outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
@@ -87,7 +87,7 @@ function run_sbas(unw_stack_file::String,
                    outdset, B, rho, alpha, lu_tuple, abstol)
     end
     println("Merging files into $outfile")
-    @time merge_partial_files(outfile, dset)
+    @time merge_partial_files(outfile, outdset)
     return outfile, outdset
 end
 
