@@ -53,7 +53,7 @@ function run_sbas(unw_stack_file::String,
     end
 
     @time @sync @distributed for (row, col) in collect(Iterators.product(1:nrows, 1:ncols))
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:1000))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:100))
         proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, rho, alpha, lu_tuple, abstol)
     end
