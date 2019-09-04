@@ -54,19 +54,26 @@ function run_inversion(unw_stack_file::String;
         velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
                                  geolist, intlist, valid_igram_indices, constant_velocity, alpha, L1)
     end
-    return
     ####################33
 
-    timediffs = day_diffs(geolist)
-    println("Integrating velocities to phases")
-    @time phi_arr = integrate_velocities(vstack, timediffs)
-    # Multiply by wavelength ratio to go from phase to cm
-    deformation = PHASE_TO_CM .* phi_arr
+    if is_3d
+        timediffs = day_diffs(geolist)
+        println("Integrating velocities to phases")
+        @time phi_arr = integrate_velocities(vstack, timediffs)
+        # Multiply by wavelength ratio to go from phase to cm
+        deformation = PHASE_TO_CM .* phi_arr
+    end
 
+    dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
     if !isnothing(outfile)
-        println("Saving deformation to $outfile")
-        dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
-        @time save_deformation(outfile, deformation, geolist, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
+        if !is_3d
+            println("Saving deformation to $outfile")
+            @time save_deformation(outfile, deformation, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
+        else
+            sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+        end
+
+        save_geolist_to_h5(outfile, geolist)
         save_reference(outfile, unw_stack_file, STACK_DSET, flat_dset)
     end
 

@@ -205,6 +205,15 @@ function load_intlist_from_h5(h5file)
     end
 end
 
+function save_geolist_to_h5(h5file, geolist)
+    h5open(h5file, "cw") do f
+        geo_strings = Dates.format.(geolist, DATE_FMT)
+        write(f, GEOLIST_DSET, geo_strings)
+        # Note: using the sario python version since for some reason (as of 7.21.2019)
+        # saving a JSON.json(dem) cant be loaded at all in h5py. weird string stuff
+    end
+end
+
 function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true)
     # TODO: is there a way to combine this with normal saving of files?
     if overwrite
@@ -226,13 +235,6 @@ function save_deformation(h5file,
                           do_permute=true,
                           unw_stack_file="unw_stack.h5")
     save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
-    h5open(h5file, "cw") do f
-        geo_strings = Dates.format.(geolist, DATE_FMT)
-        write(f, GEOLIST_DSET, geo_strings)
-        # Note: using the sario python version since for some reason (as of 7.21.2019)
-        # saving a JSON.json(dem) cant be loaded at all in h5py. weird string stuff
-        # TODO: save reference that was used at the time
-    end
     sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 end
 
@@ -393,13 +395,16 @@ end
 Cuts off values if the size isn't divisible by num looks
 size = floor(rows / row_looks, cols / col_looks)
 """
-function take_looks(image, row_looks, col_looks)
+function take_looks(image::Array{T}, row_looks, col_looks) where {T <: Number}
     (row_looks == 1 && col_looks == 1) && return image
 
     nrows, ncols = size(image)
     nr = div(nrows, row_looks)
     nc = div(ncols, col_looks)
-    out = zeros(ComplexF32, nr, naz)
+
+    # Can't sum into a Bool array
+    T == Bool ? outtype = Float32 : outtype = T
+    out = zeros(outtype, nr, nc)
 
     @inbounds Threads.@threads for j = 1:nc
         @inbounds for i = 1:nr
@@ -409,5 +414,9 @@ function take_looks(image, row_looks, col_looks)
         end
     end
 
-    return out ./ (row_looks * col_looks)
+    out ./= (row_looks * col_looks)
+    return T == Bool ? Bool.(out .> 0) : out
 end
+
+# If we pass something else like a dem_rsc
+take_looks(other, row_looks, col_looks) = other

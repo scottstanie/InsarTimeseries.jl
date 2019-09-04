@@ -6,10 +6,11 @@ using HDF5
 using LinearAlgebra
 using Statistics: mean
 using Plots
-using PyCall
 import Polynomials
 import NaNMath
-using    Printf: @printf
+using Printf: @printf
+pyplot()
+
 nm = NaNMath
 # import Convex
 # import ECOS
@@ -36,7 +37,7 @@ REFERENCE_STATION = nothing
 latlon = pyimport("apertools.latlon")
 sario = pyimport("apertools.sario")
 gps = pyimport("apertools.gps")
-plt = pyimport("matplotlib.pyplot")
+# plt = pyimport("matplotlib.pyplot")
 
 # const DEFO_FILENAME = "deformation_unreg_maxtemp400.h5"
 # const DEFO_FILENAME_LINEAR = "deformation_linear_maxtemp400.h5"
@@ -270,6 +271,7 @@ plotting = false
 
 # Compute all combos:
 @time l1_error_matrix, l2_error_matrix = calc_error_matrix(station_name_list, plotting)
+print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
 
 # station_name = station_name_list[1]
 # station_name = "TXOZ"
@@ -309,15 +311,11 @@ plotting = false
 # plot!(p1, GEOLIST, ts_unreg)
 
 function plotunws(B1, B2, unw1, unw2)
-    fig, axes = plt.subplots(1, 2)
     yh = maximum(vcat(unw1, unw2)) + 1
     yl = minimum(vcat(unw1, unw2)) - 1
-    axes[1].plot(B1, unw1, "b.")
-    axes[1].set_ylim((yl, yh))
-    axes[2].plot(B2, unw2, "b.")
-    axes[2].set_ylim((yl, yh))
-    plt.show()
-    return fig, axes
+    p1 = plot(B1, unw1, line=:nothing, marker=:o, color=:blue, ylims=(yl, yh))
+    p2 = plot(B2, unw2, line=:nothing, marker=:o, color=:green, ylims=(yl, yh))
+    plot(p1, p2)
 end
 
 # function shift_and_compare(ref_station)

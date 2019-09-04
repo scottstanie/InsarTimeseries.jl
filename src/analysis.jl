@@ -44,10 +44,19 @@ max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(unw_vals_by_date(d, intl
 
 
 # Useful:
-function remove_with_cutoff(diff_cutoff, geolist, intlist, unw_vals, B)
+function remove_with_cutoff(diff_cutoff, geolist, intlist, unw_vals, B, direction)
     l1_diffs, lstsq_diffs = compare_solutions(geolist, intlist, unw_vals, B)
-    big_l1_diffs = l1_diffs .> diff_cutoff
+    if direction == :high
+        big_l1_diffs = l1_diffs .> diff_cutoff
+    elseif direction == :low
+        big_l1_diffs = l1_diffs .< diff_cutoff
+    elseif direction == :abs
+        big_l1_diffs = abs.(l1_diffs) .> diff_cutoff
+    else
+        throw("direction must be :high, :low, or :abs")
+    end
     bad_days = geolist[big_l1_diffs]
+    println("Removing $(length(bad_days)) days out of $(length(big_l1_diffs)): $bad_days")
     return solve_without_date(bad_days, intlist, unw_vals, B)
 end
 
