@@ -14,4 +14,4 @@ rows, cols = (5, 6)
 
 @test InsarTimeseries.load(demfile, (3, 4)) == dem[3, 4] == 18
 
-@test_throws BoundsError InsarTimeseries.load(demfile, (30, 40))
+@test_throws DomainError InsarTimeseries.load(demfile, (30, 40))
