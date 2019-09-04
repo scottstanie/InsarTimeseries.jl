@@ -22,10 +22,35 @@ function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, rho, alpha, lu_tuple, abstol)
     # println("unw_stack_file, in_dset, (row, col, :)", unw_stack_file, in_dset, row, col)
     pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
-    h5open(outfile, "r+") do f
+
+    dist_outfile = string(Distributed.myid()) * outfile
+    h5open(dist_outfile, "r+") do f
         # f[outdset][row, col] = invert_pixel(pixel, B, rho=rho, alpha=alpha, 
                                              # lu_tuple=lu_tuple, abstol=abstol)
         f[outdset][row, col] = Float32.(365 * 10 * PHASE_TO_CM * invert_pixel(pixel, B, rho=rho, alpha=alpha, lu_tuple=lu_tuple, abstol=abstol))
+    end
+end
+
+partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
+
+function merge_partial_files(outfile, dset)
+    # TODO: prevent reading of entire files
+    tmp = zeros(size(partial_files(outfile)[1], dset))
+
+    for f in partial_files(outfile)
+        cur = h5read(f, dset)
+        tmp += cur
+        rm(f)
+    end
+    h5open(outfile, "w") do fout
+        fout[dset] = tmp
+    end
+end
+
+import Base.size
+function size(h5file::String, dset::String)
+    h5open(h5file) do f
+        return size(f[dset])
     end
 end
 
@@ -43,20 +68,26 @@ function run_sbas(unw_stack_file::String,
     B = prepB(geolist, intlist, constant_velocity, alpha)
     lu_tuple = factor(Float64.(B))
     rho, alpha, abstol = 1.0, 1.6, 1e-3
-    nrows, ncols = 1, 1
-    h5open(unw_stack_file) do f
-        nrows, ncols, _ = size(f[dset])
+    nrows, ncols, _ = size(unw_stack_file, dset)
+
+    # h5open(outfile, "w") do fout
+    #     d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
+    # end
+    println("Making new writing file for each of $length(Distributed.workers())")
+    @time @sync @distributed for id in Distributed.workers()
+        h5open(string(id)*outfile, "w") do fout
+            d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
+        end
     end
 
-    h5open(outfile, "w") do fout
-        d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
-    end
 
     @time @sync @distributed for (row, col) in collect(Iterators.product(1:nrows, 1:ncols))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:100))
         proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, rho, alpha, lu_tuple, abstol)
     end
+    println("Merging files into $outfile")
+    @time merge_partial_files(outfile, dset)
     return outfile, outdset
 end
 
