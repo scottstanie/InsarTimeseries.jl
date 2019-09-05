@@ -49,7 +49,7 @@ gps = pyimport("apertools.gps")
 const UNW_STACK_FILE="unw_stack.h5"
 const ignore_geo_file = "geolist_ignore.txt"
 # max_temporal_baseline = 400
-max_temporal_baseline = 500
+max_temporal_baseline = 1200
 
 GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
