@@ -11,6 +11,9 @@ function parse_commandline()
         "--overwrite"
             action = :store_true
             help = "Erase previous processed stack files"
+        "--zero"
+            action = :store_true
+            help = "Run just the igram zeroing step"
         "--igram-path"
             default = "."
             help = "Path containing .int files"
@@ -43,6 +46,7 @@ function main()
     end
 
     overwrite = parsed_args["overwrite"]
+    zero = parsed_args["zero"]
     igram_path = parsed_args["igram-path"]
     geo_path = parsed_args["geo-path"]
     ref_station = parsed_args["ref-station"]
@@ -50,9 +54,16 @@ function main()
     ref_col = parsed_args["ref-col"]
     window = parsed_args["window"]
 
-    @time InsarTimeseries.prepare_stacks(igram_path, overwrite=overwrite, geo_path=geo_path, 
-                                         ref_row=ref_row, ref_col=ref_col, ref_station=ref_station, 
-                                         window=window)
+    if zero 
+        mask_filename = abspath(joinpath(igram_path, InsarTimeseries.MASK_FILENAME))
+        @time InsarTimeseries.create_mask_stacks(igram_path, overwrite=overwrite, geo_path=geo_path,
+                                                mask_filename=mask_filename)
+        zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+    else
+        @time InsarTimeseries.prepare_stacks(igram_path, overwrite=overwrite, geo_path=geo_path, 
+                                             ref_row=ref_row, ref_col=ref_col, ref_station=ref_station, 
+                                             window=window)
+    end
 
 end
 
