@@ -13,6 +13,11 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
     create_mask_stacks(igram_path, mask_filename=mask_stack_file,
                        overwrite=overwrite, geo_path=geo_path) 
 
+
+    # Step 2: use these masks to zero bad ares to zero in .int and .cc files
+    # Note: this may have been run already after making .int files, before unwrapping
+    zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
     create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
@@ -122,6 +127,42 @@ function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1
     return in_todo, out_todo, indexin(in_todo, in_files)
 end
 
+
+# Step 2 functions: zeroing bad areas
+function zero_masked_areas(directory, input_exts=[".int", ".cc"], overwrite=false)
+    for input_ext in input_exts
+        in_files = find_files(input_ext, directory)
+        out_files = in_files  # We are saving over the same file, just setting pixels to 0
+        idxs = collect(1:length(in_files))
+
+        # TODO: should we check for 0s in masked areas? maybe in the real function
+        # in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
+        wp = _get_workerpool(8)
+        println("Starting zeroing areas for $input_ext")
+        @time pmap((name_in, name_out, mask_idx) -> _load_and_run(zero_file, name_in, name_out, mask_idx, return_amp=true),
+                   wp, in_files, out_files, idxs)
+        println("completed zeroing for $input_ext")
+    end
+end
+
+function zero_file(arr3d::AbstractArray{T, 3}, mask_idx) where {T <: Number}
+    mask = _read_mask(mask_idx)
+    data = @view arr3d[:, :, 2]
+    data[mask] .= 0
+    return arr3d
+end
+
+function zero_file(arr::AbstractArray{T, 2}, mask_idx) where {T <: Number}
+    mask = _read_mask(mask_idx)
+    arr[mask] .= 0
+    return arr
+end
+
+
+_read_mask(mask_idx) = permutedims(Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, 
+                                                (:, :, mask_idx))[:, :, 1]))
+
+
 """Remove a linear ramp from .unw files, save as .unwflat"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
     println("Writing deramped unws to $output_ext files")
@@ -136,8 +177,6 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
         println("skipping")
         return nothing
     end
-    # TODO: Dont load all this... it's 30+ GB now, will be huge later
-    # mask_stack = Bool.(load_hdf5_stack(MASK_FILENAME, IGRAM_MASK_DSET))
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
@@ -156,7 +195,7 @@ function remove_ramp(z, mask::AbstractArray{<:Number})
 end
 
 function remove_ramp(z, mask_idx::Int)
-    mask = permutedims(Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx))[:, :, 1]))
+    mask = _read_mask(mask_idx)
     remove_ramp(z, mask)
 end
 
@@ -429,11 +468,11 @@ function loop_over_files(f, in_files::Array{String, 1}, out_files::Array{String,
          wp, in_files, out_files)
 end
 
-function _load_and_run(f, name_in, name_out, args...; looks=(1, 1))
+function _load_and_run(f, name_in, name_out, args...; looks=(1, 1), kwargs...)
     println("Input: $name_in, out: $name_out")
-    input_arr = load(name_in, looks=looks)
+    input_arr = load(name_in; looks=looks, kwargs...)
     out_arr = f(input_arr, args...)
-    save(name_out, out_arr)
+    save(name_out, out_arr; kwargs...)
 end
 
 function _get_workerpool(max_procs)
