@@ -417,6 +417,11 @@ size = floor(rows / row_looks, cols / col_looks)
 function take_looks(image::Array{T}, row_looks, col_looks) where {T <: Number}
     (row_looks == 1 && col_looks == 1) && return image
 
+    if ndims(image) > 2
+        return cat((take_looks(image[:, :, i], row_looks, col_looks)
+                    for i in 1:size(image, 3))..., dims=3)
+    end
+
     nrows, ncols = size(image)
     nr = div(nrows, row_looks)
     nc = div(ncols, col_looks)
