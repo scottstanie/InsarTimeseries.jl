@@ -28,7 +28,7 @@ Raises:
         to give the file width
 """
 function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
-              looks::Tuple{Int, Int}=(1, 1), do_permute=true)
+              looks::Tuple{Int, Int}=(1, 1), do_permute=true, return_amp=false)
     ext = get_file_ext(filename)
 
     # For now, just pass through unimplemented extensions to Python
@@ -42,7 +42,7 @@ function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
     rsc_data = _get_rsc_data(filename, rsc_file)
 
     if ext in STACKED_FILES
-        return take_looks(load_stacked_img(filename, rsc_data, do_permute=do_permute), looks...)
+        return take_looks(load_stacked_img(filename, rsc_data, do_permute=do_permute, return_amp=return_amp), looks...)
     elseif ext in BOOL_EXTS
         return take_looks(load_bool(filename, rsc_data, do_permute=do_permute), looks...)
     else
@@ -172,7 +172,7 @@ Format is two stacked matrices:
 For .unw height files, the first is amplitude, second is phase (unwrapped)
 For .cc correlation files, first is amp, second is correlation (0 to 1)
 """
-function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
+function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_permute=true, return_amp=false)
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
     # Note: must be saved in c/row-major order, so loading needs a transpose
@@ -184,8 +184,13 @@ function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_perm
     read!(filename, out)
 
     # TODO: port over rest of code for handling amp (if we care about that)
-    # out_left = out[1:cols, :]
-    return do_permute ? permutedims(out[cols+1:end, :]) : out[cols+1:end, :]
+    out_amp = @view out[1:cols, :]
+    out_data = @view out[cols+1:end, :]
+    if return_amp
+        return do_permute ? permutedims(cat(out_amp, out_data, dims=3), (2, 1, 3)) : cat(out_amp, out_data, dims=3)
+    else
+        return do_permute ? permutedims(out_data) : out_data
+    end
 end
 
 function load_geolist_from_h5(h5file::String)
