@@ -58,6 +58,7 @@ timediffs = InsarTimeseries.day_diffs(GEOLIST)
 # For checking / plotting specific interestion points:
 # Sinkhole
 row, col = 1838, 1367
+# row, col = 361, 257
 # well uplift
 row, col = 1223, 943
 # row, col = 244, 188
@@ -262,10 +263,11 @@ for (idx, station_name) in enumerate(station_name_list)
 
     # The "diff" being positive means an improvement (new error off GPS is lower), while
     # negative means the new err from GPS is bigger than before
-    l1_diffs, l2_diffs, base_l1_error = InsarTimeseries.compare_solutions_with_gps(GEOLIST, INTLIST, unw_vals, station_name)
+    #
+    # l1_diffs, l2_diffs, base_l1_error = InsarTimeseries.compare_solutions_with_gps(GEOLIST, INTLIST, unw_vals, station_name)
 
-    l1_diff_matrix[idx, :] = l1_diffs
-    base_errors[idx] = base_l1_error
+    # l1_diff_matrix[idx, :] = l1_diffs
+    # base_errors[idx] = base_l1_error
 end
 
 # top row is RMS, bottom row is max
@@ -343,3 +345,44 @@ function plotunws(B1, B2, unw1, unw2)
     plot(p1, p2)
 end
 
+function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing)
+    intlists, idxs, vals, Bs = [], [], [], []
+    window = 5
+    for baseline in baselines
+        geolist, cur_intlist, cur_valid_idxs = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, baseline);
+        if isnothing(station_name)
+            cur_unw_vals = get_unw_vals(UNW_STACK_FILE, rowcol..., window, STACK_FLAT_DSET,
+                                        cur_valid_idxs, reference_station="TXKM");
+        else
+            cur_unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, STACK_FLAT_DSET,
+                                        cur_valid_idxs, reference_station="TXKM");
+        end
+        B = InsarTimeseries.build_B_matrix(geolist, cur_intlist)
+
+        push!(intlists, cur_intlist)
+        push!(idxs, cur_valid_idxs)
+        push!(vals, cur_unw_vals)
+        push!(Bs, sum(B, dims=2))
+    end
+    return intlists, idxs, vals, Bs
+end
+
+function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baselines")
+    n = length(Bs)
+
+    sort!(temps, rev=true)
+    sort!(Bs, by=x->length(x), rev=true)
+    sort!(vals, by=x->length(x), rev=true)
+
+    ym = maximum(maximum(abs.(v)) for v in vals) + 3
+    # fig, axes = plt.subplots(1, n)
+    fig, axes = plt.subplots()
+    for ii = 1:n
+        # axes[ii].plot(Bs[ii], vals[ii], ".")
+        axes.plot(Bs[ii], vals[ii], ".", label=temps[ii])
+    end
+    axes.set_ylim((-ym, ym))
+    axes.legend()
+    axes.set_title(title)
+    return fig, axes
+end
