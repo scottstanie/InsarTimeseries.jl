@@ -4,11 +4,17 @@ unw_vals_by_date(date, intlist, unw_vals) = unw_vals[date in intlist]
 
 Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
-function remove_dates(bad_dates::Union{Date, Array{Date}}, intlist, unw_vals, B)
+function remove_dates(bad_dates::Union{Date, AbstractArray{Date}}, intlist, unw_vals, B)
     good_idxs = _good_idxs(bad_dates, intlist)
+    return remove_dates(good_idxs, intlist, unw_vals, B)
+end
+
+"""Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
+function remove_dates(good_idxs:AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
-    return B_clean, unw_clean
+    intlist_clean = intlist_vals[good_idxs]
+    return intlist_clean, unw_clean, B_clean 
 end
 
 _good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
@@ -20,7 +26,7 @@ function _good_idxs(date_arr::Array{Date}, intlist)
 end
 
 function solve_without_date(bad_dates::Union{Date, Array{Date}}, intlist, unw_vals, B)
-    B_clean, unw_clean = remove_dates(bad_dates, intlist, unw_vals, B)
+    intlist_clean, unw_clean, B_clean  = remove_dates(bad_dates, intlist, unw_vals, B)
     velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year
@@ -78,21 +84,39 @@ max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(unw_vals_by_date(d, intl
 
 
 # TODO Useful, but how to automaticall pick whether high,low, or abs??
-function remove_with_cutoff(diff_cutoff, geolist, intlist, unw_vals, B, direction)
+function remove_with_cutoff(cutoff, geolist, intlist, unw_vals, B, direction=:high, method=:mean)
+    if method == :mean
+        bad_idxs = _remove_by_mean(geolist, intlist, unw_vals, cutoff)
+    elseif method == :diff
+        bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
+    end
+
+    bad_days = geolist[bad_idxs]
+    println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
+    return solve_without_date(bad_days, intlist, unw_vals, B)
+end
+
+"""Look for outliers in how much the solution shifts by just having a large mean value"""
+function _remove_by_mean(geolist, intlist, unw_vals, cutoff=nothing)
+    means = mean_abs_val(geolist, intlist, unw_vals)
+    cutoff = isnothing(cutoff) ? 1.5 * median(means) : cutoff
+    return means .> cutoff
+end
+
+"""Look for outliers in how much the solution shifts by removing the single date"""
+function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
     l1_diffs, lstsq_diffs = compare_solutions(geolist, intlist, unw_vals, B)
     if direction == :high
-        big_l1_diffs = l1_diffs .> diff_cutoff
+        return lstsq_diffs .> cutoff
     elseif direction == :low
-        big_l1_diffs = l1_diffs .< diff_cutoff
+        return lstsq_diffs .< cutoff
     elseif direction == :abs
-        big_l1_diffs = abs.(l1_diffs) .> diff_cutoff
+        return abs.(lstsq_diffs) .> cutoff
     else
         throw("direction must be :high, :low, or :abs")
     end
-    bad_days = geolist[big_l1_diffs]
-    println("Removing $(length(bad_days)) days out of $(length(big_l1_diffs)): $bad_days")
-    return solve_without_date(bad_days, intlist, unw_vals, B)
 end
+
 
 function geos_with_good_mean(geolist, intlist, unw_vals; cutoff=12)
     means_by_date = mean_abs_val(geolist, intlist, unw_vals)
