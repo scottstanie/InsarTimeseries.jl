@@ -1,6 +1,6 @@
-push!(LOAD_PATH,"/home/scott/repos/InsarTimeseries.jl/src/")
+push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
 # import InsarTimeseries
-using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET
+using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET
 using Dates
 using HDF5
 using LinearAlgebra
@@ -18,6 +18,8 @@ nm = NaNMath
 # import Convex
 # import ECOS
 # import SCS
+
+p2mm = InsarTimeseries.PHASE_TO_CM * 365 * 10
 
 # TODO: find the shift to match insar to gps best
 # insar_arr_txmc = [365 * 10 * PHASE_TO_CM * solve_insar_ts(station_name, 5, "TXMC")[3][1] for station_name in  station_name_list]
@@ -46,7 +48,8 @@ gps = pyimport("apertools.gps")
 # const DEFO_FILENAME_L1 = "deformation_linear_maxtemp400_l1.h5"
 # println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
 
-const UNW_STACK_FILE="unw_stack.h5"
+const UNW_STACK_FILE="unw_stack.h5"  # Or InsarTimeseries.UNW_FILENAME
+const CC_STACK_FILE="cc_stack.h5"  # Or InsarTimeseries.CC_FILENAME
 const ignore_geo_file = "geolist_ignore.txt"
 # max_temporal_baseline = 400
 max_temporal_baseline = 1200
@@ -58,33 +61,33 @@ timediffs = InsarTimeseries.day_diffs(GEOLIST)
 # For checking / plotting specific interestion points:
 # Sinkhole
 row, col = 1838, 1367
-# row, col = 361, 257
+# row, col = [361, 257] .+ [1, 1]
 # well uplift
 row, col = 1223, 943
-# row, col = 244, 188
+# row, col = [244, 188] .+ [1, 1]
 
 
-function get_unw_vals(unw_stack_file::String, station_name::String, window=5,
-                      dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
-                      reference_station=nothing)
+function get_stack_vals(unw_stack_file::String, station_name::String, window=5,
+                        dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
+                        reference_station=nothing)
     dem_rsc = sario.load("dem.rsc")
     lon, lat = gps.station_lonlat(station_name)
     row, col = map(x-> convert(Int, x), 
                    latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
 
     # println("Getting data at $station_name: row $row, col $col, lon $lon, lat $lat")
-    unw_vals = _read_unw(unw_stack_file, row, col, window, dset, valid_indices)
+    unw_vals = _read_vals(unw_stack_file, row, col, window, dset, valid_indices)
     return _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
 end
 
-function get_unw_vals(unw_stack_file::String, row::Int, col::Int, window=5,
-                      dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
-                      reference_station=nothing)
-    unw_vals = _read_unw(unw_stack_file, row, col, window, dset, valid_indices)
+function get_stack_vals(unw_stack_file::String, row::Int, col::Int, window=5,
+                        dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
+                        reference_station=nothing)
+    unw_vals = _read_vals(unw_stack_file, row, col, window, dset, valid_indices)
     return _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
 end
 
-function _read_unw(unw_stack_file, row, col, window=5, dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES)
+function _read_vals(unw_stack_file, row, col, window=5, dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES)
     # println("Loading $row, $col from $dset, avging window $window")
     halfwin = div(window, 2)
     # Note: swapping the col and row in h5read since julia is col-major
@@ -95,17 +98,17 @@ end
 
 function _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
     isnothing(reference_station) && return unw_vals
-    return unw_vals - get_unw_vals(unw_stack_file, reference_station, window, dset, valid_indices)
+    return unw_vals - get_stack_vals(unw_stack_file, reference_station, window, dset, valid_indices)
 end
 
 
 function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing)
-    unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
+    unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
     return solve_insar_ts(unw_vals, window)
 end
 
 function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing)
-    unw_vals = get_unw_vals(UNW_STACK_FILE, row, col, window, reference_station=reference_station)
+    unw_vals = get_stack_vals(UNW_STACK_FILE, row, col, window, reference_station=reference_station)
     return solve_insar_ts(unw_vals, window)
 end
 
@@ -259,7 +262,7 @@ for (idx, station_name) in enumerate(station_name_list)
     window = 5
     # I'm assuming TXKM is the best based on other analysis here
     ref_stat = "TXKM"
-    unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
+    unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
 
     # The "diff" being positive means an improvement (new error off GPS is lower), while
     # negative means the new err from GPS is bigger than before
@@ -345,17 +348,20 @@ function plotunws(B1, B2, unw1, unw2)
     plot(p1, p2)
 end
 
-function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing)
-    intlists, idxs, vals, Bs = [], [], [], []
-    window = 5
+function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing, window=1)
+    intlists, idxs, vals, Bs, ccvals = [], [], [], [], []
     for baseline in baselines
         geolist, cur_intlist, cur_valid_idxs = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, baseline);
         if isnothing(station_name)
-            cur_unw_vals = get_unw_vals(UNW_STACK_FILE, rowcol..., window, STACK_FLAT_DSET,
+            cur_unw_vals = get_stack_vals(UNW_STACK_FILE, rowcol..., window, STACK_FLAT_DSET,
                                         cur_valid_idxs, reference_station="TXKM");
+            # TODO: add back in when the stack sizes match up again
+            # ccval = get_stack_vals(UNW_STACK_FILE, rowcol..., window, STACK_DSET, cur_valid_idxs)
         else
-            cur_unw_vals = get_unw_vals(UNW_STACK_FILE, station_name, window, STACK_FLAT_DSET,
+            cur_unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, STACK_FLAT_DSET,
                                         cur_valid_idxs, reference_station="TXKM");
+            # TODO: add back in when the stack sizes match up again
+            # ccval = get_stack_vals(UNW_STACK_FILE, station_name, window, STACK_DSET, cur_valid_idxs)
         end
         B = InsarTimeseries.build_B_matrix(geolist, cur_intlist)
 
@@ -363,8 +369,9 @@ function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing)
         push!(idxs, cur_valid_idxs)
         push!(vals, cur_unw_vals)
         push!(Bs, sum(B, dims=2))
+        # push!(ccvals, ccval)
     end
-    return intlists, idxs, vals, Bs
+    return intlists, idxs, vals, Bs # , ccvals
 end
 
 function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baselines")
