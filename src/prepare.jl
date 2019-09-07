@@ -2,7 +2,7 @@ using Distributed: pmap, workers, WorkerPool
 
 function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
                         ref_col=nothing, ref_station=nothing, 
-                        geo_path=nothing, window=5)
+                        geo_path=nothing, window=5, zero_masked=true)
     igram_path = abspath(igram_path)
 
     unw_stack_file = abspath(joinpath(igram_path, UNW_FILENAME))
@@ -16,12 +16,15 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
 
     # Step 2: use these masks to zero bad ares to zero in .int and .cc files
     # Note: this may have been run already after making .int files, before unwrapping
-    zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+    if zero_masked
+        zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+    end
+
+    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite)
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
     create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
-    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite)
 
     if isnothing(ref_station) && isnothing(ref_row) && isnothing(ref_col)
     # TODO: auto pick, redo that logic here
@@ -129,7 +132,7 @@ end
 
 
 # Step 2 functions: zeroing bad areas
-function zero_masked_areas(directory, input_exts=[".int", ".cc"], overwrite=false)
+function zero_masked_areas(directory; input_exts=[".int", ".cc"], overwrite=false)
     for input_ext in input_exts
         in_files = find_files(input_ext, directory)
         out_files = in_files  # We are saving over the same file, just setting pixels to 0
