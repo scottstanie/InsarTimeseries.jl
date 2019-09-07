@@ -10,7 +10,7 @@ function remove_dates(bad_dates::Union{Date, AbstractArray{Date}}, intlist, unw_
 end
 
 """Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
-function remove_dates(good_idxs:AbstractArray, intlist, unw_vals, B)
+function remove_dates(good_idxs::AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
     intlist_clean = intlist_vals[good_idxs]
