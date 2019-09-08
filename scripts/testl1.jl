@@ -118,7 +118,7 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cuto
     Blin = sum(B, dims=2)
 
     if cutoff
-         v_linear_l1, v_linear_lstsq = InsarTimeseries.solve_after_cutoff(geolist, INTLIST, unw_vals, Blin)
+         v_linear_l1, v_linear_lstsq = InsarTimeseries.solve_after_cutoff(GEOLIST, INTLIST, unw_vals, Blin, in_mm_yr=false)
         return v_linear_lstsq, 0, v_linear_l1, 0
     end
 
@@ -168,13 +168,11 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
 
     # First solve for the velocities in L1 vs L2 to compare to GPS
-    if cutoff
-         v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = InsarTimeseries.solve_after_cutoff(geolist, intlist400, unw_vals400_uplift, Blin400)
-     else
-        v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station)
-    end
+    reference_station = "TXKM"
+    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station, cutoff=cutoff)
 
-    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, reference_station)
+    # NOTE: CURRENLT IGNORING THE REFERENCE STATION AND FORCING IT TO BE NOTHING
+    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, nothing)
 
     slope_insar_l2_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_lstsq)[1] # solution currently in phase
     slope_insar_l1_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_l1)[1]
@@ -194,13 +192,13 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
         println("==="^10)
     end
 
-    # Now get the full time series of insar by integrating
-    linear_lstsq, unreg_lstsq, linear_l1, unreg_l1 = integrate_velos(v_linear_lstsq,
-                                                                     v_unreg_lstsq,
-                                                                     v_linear_l1,
-                                                                     v_unreg_l1)
 
     if plotting
+        # Now get the full time series of insar by integrating
+        linear_lstsq, unreg_lstsq, linear_l1, unreg_l1 = integrate_velos(v_linear_lstsq,
+                                                                         v_unreg_lstsq,
+                                                                         v_linear_l1,
+                                                                         v_unreg_l1)
         # Plot the solutions vs gps
         p1 = plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title="L2 least squares solution")
         plot_gps!(p1, dts, gps_los_data, gps_poly)
@@ -248,10 +246,10 @@ function print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
 end
 
 # Functions for error evaluation
-rms(arr::AbstractArray{<:Number, 1}) = sqrt(mean(arr.^2))
-rms(arr::AbstractArray{<:Number, 2}) = [rms(arr[i, :]) for i in 1:size(arr, 1)]
-total_abs_error(arr::AbstractArray{<:Number, 1}) = sum(abs.(arr))
-total_abs_error(arr::AbstractArray{<:Number, 2}) = sum(abs.(arr), dims=2)
+rms(arr::AbstractArray{Any, 1}) = sqrt(mean(arr.^2))
+rms(arr::AbstractArray{Any, 2}) = [rms(arr[i, :]) for i in 1:size(arr, 1)]
+total_abs_error(arr::AbstractArray{Any, 1}) = sum(abs.(arr))
+total_abs_error(arr::AbstractArray{Any, 2}) = sum(abs.(arr), dims=2)
 
 
 
@@ -271,7 +269,7 @@ for (idx, station_name) in enumerate(station_name_list)
     window = 5
     # I'm assuming TXKM is the best based on other analysis here
     ref_stat = "TXKM"
-    unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
+    # unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
 
     # The "diff" being positive means an improvement (new error off GPS is lower), while
     # negative means the new err from GPS is bigger than before
@@ -282,21 +280,21 @@ for (idx, station_name) in enumerate(station_name_list)
     # base_errors[idx] = base_l1_error
 end
 
-# top row is RMS, bottom row is max
-new_errs = zeros(2, num_geos)
-for idx in 1:num_geos
-    # if l1_diff_matrix entry is positive, it is an improvement, 
-    # so we subtract from base.
-    new_err = abs.(abs.(base_errors) .- l1_diff_matrix[:, idx])
-    # reminder: l1_diffs[idx] = abs(base_l1_error) - abs(l1d)
-    # which means we are getting back to `l1d = l1 - slope_gps_mm_yr`
+# # top row is RMS, bottom row is max
+# new_errs = zeros(2, num_geos)
+# for idx in 1:num_geos
+#     # if l1_diff_matrix entry is positive, it is an improvement, 
+#     # so we subtract from base.
+#     new_err = abs.(abs.(base_errors) .- l1_diff_matrix[:, idx])
+#     # reminder: l1_diffs[idx] = abs(base_l1_error) - abs(l1d)
+#     # which means we are getting back to `l1d = l1 - slope_gps_mm_yr`
+# 
+#     # println("$(rms(new_err)) , $(maximum(new_err))")
+#     new_errs[:, idx] = [rms(new_err) , maximum(new_err)]
+# end
 
-    # println("$(rms(new_err)) , $(maximum(new_err))")
-    new_errs[:, idx] = [rms(new_err) , maximum(new_err)]
-end
-
-bases = [rms(abs.(base_errors)), maximum(abs.(base_errors))]
-err_diffs = new_errs .- bases;
+# bases = [rms(abs.(base_errors)), maximum(abs.(base_errors))]
+# err_diffs = new_errs .- bases;
 
 function plot_errs(err_diffs, geolist)
     scatter(geolist, err_diffs[1, :], label="RMS", title="difference in errors (negative=improvement)")
@@ -321,7 +319,7 @@ l1_errors, l2_errors = [], []
 # append!(l1_errors, l1_error)
 
 for station_name in station_name_list
-    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
+    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
     append!(l2_errors, l2_error)
     append!(l1_errors, l1_error)
 end
@@ -331,8 +329,8 @@ println("L2 RMS error for all stations: $(rms(l2_errors))")
 println("L1 RMS error for all stations: $(rms(l1_errors))")
 println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
 println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
-println("L2 maximum errors : $(maximum(l2_errors))")
-println("L1 maximum errors : $(maximum(l1_errors))")
+println("L2 maximum errors : $(maximum(abs.(l2_errors)))")
+println("L1 maximum errors : $(maximum(abs.(l1_errors)))")
 
 
 
