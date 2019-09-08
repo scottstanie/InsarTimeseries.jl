@@ -1,4 +1,6 @@
 import Polynomials
+using Statistics: quantile
+using StatsBase: mad
 
 """Get the values (unw, cc, etc.) of one date"""
 vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
@@ -86,26 +88,53 @@ mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, u
 max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(vals_by_date(d, intlist, unw_vals)))
                                              for d in geolist];
 
+"""Used for robust variance est. (as a cutoff for outliers)
+See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
+iqr(arr) = quantile(arr, .75) - quantile(arr, .25)
 
-# TODO Useful, but how to automaticall pick whether high,low, or abs??
-function remove_with_cutoff(cutoff, geolist, intlist, unw_vals, B, direction=:high, method=:mean)
-    if method == :mean
-        bad_idxs = _remove_by_mean(geolist, intlist, unw_vals, cutoff)
-    elseif method == :diff
-        bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
-    end
+""" 3* the sigma valud as calculated using MAD"""
+mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
+
+"""Look for outliers in how much the solution shifts by just having a large mean value
+Returns a Bool array the size of `geolist` with `true` marking the outliers"""
+function find_mean_outliers(geolist, intlist, unw_vals, cutoff=nothing)
+    means = mean_abs_val(geolist, intlist, unw_vals)
+
+    cutoff = isnothing(cutoff) ? median(means) + mednsigma(means, 2) : cutoff
+    println("Using cutoff of $cutoff")
+    return means .> cutoff
+end
+
+"""Remove all igrams corresponding to the date with the highest mean"""
+function peel_largest_dates(geo, int, val, B, n=1)
+    means = mean_abs_val(geo, int, val)
+    dates_to_remove = largest_n_dates(geo, int, val, n)
+    int2, val2, B2 = remove_dates(dates_to_remove, int, val, B)
+    geo2 = [g for g in geo if g != dates_to_remove]
+    return geo2, int2, val2, B2
+end
+
+function largest_n_dates(geo, int, val, n=length(geo))
+    means = mean_abs_val(geo, int, val)
+    # Sort by the means to order the geolist
+    sorted_top = sort(collect(zip(means, geolist)), rev=true)[1:n]
+    # Now upzip to get just the dates (and discard their means
+    return collect(zip(sorted_top...))[2]
+end
+
+
+function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=nothing)  #, direction=:high, method=:mean)
+    # if method == :mean
+    bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
+    # elseif method == :diff
+    #     bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
+    # end
 
     bad_days = geolist[bad_idxs]
     println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
     return solve_without_date(bad_days, intlist, unw_vals, B)
 end
 
-"""Look for outliers in how much the solution shifts by just having a large mean value"""
-function _remove_by_mean(geolist, intlist, unw_vals, cutoff=nothing)
-    means = mean_abs_val(geolist, intlist, unw_vals)
-    cutoff = isnothing(cutoff) ? 1.5 * median(means) : cutoff
-    return means .> cutoff
-end
 
 """Look for outliers in how much the solution shifts by removing the single date"""
 function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
@@ -120,18 +149,6 @@ function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
         throw("direction must be :high, :low, or :abs")
     end
 end
-
-"""Remove all igrams corresponding to the date with the highest mean"""
-function peel_max(geo, int, val, B, n=1)
-    means = mean_abs_val(geo, int, val)
-    biggest_date = geo[argmax(means)]
-    int2, val2, B2 = remove_dates(biggest_date, int, val, B)
-    geo2 = [g for g in geo if g != biggest_date]
-
-    # Now either return if removing only 1 date, or recurse to remove more
-    return n <= 1 ? (geo2, int2, val2, B2) : peel_max(geo2, int2, val2, B2, n - 1)
-end
-
 
 
 function geos_with_good_mean(geolist, intlist, unw_vals; cutoff=12)
