@@ -51,8 +51,8 @@ gps = pyimport("apertools.gps")
 const UNW_STACK_FILE="unw_stack.h5"  # Or InsarTimeseries.UNW_FILENAME
 const CC_STACK_FILE="cc_stack.h5"  # Or InsarTimeseries.CC_FILENAME
 const ignore_geo_file = "geolist_ignore.txt"
-# max_temporal_baseline = 400
-max_temporal_baseline = 1200
+max_temporal_baseline = 500
+# max_temporal_baseline = 1200
 
 GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
@@ -102,20 +102,25 @@ function _subtract_reference(unw_vals, reference_station, unw_stack_file, window
 end
 
 
-function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing)
+function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing; cutoff=false)
     unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window)
+    return solve_insar_ts(unw_vals, window, cutoff=cutoff)
 end
 
-function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing)
+function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing; cutoff=false)
     unw_vals = get_stack_vals(UNW_STACK_FILE, row, col, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window)
+    return solve_insar_ts(unw_vals, window, cutoff=cutoff)
 end
 
-function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5)
+function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cutoff=false)
 
     B = InsarTimeseries.build_B_matrix(GEOLIST, INTLIST)
     Blin = sum(B, dims=2)
+
+    if cutoff
+         v_linear_l1, v_linear_lstsq = InsarTimeseries.solve_after_cutoff(geolist, INTLIST, unw_vals, Blin)
+        return v_linear_lstsq, 0, v_linear_l1, 0
+    end
 
     v_linear_lstsq = Blin \ unw_vals
     v_unreg_lstsq = B \ unw_vals
@@ -159,13 +164,17 @@ end
 _get_day_nums(dts) = [( d - dts[1]).value for d in dts]
 
 function process_pixel(; station_name=nothing, plotting=false, reference_station=REFERENCE_STATION,
-                       window=5, verbose=true)
+                       window=5, verbose=true, cutoff=false)
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
 
     # First solve for the velocities in L1 vs L2 to compare to GPS
-    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station)
+    if cutoff
+         v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = InsarTimeseries.solve_after_cutoff(geolist, intlist400, unw_vals400_uplift, Blin400)
+     else
+        v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station)
+    end
 
-    slope_gps_mm_yr = InsarTimeserie.solve_gps_ts(station_name, reference_station)
+    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, reference_station)
 
     slope_insar_l2_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_lstsq)[1] # solution currently in phase
     slope_insar_l1_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_l1)[1]
@@ -311,19 +320,19 @@ l1_errors, l2_errors = [], []
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 
-# for station_name in station_name_list
-#     l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
-#     append!(l2_errors, l2_error)
-#     append!(l1_errors, l1_error)
-# end
+for station_name in station_name_list
+    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting)
+    append!(l2_errors, l2_error)
+    append!(l1_errors, l1_error)
+end
 
-# println("TOTAL ERRORS (all in mm / year of velocity):")
-# println("L2 RMS error for all stations: $(rms(l2_errors))")
-# println("L1 RMS error for all stations: $(rms(l1_errors))")
-# println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
-# println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
-# println("L2 maximum errors : $(maximum(l2_errors))")
-# println("L1 maximum errors : $(maximum(l1_errors))")
+println("TOTAL ERRORS (all in mm / year of velocity):")
+println("L2 RMS error for all stations: $(rms(l2_errors))")
+println("L1 RMS error for all stations: $(rms(l1_errors))")
+println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
+println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
+println("L2 maximum errors : $(maximum(l2_errors))")
+println("L1 maximum errors : $(maximum(l1_errors))")
 
 
 
