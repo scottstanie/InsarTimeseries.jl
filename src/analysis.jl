@@ -2,6 +2,8 @@ import Polynomials
 using Statistics: quantile
 using StatsBase: mad
 
+p2mm = PHASE_TO_CM * 365 * 10
+
 """Get the values (unw, cc, etc.) of one date"""
 vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
 
@@ -31,12 +33,14 @@ function _good_idxs(date_arr::Array{Date}, intlist)
                     init=falses(size(intlist)));
 end
 
-function solve_without_date(bad_dates::Union{Date, Array{Date}}, intlist, unw_vals, B)
+function solve_without_date(bad_dates::Union{Date, Array{Date}}, intlist, unw_vals, B; in_mm_yr=true)
     intlist_clean, unw_clean, B_clean  = remove_dates(bad_dates, intlist, unw_vals, B)
     velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
-    # Return soluyion in mm/year
-    return PHASE_TO_CM * 10 * 365 .* (velo_l1[1], velo_lstsq[1])
+    # Return soluyion in mm/year if specified
+    scale = in_mm_yr ? p2mm : 1
+
+    return scale .* (velo_l1[1], velo_lstsq[1])
 end
 
 
@@ -123,7 +127,7 @@ function largest_n_dates(geo, int, val, n=length(geo))
 end
 
 
-function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=nothing)  #, direction=:high, method=:mean)
+function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=nothing; in_mm_yr=true)  #, direction=:high, method=:mean)
     # if method == :mean
     bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
     # elseif method == :diff
@@ -132,7 +136,7 @@ function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=nothing)  #, d
 
     bad_days = geolist[bad_idxs]
     println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
-    return solve_without_date(bad_days, intlist, unw_vals, B)
+    return solve_without_date(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
 end
 
 
