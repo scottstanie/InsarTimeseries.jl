@@ -1,6 +1,10 @@
 import Polynomials
 
-unw_vals_by_date(date, intlist, unw_vals) = unw_vals[date in intlist]
+"""Get the values (unw, cc, etc.) of one date"""
+vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
+
+"""Get the values (unw, cc, etc.) grouped by each date"""
+vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d in date_arr]
 
 Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
@@ -13,7 +17,7 @@ end
 function remove_dates(good_idxs::AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
-    intlist_clean = intlist_vals[good_idxs]
+    intlist_clean = intlist[good_idxs]
     return intlist_clean, unw_clean, B_clean 
 end
 
@@ -77,9 +81,9 @@ function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, li
     return l1_diffs, lstsq_diffs, base_l1_error
 end
 
-mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(unw_vals_by_date(d, intlist, unw_vals)))
+mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
                                              for d in geolist];
-max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(unw_vals_by_date(d, intlist, unw_vals)))
+max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(vals_by_date(d, intlist, unw_vals)))
                                              for d in geolist];
 
 
@@ -116,6 +120,18 @@ function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
         throw("direction must be :high, :low, or :abs")
     end
 end
+
+"""Remove all igrams corresponding to the date with the highest mean"""
+function peel_max(geo, int, val, B, n=1)
+    means = mean_abs_val(geo, int, val)
+    biggest_date = geo[argmax(means)]
+    int2, val2, B2 = remove_dates(biggest_date, int, val, B)
+    geo2 = [g for g in geo if g != biggest_date]
+
+    # Now either return if removing only 1 date, or recurse to remove more
+    return n <= 1 ? (geo2, int2, val2, B2) : peel_max(geo2, int2, val2, B2, n - 1)
+end
+
 
 
 function geos_with_good_mean(geolist, intlist, unw_vals; cutoff=12)
@@ -157,6 +173,27 @@ function phase_triplets(intlist, unw_vals)
     end
     return triplets
 end
+
+
+######################
+# Outlier Removal
+######################
+function find_outliers(B, vals, lof, n_neighbors=100, is1d=true)
+    # lof = LOF(n_neighbors)
+    X_train = is1d ? reshape(vals, :, 1) : cat(B, vals, dims=2)
+    isout = _calc_outliers(X_train, lof)
+    return B[isout, :], vals[isout]
+end
+_calc_outliers(X, lof) = lof.fit_predict(X) .== -1
+
+function find_inliers(B, vals, lof, n_neighbors=100, is1d=true)
+    # lof = LOF(n_neighbors)
+    X_train = is1d ? reshape(vals, :, 1) : cat(B, vals, dims=2)
+    isout = _calc_outliers(X_train, lof)
+    return B[.!isout, :], vals[.!isout]
+end
+
+
 
 ############################
 # GPS FUNCTIONS
