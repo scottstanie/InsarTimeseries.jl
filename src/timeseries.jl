@@ -4,6 +4,7 @@ using LinearAlgebra
 
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
+const P2MM = 365 * 10 * PHASE_TO_CM   # mm / year
 
 
 """Runs SBAS inversion on all unwrapped igrams

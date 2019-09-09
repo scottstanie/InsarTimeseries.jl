@@ -19,15 +19,18 @@ using Distributed
 # end
 
 function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
-                    outfile, outdset, B, rho, alpha, lu_tuple, abstol)
+                    outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
     # println("unw_stack_file, in_dset, (row, col, :)", unw_stack_file, in_dset, row, col)
     pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
 
+    # Now find outliers in this pixels' values and remove them
+    bad_idxs = find_mean_outliers(geolist, intlist, pixel)
+    bad_dates = geolist[bad_idxs]
+    intlist_clean, unw_clean, B_clean  = remove_dates(bad_dates, intlist, pixel, B)
+
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        # f[outdset][row, col] = invert_pixel(pixel, B, rho=rho, alpha=alpha, 
-                                             # lu_tuple=lu_tuple, abstol=abstol)
-        f[outdset][row, col] = Float32.(365 * 10 * PHASE_TO_CM * invert_pixel(pixel, B, rho=rho, alpha=alpha, lu_tuple=lu_tuple, abstol=abstol))
+        f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, lu_tuple=lu_tuple, abstol=abstol))
     end
 end
 
@@ -84,7 +87,7 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for (row, col) in collect(Iterators.product(1:nrows, 1:ncols))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:100))
         proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, B, rho, alpha, lu_tuple, abstol)
+                   outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
     end
     println("Merging files into $outfile")
     @time merge_partial_files(outfile, outdset)

@@ -2,8 +2,6 @@ import Polynomials
 using Statistics: quantile
 using StatsBase: mad
 
-p2mm = PHASE_TO_CM * 365 * 10
-
 """Get the values (unw, cc, etc.) of one date"""
 vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
 
@@ -38,7 +36,7 @@ function solve_without_date(bad_dates::Union{Date, Array{Date}}, intlist, unw_va
     velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year if specified
-    scale = in_mm_yr ? p2mm : 1
+    scale = in_mm_yr ? P2MM : 1
 
     return scale .* (velo_l1[1], velo_lstsq[1])
 end
@@ -105,7 +103,7 @@ function find_mean_outliers(geolist, intlist, unw_vals, cutoff=nothing)
     means = mean_abs_val(geolist, intlist, unw_vals)
 
     cutoff = isnothing(cutoff) ? median(means) + mednsigma(means, 2) : cutoff
-    println("Using cutoff of $cutoff")
+    # println("Using cutoff of $cutoff")
     return means .> cutoff
 end
 
