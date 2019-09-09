@@ -10,9 +10,12 @@ vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d i
 
 Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
-function remove_igrams(bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}, 
-                       intlist, unw_vals, B)
-    good_idxs = _good_idxs(bad_items, intlist)
+function remove_igrams(intlist, unw_vals, B,
+                       bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}...)
+    good_idxs = trues(size(intlist))
+    for item in bad_items
+        good_idxs .&= _good_idxs(item, intlist)
+    end
     return remove_by_idx(good_idxs, intlist, unw_vals, B)
 end
 
@@ -38,7 +41,7 @@ end
 
 """Solve without a geo date, array of dates, or array of igrams"""
 function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, intlist, unw_vals, B; in_mm_yr=true)
-    intlist_clean, unw_clean, B_clean  = remove_igrams(bad_items, intlist, unw_vals, B)
+    intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_vals, B, bad_items)
     velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year if specified
@@ -129,7 +132,7 @@ end
 function peel_largest_dates(geo, int, val, B, n=1)
     means = mean_abs_val(geo, int, val)
     dates_to_remove = largest_n_dates(geo, int, val, n)
-    int2, val2, B2 = remove_igrams(dates_to_remove, int, val, B)
+    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
     geo2 = [g for g in geo if g != dates_to_remove]
     return geo2, int2, val2, B2
 end
