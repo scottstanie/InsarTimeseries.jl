@@ -12,13 +12,13 @@ const STACKED_FILES = [".cc", ".unw", ".unwflat"]
 const IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
 const BOOL_EXTS = [".mask"]
 
-const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".rsc", ".geojson", ".npy"])
+const LOAD_IN_PYTHON = vcat(IMAGE_EXTS, [".geojson", ".npy"])
 
 
 find_files(ext, directory=".") = sort(Glob.glob("*"*ext, directory))
 
 """Extracts the file extension, including the "." (e.g.: .slc)"""
-get_file_ext(filename::String) = splitext(filename)[end]
+get_file_ext(filename::AbstractString) = splitext(filename)[end]
 
 
 """Examines file type for real/complex and runs appropriate load
@@ -27,13 +27,15 @@ Raises:
     ValueError: if sentinel files loaded without a .rsc file in same path
         to give the file width
 """
-function load(filename::String; rsc_file::Union{String, Nothing}=nothing,
+function load(filename::AbstractString; rsc_file::Union{AbstractString, Nothing}=nothing,
               looks::Tuple{Int, Int}=(1, 1), do_permute=true, return_amp=false)
     ext = get_file_ext(filename)
 
     # For now, just pass through unimplemented extensions to Python
     if ext in LOAD_IN_PYTHON
         return take_looks(sario.load(filename), looks...)
+    elseif ext == ".rsc"
+        return _get_rsc_data(filename, filename)
     elseif ext in ELEVATION_EXTS
         return take_looks(load_elevation(filename), looks...)
     end
@@ -55,7 +57,7 @@ end
 
 """Load one element of a file on disk (avoid reading in all of huge file"""
 # TODO: Load a chunk of a file now?
-function load(filename::String, row_col::Tuple{Int, Int}; rsc_file::Union{String, Nothing}=nothing)
+function load(filename::AbstractString, row_col::Tuple{Int, Int}; rsc_file::Union{AbstractString, Nothing}=nothing)
     data_type = _get_data_type(filename)
 
     rsc_data = _get_rsc_data(filename, rsc_file)
@@ -145,11 +147,11 @@ function load_elevation(filename; do_permute=true)
 end
 
 
-function load_complex(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
+function load_complex(filename::AbstractString, rsc_data::Dict{<:AbstractString, Any}; do_permute=true)
     return _load_bin_matrix(filename, rsc_data, ComplexF32, do_permute)
 end
 
-function load_bool(filename::String, rsc_data::Dict{String, Any}; do_permute=true)
+function load_bool(filename::AbstractString, rsc_data::Dict{<:AbstractString, Any}; do_permute=true)
     return _load_bin_matrix(filename, rsc_data, Bool, do_permute)
 end
 
@@ -172,7 +174,7 @@ Format is two stacked matrices:
 For .unw height files, the first is amplitude, second is phase (unwrapped)
 For .cc correlation files, first is amp, second is correlation (0 to 1)
 """
-function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_permute=true, return_amp=false)
+function load_stacked_img(filename::AbstractString, rsc_data::Dict{<:AbstractString, Any}; do_permute=true, return_amp=false)
     rows = rsc_data["file_length"]
     cols = rsc_data["width"]
     # Note: must be saved in c/row-major order, so loading needs a transpose
@@ -193,7 +195,7 @@ function load_stacked_img(filename::String, rsc_data::Dict{String, Any}; do_perm
     end
 end
 
-function load_geolist_from_h5(h5file::String)
+function load_geolist_from_h5(h5file::AbstractString)
     h5open(h5file) do f
         geo_strings = read(f, GEOLIST_DSET)
         return sario.parse_geolist_strings(geo_strings)
@@ -222,7 +224,7 @@ function save_geolist_to_h5(h5file, geolist; overwrite=false)
     end
 end
 
-function save_hdf5_stack(h5file::String, dset_name::String, stack; overwrite::Bool=true, do_permute=true)
+function save_hdf5_stack(h5file::AbstractString, dset_name::AbstractString, stack; overwrite::Bool=true, do_permute=true)
     # TODO: is there a way to combine this with normal saving of files?
     if overwrite
         mode = "w"
@@ -269,14 +271,14 @@ end
 necessary when reading from python-written stacks
 
 """
-function load_hdf5_stack(h5file::String, dset_name::String)
+function load_hdf5_stack(h5file::AbstractString, dset_name::AbstractString)
     h5open(h5file) do f
         return permutedims(read(f[dset_name]), (2, 1, 3))
     end
 end
 
 # If loading only certain layers, don't read all into memory
-function load_hdf5_stack(h5file::String, dset_name::String, valid_layer_idxs)
+function load_hdf5_stack(h5file::AbstractString, dset_name::AbstractString, valid_layer_idxs)
     h5open(h5file) do f
         dset = f[dset_name]
         nrows, ncols, _ = size(dset)
@@ -291,9 +293,9 @@ end
 
 # TODO: probably a better way to do this.. but can't figure out how to
 # without allocating so many arrays that it's slow as Python
-function load_stack(; file_list::Union{Array{String}, Nothing}=nothing, 
-                    directory::Union{String, Nothing}=nothing,
-                    file_ext::Union{String, Nothing}=nothing)
+function load_stack(; file_list::Union{Array{AbstractString}, Nothing}=nothing, 
+                    directory::Union{AbstractString, Nothing}=nothing,
+                    file_ext::Union{AbstractString, Nothing}=nothing)
     if isnothing(file_list)
         file_list = find_files(file_ext, directory)
     end
@@ -339,7 +341,7 @@ end
 
 
 
-# function _load_stack_complex(file_list::Array{String}, rows::Int, cols::Int)
+# function _load_stack_complex(file_list::Array{AbstractString}, rows::Int, cols::Int)
 #     stack = Array{ComplexF32, 3}(undef, (cols, rows, length(file_list)))
 #     buffer = Array{ComplexF32, 2}(undef, (cols, rows))
 # 
@@ -352,7 +354,7 @@ end
 # end
 # 
 # 
-# function _load_stack_stacked(file_list::Array{String}, rows::Int, cols::Int)
+# function _load_stack_stacked(file_list::Array{AbstractString}, rows::Int, cols::Int)
 #     stack = Array{Float32, 3}(undef, (2cols, rows, length(file_list)))
 #     buffer = Array{Float32, 2}(undef, (2cols, rows))
 # 
@@ -364,7 +366,7 @@ end
 # end
 
 
-function save(filename::String, array ; kwargs...)
+function save(filename::AbstractString, array ; kwargs...)
     ext = get_file_ext(filename)
 
     if ext in BOOL_EXTS
@@ -444,3 +446,6 @@ end
 
 # If we pass something else like a dem_rsc
 take_looks(other, row_looks, col_looks) = other
+
+# For future:
+# cc_patch(a, b) = real(abs(sum(a .* conj.(b))) / sqrt(sum(a .* conj.(a)) * sum(b .* conj.(b))))
