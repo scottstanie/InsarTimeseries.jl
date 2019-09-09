@@ -99,12 +99,12 @@ mednsigma(arr, n=3) = n * mad(arr, normalize=true)
 
 """Look for outliers in how much the solution shifts by just having a large mean value
 Returns a Bool array the size of `geolist` with `true` marking the outliers"""
-function find_mean_outliers(geolist, intlist, unw_vals, cutoff=nothing)
+function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3)
     means = mean_abs_val(geolist, intlist, unw_vals)
 
-    cutoff = isnothing(cutoff) ? median(means) + mednsigma(means, 2) : cutoff
+    cutoff_val = median(means) + mednsigma(means, cutoff)
     # println("Using cutoff of $cutoff")
-    return means .> cutoff
+    return means .> cutoff_val
 end
 
 """Remove all igrams corresponding to the date with the highest mean"""
@@ -125,7 +125,7 @@ function largest_n_dates(geo, int, val, n=length(geo))
 end
 
 
-function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=nothing; in_mm_yr=true)  #, direction=:high, method=:mean)
+function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=true)  #, direction=:high, method=:mean)
     # if method == :mean
     bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
     # elseif method == :diff
