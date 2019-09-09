@@ -319,11 +319,12 @@ l1_errors, l2_errors = [], []
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 
-for station_name in station_name_list
-    l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
-    append!(l2_errors, l2_error)
-    append!(l1_errors, l1_error)
-end
+if false
+    for station_name in station_name_list
+        l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
+        append!(l2_errors, l2_error)
+        append!(l1_errors, l1_error)
+    end
 
 println("TOTAL ERRORS (all in mm / year of velocity):")
 println("L2 RMS error for all stations: $(rms(l2_errors))")
@@ -332,6 +333,8 @@ println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
 println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
 println("L2 maximum errors : $(maximum(abs.(l2_errors)))")
 println("L1 maximum errors : $(maximum(abs.(l1_errors)))")
+
+end
 
 
 
@@ -400,4 +403,27 @@ function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baseline
     axes.legend()
     axes.set_title(title)
     return fig, axes
+end
+
+function plot_big_days(geolist, intlist, vals, B, to_cm=true, label=nothing)
+    scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
+    v = vals .* scale   
+
+    plt.figure()
+    plt.scatter(B, v, label=label)
+
+    means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
+    highest_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
+    ym = maximum(abs.(v)) * 1.2
+    ylims = to_cm ? (-ym, ym) : (0, ym)  # correlation: 0 as bottom
+
+    for ii in 1:3
+        hh = highest_days[ii][2]
+        plt.scatter(InsarTimeseries.Blins_by_date(hh, intlist, B),
+                                         InsarTimeseries.vals_by_date(hh, intlist, v),
+                                         label="highest $ii")
+        plt.ylim(ylims)
+    end
+    plt.legend()
+    plt.show(block=false)
 end
