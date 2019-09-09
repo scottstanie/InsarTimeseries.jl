@@ -65,7 +65,8 @@ row, col = 1838, 1367
 # well uplift
 row, col = 1223, 943
 # row, col = [244, 188] .+ [1, 1]
-
+# Pecos subs.
+# row, col = [368, 131]
 
 function get_stack_vals(unw_stack_file::String, station_name::String, window=5,
                         dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;

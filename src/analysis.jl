@@ -107,6 +107,18 @@ function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3)
     return means .> cutoff_val
 end
 
+function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=true)  #, direction=:high, method=:mean)
+    # if method == :mean
+    bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
+    # elseif method == :diff
+    #     bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
+    # end
+
+    bad_days = geolist[bad_idxs]
+    println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
+    return solve_without_date(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
+end
+
 """Remove all igrams corresponding to the date with the highest mean"""
 function peel_largest_dates(geo, int, val, B, n=1)
     means = mean_abs_val(geo, int, val)
@@ -124,18 +136,6 @@ function largest_n_dates(geo, int, val, n=length(geo))
     return collect(zip(sorted_top...))[2]
 end
 
-
-function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=true)  #, direction=:high, method=:mean)
-    # if method == :mean
-    bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
-    # elseif method == :diff
-    #     bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
-    # end
-
-    bad_days = geolist[bad_idxs]
-    println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
-    return solve_without_date(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
-end
 
 
 """Look for outliers in how much the solution shifts by removing the single date"""
