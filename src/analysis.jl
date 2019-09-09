@@ -10,13 +10,15 @@ vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d i
 
 Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
-function remove_dates(bad_dates::Union{Date, AbstractArray{Date}}, intlist, unw_vals, B)
-    good_idxs = _good_idxs(bad_dates, intlist)
-    return remove_dates(good_idxs, intlist, unw_vals, B)
+function remove_igrams(bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}, 
+                       intlist, unw_vals, B)
+    good_idxs = _good_idxs(bad_items, intlist)
+    return remove_by_idx(good_idxs, intlist, unw_vals, B)
 end
 
+
 """Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
-function remove_dates(good_idxs::AbstractArray, intlist, unw_vals, B)
+function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
     intlist_clean = intlist[good_idxs]
@@ -25,14 +27,18 @@ end
 
 _good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
 
-function _good_idxs(date_arr::Array{Date}, intlist)
+function _good_idxs(bad_date_arr::AbstractArray{Date}, intlist)
     return .!reduce((x, y)-> x .| y, 
-                    (b in intlist for b in date_arr),
+                    (b in intlist for b in bad_date_arr),
                     init=falses(size(intlist)));
 end
+function _good_idxs(bad_igram_arr::AbstractArray{Igram}, intlist)
+    return [!(ig in bad_igram_arr) for ig in intlist]
+end
 
-function solve_without_date(bad_dates::Union{Date, Array{Date}}, intlist, unw_vals, B; in_mm_yr=true)
-    intlist_clean, unw_clean, B_clean  = remove_dates(bad_dates, intlist, unw_vals, B)
+"""Solve without a geo date, array of dates, or array of igrams"""
+function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, intlist, unw_vals, B; in_mm_yr=true)
+    intlist_clean, unw_clean, B_clean  = remove_igrams(bad_items, intlist, unw_vals, B)
     velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year if specified
@@ -47,11 +53,11 @@ Solves once with no removals, and returns the difference of no removing
 and removing each day. 
 """
 function compare_solutions(geolist, intlist, unw_vals, B)
-    base_l1, base_lstsq = solve_without_date(Date(2000,1,1), intlist, unw_vals, B)
+    base_l1, base_lstsq = solve_without(Date(2000,1,1), intlist, unw_vals, B)
     l1_diffs = Array{Float32, 1}(undef, length(geolist))
     lstsq_diffs = similar(l1_diffs)
     for (idx, d) in enumerate(geolist)
-        l1, lstsq = solve_without_date(d, intlist, unw_vals, B)
+        l1, lstsq = solve_without(d, intlist, unw_vals, B)
         l1_diffs[idx] =  l1 - base_l1
         lstsq_diffs[idx] = lstsq - base_lstsq
     end
@@ -68,13 +74,13 @@ function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, li
     slope_gps_mm_yr = solve_gps_ts(station_name, nothing)
 
     # First, solve with a dummy date so nothing is removed
-    base_l1, base_lstsq = solve_without_date(Date(2000,1,1), intlist, unw_vals, B)
+    base_l1, base_lstsq = solve_without(Date(2000,1,1), intlist, unw_vals, B)
     base_l1_error = base_l1 - slope_gps_mm_yr
     base_lstsq_error = base_lstsq - slope_gps_mm_yr
     println("Base L1 error for $station_name = $base_l1_error")
 
     for (idx, d) in enumerate(geolist)
-        l1, lstsq = solve_without_date(d, intlist, unw_vals, B)
+        l1, lstsq = solve_without(d, intlist, unw_vals, B)
         l1d = l1 - slope_gps_mm_yr
         lstsqd = lstsq - slope_gps_mm_yr
 
@@ -116,14 +122,14 @@ function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=tr
 
     bad_days = geolist[bad_idxs]
     println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
-    return solve_without_date(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
+    return solve_without(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
 end
 
 """Remove all igrams corresponding to the date with the highest mean"""
 function peel_largest_dates(geo, int, val, B, n=1)
     means = mean_abs_val(geo, int, val)
     dates_to_remove = largest_n_dates(geo, int, val, n)
-    int2, val2, B2 = remove_dates(dates_to_remove, int, val, B)
+    int2, val2, B2 = remove_igrams(dates_to_remove, int, val, B)
     geo2 = [g for g in geo if g != dates_to_remove]
     return geo2, int2, val2, B2
 end
@@ -152,23 +158,6 @@ function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
     end
 end
 
-
-function geos_with_good_mean(geolist, intlist, unw_vals; cutoff=12)
-    means_by_date = mean_abs_val(geolist, intlist, unw_vals)
-    good_geo_idxs = [idx for (idx, val) in enumerate(means_by_date) if val < cutoff];
-    bad_geo_idxs = [idx for (idx, val) in enumerate(means_by_date) if val >= cutoff];
-
-    good_geos = geolist[good_geo_idxs]
-    bad_geos = geolist[bad_geo_idxs]
-
-    # good_igrams = filter(igram -> any(g in igram for g in good_geos), intlist)
-    good_igrams = filter(igram -> !(igram in bad_geos), intlist)
-
-    good_unw_idxs = indexin(good_igrams, intlist)
-    good_unw_vals = unw_vals[good_unw_idxs]
-
-    good_geos, good_igrams, good_unw_vals
-end
 
 import Base.-
 -(x::Igram) = (x[2], x[1])
