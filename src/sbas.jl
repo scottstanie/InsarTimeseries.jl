@@ -22,11 +22,13 @@ function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
     # println("unw_stack_file, in_dset, (row, col, :)", unw_stack_file, in_dset, row, col)
     pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    # Also load correlations for cutoff
+    cc = h5read(CC_STACK_FILE, "stack", (row, col, :))[1, 1, valid_igram_indices]
 
     # Now find outliers in this pixels' values and remove them
     bad_idxs = find_mean_outliers(geolist, intlist, pixel)
     bad_dates = geolist[bad_idxs]
-    intlist_clean, unw_clean, B_clean  = remove_dates(bad_dates, intlist, pixel, B)
+    intlist_clean, unw_clean, B_clean  = remove_igrams(bad_dates, intlist, pixel, B)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
