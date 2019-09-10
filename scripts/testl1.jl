@@ -1,6 +1,6 @@
 push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
 # import InsarTimeseries
-using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET
+using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET, CC_FILENAME, UNW_FILENAME
 using Dates
 using HDF5
 using LinearAlgebra
@@ -48,13 +48,11 @@ gps = pyimport("apertools.gps")
 # const DEFO_FILENAME_L1 = "deformation_linear_maxtemp400_l1.h5"
 # println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
 
-const UNW_STACK_FILE="unw_stack.h5"  # Or InsarTimeseries.UNW_FILENAME
-const CC_STACK_FILE="cc_stack.h5"  # Or InsarTimeseries.CC_FILENAME
 const ignore_geo_file = "geolist_ignore.txt"
 max_temporal_baseline = 500
 # max_temporal_baseline = 1200
 
-GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, max_temporal_baseline);
+GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, ignore_geo_file, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 
@@ -104,12 +102,12 @@ end
 
 
 function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing; cutoff=false)
-    unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=reference_station)
+    unw_vals = get_stack_vals(UNW_FILENAME, station_name, window, reference_station=reference_station)
     return solve_insar_ts(unw_vals, window, cutoff=cutoff)
 end
 
 function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing; cutoff=false)
-    unw_vals = get_stack_vals(UNW_STACK_FILE, row, col, window, reference_station=reference_station)
+    unw_vals = get_stack_vals(UNW_FILENAME, row, col, window, reference_station=reference_station)
     return solve_insar_ts(unw_vals, window, cutoff=cutoff)
 end
 
@@ -270,7 +268,7 @@ for (idx, station_name) in enumerate(station_name_list)
     window = 5
     # I'm assuming TXKM is the best based on other analysis here
     ref_stat = "TXKM"
-    # unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, reference_station=ref_stat)
+    # unw_vals = get_stack_vals(UNW_FILENAME, station_name, window, reference_station=ref_stat)
 
     # The "diff" being positive means an improvement (new error off GPS is lower), while
     # negative means the new err from GPS is bigger than before
@@ -315,7 +313,7 @@ l1_errors, l2_errors = [], []
 # station_name = "TXOZ"
 # station_name_list = ["TXMH"]
 
-# l1_error, l2_error = process_pixel(station_name, UNW_STACK_FILE, GEOLIST, INTLIST, VALID_IGRAM_INDICES, plotting=plotting)
+# l1_error, l2_error = process_pixel(station_name, UNW_FILENAME, GEOLIST, INTLIST, VALID_IGRAM_INDICES, plotting=plotting)
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 
@@ -362,17 +360,17 @@ end
 function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing, window=1)
     intlists, idxs, vals, Bs, ccvals = [], [], [], [], []
     for baseline in baselines
-        geolist, cur_intlist, cur_valid_idxs = InsarTimeseries.load_geolist_intlist(UNW_STACK_FILE, ignore_geo_file, baseline);
+        geolist, cur_intlist, cur_valid_idxs = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, ignore_geo_file, baseline);
         if isnothing(station_name)
-            cur_unw_vals = get_stack_vals(UNW_STACK_FILE, rowcol..., window, STACK_FLAT_DSET,
+            cur_unw_vals = get_stack_vals(UNW_FILENAME, rowcol..., window, STACK_FLAT_DSET,
                                         cur_valid_idxs, reference_station="TXKM");
             # TODO: add back in when the stack sizes match up again
-            # ccval = get_stack_vals(UNW_STACK_FILE, rowcol..., window, STACK_DSET, cur_valid_idxs)
+            # ccval = get_stack_vals(UNW_FILENAME, rowcol..., window, STACK_DSET, cur_valid_idxs)
         else
-            cur_unw_vals = get_stack_vals(UNW_STACK_FILE, station_name, window, STACK_FLAT_DSET,
+            cur_unw_vals = get_stack_vals(UNW_FILENAME, station_name, window, STACK_FLAT_DSET,
                                         cur_valid_idxs, reference_station="TXKM");
             # TODO: add back in when the stack sizes match up again
-            # ccval = get_stack_vals(UNW_STACK_FILE, station_name, window, STACK_DSET, cur_valid_idxs)
+            # ccval = get_stack_vals(UNW_FILENAME, station_name, window, STACK_DSET, cur_valid_idxs)
         end
         B = InsarTimeseries.build_B_matrix(geolist, cur_intlist)
 
