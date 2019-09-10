@@ -8,7 +8,9 @@ invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = Insa
 rowcol2 = [245, 189]
 rowcol3 = [368, 131]
 
-geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+# geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+# geolist2, intlist5002, valid_igram_indices5002 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", nothing, 500)
+geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", nothing, 500)
 B500 = InsarTimeseries.build_B_matrix(geolist, intlist500);
 Blin500 = sum(B500, dims=2);
 
