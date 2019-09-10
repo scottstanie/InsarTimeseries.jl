@@ -52,7 +52,8 @@ const ignore_geo_file = "geolist_ignore.txt"
 max_temporal_baseline = 500
 # max_temporal_baseline = 1200
 
-GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, ignore_geo_file, max_temporal_baseline);
+# NOTE: not using the ignore file for now- using all .geos
+GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, nothing, max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 
@@ -317,7 +318,7 @@ l1_errors, l2_errors = [], []
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 
-if false
+if true
     for station_name in station_name_list
         l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
         append!(l2_errors, l2_error)

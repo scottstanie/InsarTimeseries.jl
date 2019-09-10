@@ -17,7 +17,6 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-unw_stack
 function run_inversion(unw_stack_file::String; 
                        outfile::Union{String,Nothing}=nothing, 
                        use_stackavg::Bool=false, 
@@ -95,7 +94,6 @@ function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_base
     valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file, max_temporal_baseline)
     return geolist[valid_geo_indices], intlist[valid_igram_indices], valid_igram_indices
 end
-
 
 
 """Finds the number of days between successive .geo files"""
