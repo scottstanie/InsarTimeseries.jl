@@ -18,8 +18,9 @@ using Distributed
 #     return vstack
 # end
 
-function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing; cor_thresh=0.2,
-                      cut_high_means=true, cut_fast_moving=true)
+function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing;
+                      mean_sigma_cutoff=3, cor_thresh=0.1,
+                      fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
     # 3 Reasons for removing igrams:
     # 1. remove all from .geo dates with huge averages (whole day is garbage)
     # 2. remove very low correlation
@@ -30,13 +31,9 @@ function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing; cor_thr
 
     # @show size(intlist)
     # 1. find outliers in this pixels' values and remove them
-    if cut_high_means
-        bad_idxs = find_mean_outliers(geolist, intlist, unw_pixel)
-        bad_dates = geolist[bad_idxs]
-        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_pixel, B, bad_dates)
-    else
-        intlist_clean, unw_clean, B_clean  = intlist, unw_pixel, B
-    end
+    bad_idxs = find_mean_outliers(geolist, intlist, unw_pixel, mean_sigma_cutoff)
+    bad_dates = geolist[bad_idxs]
+    intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_pixel, B, bad_dates)
     # @show size(intlist_clean)
 
     # 2. low correlation cleaning
@@ -47,15 +44,13 @@ function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing; cor_thr
     # @show size(intlist_clean)
 
     # 3. with rought velocity estimate, find igrams with too long of baseline
-    # Here we assume beyond WAVELENGTH/2 is too long to sense in one igram
-    if cut_fast_moving
+    # Here we assume beyond some wavelength fraction is too long to sense in one igram
+    if fast_cm_cutoff < 5
         velo_cm = PHASE_TO_CM * (B_clean \ unw_clean)[1]  # cm / day
         # rho, alpha, abstol = 1.0, 1.6, 1e-3
         # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
-
-        cm_cutoff = SENTINEL_WAVELENGTH / 2  # cm
-        day_cutoff = cm_cutoff / abs(velo_cm)
-        # @show velo_cm, cm_cutoff, day_cutoff
+        day_cutoff = fast_cm_cutoff / abs(velo_cm)
+        # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
         too_long_igrams = [ig for ig in intlist_clean 
                            if temporal_baseline(ig) > day_cutoff]
 
@@ -67,7 +62,6 @@ end
 
 function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
-    unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     # println("unw_stack_file, in_dset, (row, col, :)", unw_stack_file, in_dset, row, col)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     # Also load correlations for cutoff
@@ -80,7 +74,7 @@ function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         # f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, lu_tuple=lu_tuple, abstol=abstol))
         if length(unw_clean) < 50  # TODO: justify this minimum data
-            println("WARNING: (row, col) ($row, $col) had only $(length(unw_clean)) igrams left")
+            # println("WARNING: (row, col) ($row, $col) had only $(length(unw_clean)) igrams left")
             f[outdset][row, col] = Float32(0)
         else
             f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol))
