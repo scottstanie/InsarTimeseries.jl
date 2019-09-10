@@ -62,8 +62,8 @@ end
 
 function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
-    # println("unw_stack_file, in_dset, (row, col, :)", unw_stack_file, in_dset, row, col)
-    unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    try
+        unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     # Also load correlations for cutoff
     cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
     
@@ -79,6 +79,11 @@ function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
         else
             f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol))
         end
+    end
+    catch
+        println("FAIL ($row, $col)")
+        println(valid_igram_indices)
+        return
     end
 end
 
@@ -142,7 +147,7 @@ function run_sbas(unw_stack_file::String,
 end
 
 # Need the .I so we can use to load from h5 
-get_unmasked_idxs() = [cart_idx.I for cart_idx in findall(.!load_mask())]
+get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!load_mask(do_permute))]
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion

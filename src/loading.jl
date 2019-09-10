@@ -166,7 +166,7 @@ function _load_bin_matrix(filename, rsc_data, dtype, do_permute::Bool)
 end
 
 """Get the composite mask from the stack, true only where ALL pixels are masked"""
-function load_mask(fname=MASK_FILENAME, dset=GEO_MASK_SUM_DSET, do_permute=true)
+function load_mask(do_permute=true, fname=MASK_FILENAME, dset=GEO_MASK_SUM_DSET)
     mask = h5read(fname, dset)
     return do_permute ? permutedims(mask .== maximum(mask)) : mask .== maximum(mask)
 end
