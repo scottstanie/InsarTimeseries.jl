@@ -130,9 +130,8 @@ function run_sbas(unw_stack_file::String,
             d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
         end
     end
-
-
-    @time @sync @distributed for (row, col) in collect(Iterators.product(1:nrows, 1:ncols))
+ 
+    @time @sync @distributed for (row, col) in get_unmasked_idxs()
     # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:100))
         proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, geolist, intlist, rho, alpha, lu_tuple, abstol)
@@ -141,6 +140,9 @@ function run_sbas(unw_stack_file::String,
     @time merge_partial_files(outfile, outdset)
     return outfile, outdset
 end
+
+# Need the .I so we can use to load from h5 
+get_unmasked_idxs() = [cart_idx.I for cart_idx in findall(.!load_mask())]
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion

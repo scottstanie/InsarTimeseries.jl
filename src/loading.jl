@@ -165,6 +165,12 @@ function _load_bin_matrix(filename, rsc_data, dtype, do_permute::Bool)
     return do_permute ? permutedims(out) : out
 end
 
+"""Get the composite mask from the stack, true only where ALL pixels are masked"""
+function load_mask(fname=MASK_FILENAME, dset=GEO_MASK_SUM_DSET)
+    mask = permutedims(h5read(fname, dset))
+    return mask .== maximum(mask)
+end
+
 
 """load_stacked_img is for weirdly formatted images:
 
