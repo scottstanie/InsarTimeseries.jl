@@ -20,7 +20,7 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
         zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
     end
 
-    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite)
+    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite, do_repack=true)
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
@@ -243,7 +243,8 @@ function create_hdf5_stack(filename::String,
                            file_ext::String;
                            dset_name=STACK_DSET,
                            directory=".",
-                           overwrite=false)
+                           overwrite=false,
+                           do_repack=false)
 
     filename = isabspath(filename) ? filename : abspath(joinpath(directory, filename))
     println("Creating stack file $filename")
@@ -281,8 +282,30 @@ function create_hdf5_stack(filename::String,
     mean_buf ./= length(file_list)
     h5write(filename, STACK_MEAN_DSET, mean_buf)
 
+    if do_repack
+        repack(filename, dset_name)
+    end
+
     return filename
 end
+
+function repack(filename, dset_name)
+    # Now repack so that chunks are depth-wise (pixels for quick loading)
+    nrows, ncols, nlayers = size(filename, dset_name)
+    tmp_name = _make_tmp_name(filename)
+    chunk_size = "$(nlayers)x10x10"
+    println("Repacking $filename into size $chunk_size depth-wise chunks")
+    cmd = `h5repack -v -f NONE -l $dset_name:CHUNK=$chunk_size $filename $tmp_name`
+    println("Running:")
+    println(cmd)
+    @time run(cmd)
+    run(`mv $tmp_name $filename`)
+end
+function _make_tmp_name(filename)
+    fparts = splitpath(filename)
+    return joinpath(fparts[1:end-1]..., "tmp_" * fparts[end])
+end
+
 
 
 """Subtracts reference pixel group from each layer
@@ -291,10 +314,10 @@ window is the size around the reference pixel to
 average at each layer"""
 function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
                         ref_row=nothing, ref_col=nothing, window=5, ref_station=nothing, 
-                        overwrite::Bool=false, repack::Bool=true)
+                        overwrite::Bool=false, do_repack::Bool=true)
     """Runs a reference point shift on flattened stack of unw files stored in .h5
     
-    repack will run h5repack to chunk"""
+    do_repack will run h5repack to chunk"""
     if isnothing(stack_flat_dset)
         stack_flat_dset = STACK_FLAT_DSET
     end
@@ -310,10 +333,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     end
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
-    stack_size = nothing
-    h5open(unw_stack_file, "r") do f
-        stack_size = size(f[stack_flat_dset])
-    end
+    stack_size = size(unw_stack_file, stack_flat_dset)
     h5open(unw_stack_file, "r+") do f
         if !(stack_flat_dset in names(f))
             throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
@@ -335,17 +355,8 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
 
     end
 
-    if repack
-        # Now repack so that chunks are depth-wise (pixels for quick loading)
-        nrows, ncols, nlayers = stack_size
-        fparts = splitpath(unw_stack_file)
-        tmp_stack_file = joinpath(fparts[1:end-1]..., "tmp_" * fparts[end])
-        println("Repacking to chunk shifted stack")
-        cmd = `h5repack -v -f NONE -l stack_flat_shifted:CHUNK=$(nlayers)x10x10 $unw_stack_file $tmp_stack_file`
-        println("Running:")
-        println(cmd)
-        @time run(cmd)
-        run(`mv $tmp_stack_file $unw_stack_file`)
+    if do_repack
+        @time repack(unw_stack_file, stack_flat_shifted_dset)
     end
 
     h5writeattr(unw_stack_file, stack_flat_shifted_dset, Dict(REFERENCE_ATTR => [ref_row, ref_col]))
@@ -355,7 +366,6 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
 
     println("Shifting stack complete")
 end
-
 
 """
 Note: window is size of the group around ref pixel to avg for reference.
