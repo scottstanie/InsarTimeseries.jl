@@ -325,13 +325,13 @@ if true
         append!(l1_errors, l1_error)
     end
 
-println("TOTAL ERRORS (all in mm / year of velocity):")
-println("L2 RMS error for all stations: $(rms(l2_errors))")
-println("L1 RMS error for all stations: $(rms(l1_errors))")
-println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
-println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
-println("L2 maximum errors : $(maximum(abs.(l2_errors)))")
-println("L1 maximum errors : $(maximum(abs.(l1_errors)))")
+    println("TOTAL ERRORS (all in mm / year of velocity):")
+    println("L2 RMS error for all stations: $(rms(l2_errors))")
+    println("L1 RMS error for all stations: $(rms(l1_errors))")
+    println("L2 sum of abs errors for all stations: $(total_abs_error(l2_errors))")
+    println("L1 sum of abs errors for all stations: $(total_abs_error(l1_errors))")
+    println("L2 maximum errors : $(maximum(abs.(l2_errors)))")
+    println("L1 maximum errors : $(maximum(abs.(l1_errors)))")
 
 end
 
