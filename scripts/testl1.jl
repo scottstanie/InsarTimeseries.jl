@@ -318,7 +318,7 @@ l1_errors, l2_errors = [], []
 # append!(l2_errors, l2_error)
 # append!(l1_errors, l1_error)
 
-if true
+if false
     for station_name in station_name_list
         l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
         append!(l2_errors, l2_error)

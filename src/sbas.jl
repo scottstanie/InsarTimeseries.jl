@@ -29,19 +29,19 @@ function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing;
     #   will be all noise- we can't sense such quickly moving ground
     # TODO: verify this third criteria?
 
-    # @show size(intlist)
+    # @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
     bad_idxs = find_mean_outliers(geolist, intlist, unw_pixel, mean_sigma_cutoff)
     bad_dates = geolist[bad_idxs]
     intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_pixel, B, bad_dates)
-    # @show size(intlist_clean)
+    # @show "outlier: ", size(intlist_clean)
 
     # 2. low correlation cleaning
     if cor_thresh > 0 || isnothing(cor_pixel)
         low_cor_igrams = intlist[cor_pixel .< cor_thresh]
         intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
     end
-    # @show size(intlist_clean)
+    # @show "cor: ", size(intlist_clean)
 
     # 3. with rought velocity estimate, find igrams with too long of baseline
     # Here we assume beyond some wavelength fraction is too long to sense in one igram
@@ -56,17 +56,19 @@ function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing;
 
         intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
     end
-    # @show size(intlist_clean)
+    # @show "fast: ", size(intlist_clean)
     return intlist_clean, unw_clean, B_clean
 end
 
 function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, L1=true)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
-    # Also load correlations for cutoff
-    cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
     
-    intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel)
+    # Also load correlations for cutoff
+    # TODO: if we dont care about corr, don't waste time loading this
+    cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
+
+    intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel, mean_sigma_cutoff=2)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
@@ -77,28 +79,30 @@ function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
             # println("WARNING: (row, col) ($row, $col) had only $(length(unw_clean)) igrams left")
             f[outdset][row, col] = Float32(0)
         else
-            if L1
-                f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha))
-            else
-                f[outdset][row, col] = Float32.(P2MM * (B_clean \ unw_clean))
-            end
+            soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
+            f[outdset][row, col] = Float32.(P2MM * soln)
         end
+        f["counts"][row, col] = length(unw_clean)
     end
+
 end
 
 partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
 
-function merge_partial_files(outfile, dset)
-    # TODO: prevent reading of entire files
-    tmp = zeros(size(partial_files(outfile)[1], dset))
+function merge_partial_files(outfile, dsets...)
+    for dset in dsets
+        tmp = zeros(size(partial_files(outfile)[1], dset))
 
-    for f in partial_files(outfile)
-        cur = h5read(f, dset)
-        tmp += cur
-        rm(f)
+        for f in partial_files(outfile)
+            cur = h5read(f, dset)
+            tmp += cur
+        end
+        h5open(outfile, "cw") do fout
+            fout[dset] = tmp
+        end
     end
-    h5open(outfile, "w") do fout
-        fout[dset] = tmp
+    for f in partial_files(outfile)
+        rm(f)
     end
 end
 
@@ -133,16 +137,18 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for id in Distributed.workers()
         h5open(string(id)*outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
+            d_create(fout, "counts", datatype(Int32), dataspace(nrows, ncols))
         end
     end
  
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:100, 1:100))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:1000, 1:2500))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
         proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, geolist, intlist, rho, alpha, lu_tuple, L1)
     end
     println("Merging files into $outfile")
-    @time merge_partial_files(outfile, outdset)
+    @time merge_partial_files(outfile, outdset, "counts")
     return outfile, outdset
 end
 
