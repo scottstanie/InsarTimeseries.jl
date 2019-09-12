@@ -42,7 +42,7 @@ function _get_station_rowcol(station_name)
 end
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
-function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=true)
+function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=false)
 
     # Load the insar soln in a small patch around the pixel
     # Note: swapping row and col due to julia/hdf5 transposes
@@ -65,11 +65,6 @@ function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbo
 end
 find_gps_error(fname, station_list::Array{String}; kwargs...) = [find_gps_error(fname, stat; kwargs...)
                                                                  for stat in station_list]
-
-"""Function to take a velocity file and find the shift that minimizes GPS error"""
-function find_min_shift(insar_fname)
-end
-
 
 """Given a list of errors from insar-gps, find the const to add
 to the insar solution image to minimize these errors

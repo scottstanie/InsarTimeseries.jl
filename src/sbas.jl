@@ -37,7 +37,7 @@ function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing;
     # @show "outlier: ", size(intlist_clean)
 
     # 2. low correlation cleaning
-    if cor_thresh > 0 || isnothing(cor_pixel)
+    if cor_thresh > 0 && !isnothing(cor_pixel)
         low_cor_igrams = intlist[cor_pixel .< cor_thresh]
         intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
     end

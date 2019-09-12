@@ -95,9 +95,9 @@ function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, li
 end
 
 mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
-                                             for d in geolist];
+                                            for d in geolist];
 max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(vals_by_date(d, intlist, unw_vals)))
-                                             for d in geolist];
+                                           for d in geolist];
 
 """Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
@@ -106,14 +106,23 @@ iqr(arr) = quantile(arr, .75) - quantile(arr, .25)
 """ 3* the sigma valud as calculated using MAD"""
 mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
 
+_get_cutoff(arr, sigma_cutoff) = median(arr) + mednsigma(arr, curoff)
+
 """Look for outliers in how much the solution shifts by just having a large mean value
 Returns a Bool array the size of `geolist` with `true` marking the outliers"""
-function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3)
+function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3; iters=1, B=nothing)
     means = mean_abs_val(geolist, intlist, unw_vals)
 
     cutoff_val = median(means) + mednsigma(means, cutoff)
     # println("Using cutoff of $cutoff")
-    return means .> cutoff_val
+    bad_idxs = means .> cutoff_val
+    if iters > 1
+        g2 = geolist[.!bad_idxs]
+        i2, u2, B2 = remove_igrams(intlist, unw_vals, B, geolist[bad_idxs])
+        # TODO: fix this
+        return find_mean_outliers(g2, i2, u2, B=B2, iters=iters-1)
+    end
+    return bad_idxs
 end
 
 function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=true)  #, direction=:high, method=:mean)
