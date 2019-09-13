@@ -94,25 +94,33 @@ function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, li
     return l1_diffs, lstsq_diffs, base_l1_error
 end
 
-mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
-                                            for d in geolist];
-max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(vals_by_date(d, intlist, unw_vals)))
-                                           for d in geolist];
+"""Get the mean values of igrams, per date, always taking the igram to be  (date, other)
+(i.e. the sign of the phase is reversed if igram is (other, date)
 
-"""Get the values of igrams with all `date` as the early igram
-reverses sign if igram is (other, date) """
-# oneway_vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
-# oneway_vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d in date_arr]
+The allows you to see if a date has some consistent delay added that is too
+large to give useful phase difference values
 
-function mean_oneway_val(geolist, intlist, unw_vals)
+Also reveals trends: For example, the final dates at the end of linear subsidence 
+will have means with higher phase (positive phase = ground subsidence), 
+since most igrams will look like (sunk ground -> neutral ground)
+"""
+function oneway_val(geolist, intlist, unw_vals, func=median)
     out = Array{Float64, 1}()
     for g in geolist
+        # Make a 1 if g is the first date, -1 if second, and 0 otherwise
         mults = [g == ifg[1] ? 1 : (g == ifg[2] ? -1 : 0) for ifg in intlist]
         vals = filter(!iszero, mults .* unw_vals)
-        push!(out, mean(vals))
+        push!(out, func(vals))
     end
     return out
 end
+
+"""Simpler means by day: just abs. value of phases, either mean or median"""
+mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
+                                            for d in geolist];
+median_abs_val(geolist, intlist, unw_vals) = [median(abs.(vals_by_date(d, intlist, unw_vals)))
+                                              for d in geolist];
+
 
 """Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
@@ -155,25 +163,28 @@ function _remove_largest(geo, int, val, B, dates_to_remove)
     return geo2, int2, val2, B2
 end
 
-function largest_n_dates(geo, int, val, n=length(geo))
-    # means = mean_abs_val(geo, int, val)
-    means = abs.(mean_oneway_val(geol, int, unw_vals))
-
-    # Sort by the means to order the geolist
-    sorted_top = sort(collect(zip(means, geo)), rev=true)[1:n]
-    # Now upzip to get just the dates (and discard their means
-    return collect(zip(sorted_top...))[2]
-end
+# function largest_n_dates(geo, int, val, n=length(geo))
+#     # means = mean_abs_val(geo, int, val)
+#     means = abs.(oneway_val(geo, int, unw_vals, mean))
+# 
+#     # Sort by the means to order the geolist
+#     sorted_top = sort(collect(zip(means, geo)), rev=true)[1:n]
+#     # Now upzip to get just the dates (and discard their means
+#     return collect(zip(sorted_top...))[2]
+# end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
 function nsigma_days(geo, int, val, nsigma=3)
     # means = mean_abs_val(geo, int, val)
-    # means = mean_oneway_val(geo, int, val)
-    means = abs.(mean_oneway_val(geo, int, val))
+    # means = median_abs_val(geo, int, val)
+    # means = abs.(oneway_val(geo, int, val, mean))
+    # means = abs.(oneway_val(geo, int, val, median))
+    # means = oneway_val(geo, int, val, mean)
+    means = oneway_val(geo, int, val, median)
 
     # FOR PRINTING ONLY
     low, high = two_way_cutoff(means, nsigma)
-    println("Using cutoff around $(median(means)): ($low, $high) ")
+    println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
 
     return geo[two_way_outliers(means, nsigma)]
 end
@@ -194,7 +205,7 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
 
     @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
-    geo_clean, intlist_clean, unw_clean, B_clean  = peel_nsigma(intlist, unw_pixel, B, bad_dates, nsigma=mean_sigma_cutoff)
+    geo_clean, intlist_clean, unw_clean, B_clean  = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
     @show "outlier: ", size(intlist_clean)
 
     # 2. low correlation cleaning
@@ -211,7 +222,7 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
         # rho, alpha, abstol = 1.0, 1.6, 1e-3
         # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
         day_cutoff = fast_cm_cutoff / abs(velo_cm)
-        @show (365*velo_cm), fast_cm_cutoff, day_cutoff
+        # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
         too_long_igrams = [ig for ig in intlist_clean 
                            if temporal_baseline(ig) > day_cutoff]
 
