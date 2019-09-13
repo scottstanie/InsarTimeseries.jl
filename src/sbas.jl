@@ -84,6 +84,7 @@ function run_sbas(unw_stack_file::String,
                   L1::Bool=false) 
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
+    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     lu_tuple = factor(Float64.(B))
     # TODO: do I ever really care about the abstol to change as variable?
     rho, alpha, abstol = 1.0, 1.6, 1e-3

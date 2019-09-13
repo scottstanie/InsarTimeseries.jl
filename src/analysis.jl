@@ -180,7 +180,7 @@ function nsigma_days(geo, int, val, nsigma=3)
     # means = abs.(oneway_val(geo, int, val, mean))
     # means = abs.(oneway_val(geo, int, val, median))
     # means = oneway_val(geo, int, val, mean)
-    means = oneway_val(geo, int, val, median)
+    means = oneway_val(geo, int, val, median)  # TODO: change "means" if its not means
 
     # FOR PRINTING ONLY
     low, high = two_way_cutoff(means, nsigma)
