@@ -1,5 +1,5 @@
 push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
-import InsarTimeseries
+# import InsarTimeseries
 # using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET, CC_FILENAME, UNW_FILENAME
 using HDF5
 using PyCall

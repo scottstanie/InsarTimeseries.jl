@@ -6,14 +6,14 @@ include("./testl1.jl")
 invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel(u, B, rho=1.0, alpha=1.5)
 invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
 
-# rowcol2 = [245, 189]  # small/looked uplift
-rowcol2 = [1224, 944]  # full uplift
-# rowcol3 = [368, 131]  # Small/looked subs
-rowcol3 = [2229, 2236]  # TESTING for diffs
+rowcol2 = [245, 189]  # small/looked uplift
+# rowcol2 = [1224, 944]  # full uplift
+rowcol3 = [368, 131]  # Small/looked subs
+# rowcol3 = [2229, 2236]  # TESTING for diffs
 
-geolistig, intlist500ig, valid_igram_indices500ig = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
-# geolist2, intlist5002, valid_igram_indices5002 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", nothing, 500)
-geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", nothing, 500)
+# geolistig, intlist500ig, valid_igram_indices500ig = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+# geolist, intlist500, valid_igram_indices500 = InsarTimeseries.load_geolist_intlist("unw_stack.h5", nothing, 500)
 B500 = InsarTimeseries.build_B_matrix(geolist, intlist500);
 Blin500 = sum(B500, dims=2);
 
