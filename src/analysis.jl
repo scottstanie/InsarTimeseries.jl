@@ -99,6 +99,21 @@ mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, u
 max_abs_val(geolist, intlist, unw_vals) = [maximum(abs.(vals_by_date(d, intlist, unw_vals)))
                                            for d in geolist];
 
+"""Get the values of igrams with all `date` as the early igram
+reverses sign if igram is (other, date) """
+# oneway_vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
+# oneway_vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d in date_arr]
+
+function mean_oneway_val(geolist, intlist, unw_vals)
+    out = Array{Float64, 1}()
+    for g in geolist
+        mults = [g == ifg[1] ? 1 : (g == ifg[2] ? -1 : 0) for ifg in intlist]
+        vals = filter(!iszero, mults .* unw_vals)
+        push!(out, mean(vals))
+    end
+    return out
+end
+
 """Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
 iqr(arr) = quantile(arr, .75) - quantile(arr, .25)
@@ -106,15 +121,117 @@ iqr(arr) = quantile(arr, .75) - quantile(arr, .25)
 """ 3* the sigma valud as calculated using MAD"""
 mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
 
-_get_cutoff(arr, sigma_cutoff) = median(arr) + mednsigma(arr, curoff)
+_get_cutoff(arr, nsigma) = median(arr) + mednsigma(arr, nsigma)
 
+two_way_cutoff(arr, nsigma) = (median(arr) - mednsigma(arr, nsigma), 
+                               median(arr) + mednsigma(arr, nsigma))
+
+# TODO: which of these do I really need?
+function two_way_inliers(arr, nsigma)
+    low, high = two_way_cutoff(arr, nsigma)
+    return low .< arr .< high
+end
+function two_way_outliers(arr, nsigma)
+    low, high = two_way_cutoff(arr, nsigma)
+    return (arr .< low) .| (arr .> high)
+end
+
+
+"""Remove all igrams corresponding to the date with the highest mean"""
+function peel_largest_n(geo, int, val, B; n=1)
+    dates_to_remove = largest_n_dates(geo, int, val, n)
+    return _remove_largest(geo, int, val, B, dates)
+end
+
+"""Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
+function peel_nsigma(geo, int, val, B; nsigma=3)
+    dates_to_remove = nsigma_days(geo, int, val, nsigma)
+    return _remove_largest(geo, int, val, B, dates_to_remove)
+end
+
+function _remove_largest(geo, int, val, B, dates_to_remove)
+    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
+    geo2 = [g for g in geo if !(g in dates_to_remove)]
+    return geo2, int2, val2, B2
+end
+
+function largest_n_dates(geo, int, val, n=length(geo))
+    # means = mean_abs_val(geo, int, val)
+    means = abs.(mean_oneway_val(geol, int, unw_vals))
+
+    # Sort by the means to order the geolist
+    sorted_top = sort(collect(zip(means, geo)), rev=true)[1:n]
+    # Now upzip to get just the dates (and discard their means
+    return collect(zip(sorted_top...))[2]
+end
+
+"""Return the days of `geo` which are more than nsigma away from mean"""
+function nsigma_days(geo, int, val, nsigma=3)
+    # means = mean_abs_val(geo, int, val)
+    # means = mean_oneway_val(geo, int, val)
+    means = abs.(mean_oneway_val(geo, int, val))
+
+    # FOR PRINTING ONLY
+    low, high = two_way_cutoff(means, nsigma)
+    println("Using cutoff around $(median(means)): ($low, $high) ")
+
+    return geo[two_way_outliers(means, nsigma)]
+end
+
+
+function prune_igrams(geolist, intlist, unw_pixel, B;
+                      cor_pixel=nothing, cor_thresh=0.0,
+                      mean_sigma_cutoff=3, 
+                      fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
+    # 3 Reasons for removing igrams:
+    # 1. remove all from .geo dates with huge averages (whole day is garbage)
+    # 2. remove very low correlation
+    #   NOTE: for now, we are skipping... doesn't seem to make much difference generally
+    # 3. remove longer igrams w/ longer baseline than is possible
+    #   e.g. if we have 2.5 cm/year velocity, anything longer than ~1 year
+    #   will be all noise- we can't reliably sense such quickly moving ground
+    # TODO: verify this third criteria?
+
+    @show "start", size(intlist)
+    # 1. find outliers in this pixels' values and remove them
+    geo_clean, intlist_clean, unw_clean, B_clean  = peel_nsigma(intlist, unw_pixel, B, bad_dates, nsigma=mean_sigma_cutoff)
+    @show "outlier: ", size(intlist_clean)
+
+    # 2. low correlation cleaning
+    if cor_thresh > 0 && !isnothing(cor_pixel)
+        low_cor_igrams = intlist[cor_pixel .< cor_thresh]
+        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
+    end
+    # @show "cor: ", size(intlist_clean)
+
+    # 3. with rought velocity estimate, find igrams with too long of baseline
+    # Here we assume beyond some wavelength fraction is too long to sense in one igram
+    if fast_cm_cutoff < 5
+        velo_cm = PHASE_TO_CM * (B_clean \ unw_clean)[1]  # cm / day
+        # rho, alpha, abstol = 1.0, 1.6, 1e-3
+        # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
+        day_cutoff = fast_cm_cutoff / abs(velo_cm)
+        @show (365*velo_cm), fast_cm_cutoff, day_cutoff
+        too_long_igrams = [ig for ig in intlist_clean 
+                           if temporal_baseline(ig) > day_cutoff]
+
+        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
+    end
+    @show "fast: ", size(intlist_clean)
+    return intlist_clean, unw_clean, B_clean
+end
+
+
+# OLDER WAY: (redundant code? TODO: cleanup)
 """Look for outliers in how much the solution shifts by just having a large mean value
 Returns a Bool array the size of `geolist` with `true` marking the outliers"""
-function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3; iters=1, B=nothing)
-    means = mean_abs_val(geolist, intlist, unw_vals)
+function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
+    # means = mean_abs_val(geolist, intlist, unw_vals)
+    means = abs.(mean_oneway_val(geolist, intlist, unw_vals))
+    # means = mean_oneway_val(geolist, intlist, unw_vals)
 
-    cutoff_val = median(means) + mednsigma(means, cutoff)
-    # println("Using cutoff of $cutoff")
+    cutoff_val = median(means) + mednsigma(means, nsigma)
+    println("Using cutoff of $cutoff_val: $(median(means)) + $(mednsigma(means, nsigma))")
     bad_idxs = means .> cutoff_val
     if iters > 1
         g2 = geolist[.!bad_idxs]
@@ -125,36 +242,14 @@ function find_mean_outliers(geolist, intlist, unw_vals, cutoff=3; iters=1, B=not
     return bad_idxs
 end
 
-function solve_after_cutoff(geolist, intlist, unw_vals, B, cutoff=3; in_mm_yr=true)  #, direction=:high, method=:mean)
-    # if method == :mean
-    bad_idxs = find_mean_outliers(geolist, intlist, unw_vals, cutoff)
-    # elseif method == :diff
-    #     bad_idxs = _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
-    # end
+function solve_after_cutoff(geolist, intlist, unw_vals, B, nsigma=3; in_mm_yr=true)  #, direction=:high, method=:mean)
+    bad_days = find_mean_outliers(geolist, intlist, unw_vals, nsigma)
+
 
     bad_days = geolist[bad_idxs]
-    println("Removing $(length(bad_days)) days out of $(length(bad_idxs)): $bad_days")
+    println("Removing $(length(bad_days)) days out of $(length(geolist)): $bad_days")
     return solve_without(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
 end
-
-"""Remove all igrams corresponding to the date with the highest mean"""
-function peel_largest_dates(geo, int, val, B, n=1)
-    means = mean_abs_val(geo, int, val)
-    dates_to_remove = largest_n_dates(geo, int, val, n)
-    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
-    geo2 = [g for g in geo if g != dates_to_remove]
-    return geo2, int2, val2, B2
-end
-
-function largest_n_dates(geo, int, val, n=length(geo))
-    means = mean_abs_val(geo, int, val)
-    # Sort by the means to order the geolist
-    sorted_top = sort(collect(zip(means, geolist)), rev=true)[1:n]
-    # Now upzip to get just the dates (and discard their means
-    return collect(zip(sorted_top...))[2]
-end
-
-
 
 """Look for outliers in how much the solution shifts by removing the single date"""
 function _remove_by_diff(geolist, intlist, unw_vals, B, cutoff)
@@ -196,7 +291,7 @@ end
 
 
 ######################
-# Outlier Removal
+# Outlier Removal through fancy means (loF = sklearn.neighbors.LOF
 ######################
 function find_outliers(B, vals, lof, n_neighbors=100, is1d=true)
     # lof = LOF(n_neighbors)
