@@ -1,12 +1,14 @@
 import PyPlot
 plt = PyPlot
+import InsarTimeseries
 include("./testl1.jl")
 
-invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
 invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel(u, B, rho=1.0, alpha=1.5)
+invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
 
-rowcol2 = [245, 189]  # looked uplift
-# rowcol3 = [368, 131]  # Small subs
+# rowcol2 = [245, 189]  # small/looked uplift
+rowcol2 = [1224, 944]  # full uplift
+# rowcol3 = [368, 131]  # Small/looked subs
 rowcol3 = [2229, 2236]  # TESTING for diffs
 
 geolistig, intlist500ig, valid_igram_indices500ig = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
