@@ -18,57 +18,16 @@ using Distributed
 #     return vstack
 # end
 
-function prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel=nothing;
-                      mean_sigma_cutoff=3, cor_thresh=0.1,
-                      fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
-    # 3 Reasons for removing igrams:
-    # 1. remove all from .geo dates with huge averages (whole day is garbage)
-    # 2. remove very low correlation
-    # 3. remove longer igrams w/ longer baseline than is possible
-    #   e.g. if we have 2.5 cm/year velocity, anything longer than a year
-    #   will be all noise- we can't sense such quickly moving ground
-    # TODO: verify this third criteria?
-
-    # @show "start", size(intlist)
-    # 1. find outliers in this pixels' values and remove them
-    bad_idxs = find_mean_outliers(geolist, intlist, unw_pixel, mean_sigma_cutoff)
-    bad_dates = geolist[bad_idxs]
-    intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_pixel, B, bad_dates)
-    # @show "outlier: ", size(intlist_clean)
-
-    # 2. low correlation cleaning
-    if cor_thresh > 0 && !isnothing(cor_pixel)
-        low_cor_igrams = intlist[cor_pixel .< cor_thresh]
-        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
-    end
-    # @show "cor: ", size(intlist_clean)
-
-    # 3. with rought velocity estimate, find igrams with too long of baseline
-    # Here we assume beyond some wavelength fraction is too long to sense in one igram
-    if fast_cm_cutoff < 5
-        velo_cm = PHASE_TO_CM * (B_clean \ unw_clean)[1]  # cm / day
-        # rho, alpha, abstol = 1.0, 1.6, 1e-3
-        # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
-        day_cutoff = fast_cm_cutoff / abs(velo_cm)
-        # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
-        too_long_igrams = [ig for ig in intlist_clean 
-                           if temporal_baseline(ig) > day_cutoff]
-
-        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
-    end
-    # @show "fast: ", size(intlist_clean)
-    return intlist_clean, unw_clean, B_clean
-end
-
 function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, L1=true)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
     # Also load correlations for cutoff
     # TODO: if we dont care about corr, don't waste time loading this
-    cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
+    # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
 
-    intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, cor_pixel, mean_sigma_cutoff=2)
+    intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, # cor_pixel=cor_pixel,
+                                                     mean_sigma_cutoff=2)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
