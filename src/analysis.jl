@@ -163,28 +163,18 @@ function _remove_largest(geo, int, val, B, dates_to_remove)
     return geo2, int2, val2, B2
 end
 
-# function largest_n_dates(geo, int, val, n=length(geo))
-#     # means = mean_abs_val(geo, int, val)
-#     means = abs.(oneway_val(geo, int, unw_vals, mean))
-# 
-#     # Sort by the means to order the geolist
-#     sorted_top = sort(collect(zip(means, geo)), rev=true)[1:n]
-#     # Now upzip to get just the dates (and discard their means
-#     return collect(zip(sorted_top...))[2]
-# end
-
 """Return the days of `geo` which are more than nsigma away from mean"""
 function nsigma_days(geo, int, val, nsigma=3)
     # means = mean_abs_val(geo, int, val)
-    # means = median_abs_val(geo, int, val)
+    # means = median_abs_val(geo, int, val)  # TODO: change "means" if its not means
     # means = abs.(oneway_val(geo, int, val, mean))
-    # means = abs.(oneway_val(geo, int, val, median))
+    means = abs.(oneway_val(geo, int, val, median))
     # means = oneway_val(geo, int, val, mean)
-    means = oneway_val(geo, int, val, median)  # TODO: change "means" if its not means
+    # means = oneway_val(geo, int, val, median)  # TODO: change "means" if its not means
 
-    # FOR PRINTING ONLY
-    low, high = two_way_cutoff(means, nsigma)
-    println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
+    # # FOR PRINTING ONLY
+    # low, high = two_way_cutoff(means, nsigma)
+    # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
 
     return geo[two_way_outliers(means, nsigma)]
 end
@@ -203,10 +193,10 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
     #   will be all noise- we can't reliably sense such quickly moving ground
     # TODO: verify this third criteria?
 
-    @show "start", size(intlist)
+    # @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
     geo_clean, intlist_clean, unw_clean, B_clean  = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
-    @show "outlier: ", size(intlist_clean)
+    # @show "outlier: ", size(intlist_clean)
 
     # 2. low correlation cleaning
     if cor_thresh > 0 && !isnothing(cor_pixel)
@@ -228,8 +218,8 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
 
         intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
     end
-    @show "fast: ", size(intlist_clean)
-    return intlist_clean, unw_clean, B_clean
+    # @show "fast: ", size(intlist_clean)
+    return geo_clean, intlist_clean, unw_clean, B_clean
 end
 
 
@@ -252,6 +242,16 @@ function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
     end
     return bad_idxs
 end
+
+# function largest_n_dates(geo, int, val, n=length(geo))
+#     # means = mean_abs_val(geo, int, val)
+#     means = abs.(oneway_val(geo, int, unw_vals, mean))
+# 
+#     # Sort by the means to order the geolist
+#     sorted_top = sort(collect(zip(means, geo)), rev=true)[1:n]
+#     # Now upzip to get just the dates (and discard their means
+#     return collect(zip(sorted_top...))[2]
+# end
 
 function solve_after_cutoff(geolist, intlist, unw_vals, B, nsigma=3; in_mm_yr=true)  #, direction=:high, method=:mean)
     bad_days = find_mean_outliers(geolist, intlist, unw_vals, nsigma)
