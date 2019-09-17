@@ -135,8 +135,8 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
     pix_count, total_pixels = 0, nrows * ncols
 
     # last_time = time()
-    @time @inbounds Threads.@threads for row in 1:nrows
-        @inbounds for col in 1:ncols
+    @time Threads.@threads for col in 1:ncols
+        for row in 1:nrows
             soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1)
             outstack[row, col] = soln_p2mm
             countstack[row, col] = igram_count

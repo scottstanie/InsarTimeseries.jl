@@ -25,7 +25,9 @@ function run_inversion(unw_stack_file::String;
                        ignore_geo_file=nothing, 
                        max_temporal_baseline::Union{Int, Nothing}=nothing,
                        alpha::Float32=0.0f0,
-                       L1::Bool=false)
+                       L1::Bool=false,  
+                       use_distributed=true)
+                       
 
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
@@ -34,7 +36,11 @@ function run_inversion(unw_stack_file::String;
     flat_dset = use_stackavg ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
     stack_file_size = _stack_size_mb(unw_stack_file, flat_dset)
     can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
+
+    # Note: as of version 1.3.0rc2, my threaded version on preloaded matrix is slower than
+    # distributed reading/writing... not sure why but oh well
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
+    println("Using Distributed to solve: $use_distributed")
 
     outdset = use_stackavg ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if use_stackavg
@@ -57,13 +63,14 @@ function run_inversion(unw_stack_file::String;
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
         #                       constant_velocity, alpha, L1)
         # end
-        if can_fit_mem
-            @time unw_stack = h5read(unw_stack_file, flat_dset)[:, :, valid_igram_indices]
-            velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
-                                     constant_velocity, alpha, L1)
-        else
+        if use_distributed
             velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
                                      geolist, intlist, valid_igram_indices, 
+                                     constant_velocity, alpha, L1)
+        else
+            # If we want to read the whole stack in at once:
+            @time unw_stack = h5read(unw_stack_file, flat_dset)[:, :, valid_igram_indices]
+            velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
                                      constant_velocity, alpha, L1)
         end
 
