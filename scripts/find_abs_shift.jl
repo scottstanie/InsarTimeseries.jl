@@ -42,14 +42,14 @@ function _get_station_rowcol(station_name)
 end
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
-function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=false)
+function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=false, avgfunc=median)
 
     # Load the insar soln in a small patch around the pixel
     # Note: swapping row and col due to julia/hdf5 transposes
     row, col = _get_station_rowcol(station_name)
     halfwin = div(window, 2)
     patch = h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
-    slope_insar_mm_yr = mean(patch)
+    slope_insar_mm_yr = avgfunc(patch)
 
     # NOTE: CURRENLT IGNORING THE REFERENCE STATION AND FORCING IT TO BE NOTHING
     slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, nothing)
