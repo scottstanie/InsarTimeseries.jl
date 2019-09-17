@@ -27,27 +27,28 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
     # TODO: if we dont care about corr, don't waste time loading this
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
     #
-    soln_p2mm = _calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1)
+    soln_p2mm, igram_count = calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = soln_p2mm
-        f["counts"][row, col] = length(unw_clean)
+        f["counts"][row, col] = igram_count
     end
 
 end
 
-function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true)
+function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true)::Tuple{Float32, Int64}
     _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=1)
 
-    if length(unw_clean) < 50  # TODO: justify this minimum data
+    igram_count = length(unw_clean)
+    if igram_count < 50  # TODO: justify this minimum data
         soln_p2mm = Float32(0)
     else
         soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
-        soln_p2mm = Float32.(P2MM * soln)
+        soln_p2mm = Float32.(P2MM * soln[1])
     end
-    return soln_p2mm
+    return soln_p2mm, igram_count
 end
 
 partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
@@ -126,16 +127,29 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     # TODO: do I ever really care about the abstol to change as variable?
     rho, alpha, abstol = 1.0, 1.6, 1e-3
-    nrows, ncols, _ = size(unw_stack_file, dset)
+    nrows, ncols, _ = size(unw_stack)
  
     outstack = Array{Float32, 2}(undef, (nrows, ncols))
-    @time Threads.@threads for row in 1:nrows
-        for col in 1:ncols
-            outstack[row, col] = _calc_soln(unw_stack[row, col, :], B, geolist, intlist, rho, alpha, L1)
+    countstack = similar(outstack)
+    println("Out size: ($nrows, $ncols)")
+    pix_count, total_pixels = 0, nrows * ncols
+
+    # last_time = time()
+    @time @inbounds Threads.@threads for row in 1:nrows
+        @inbounds for col in 1:ncols
+            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1)
+            outstack[row, col] = soln_p2mm
+            countstack[row, col] = igram_count
+            # pix_count += 1
+            # last_time = log_count(pix_count, total_pixels, 1, every=10000, last_time=last_time)
         end
     end
+
     println("Writing solution into $outfile")
-    h5write(outfile, outdset, outstack)
+    h5open(outfile, "cw") do f
+        f[outdset] = outstack
+        f["counts"] = countstack
+    end
     return outfile, outdset
 end
 
