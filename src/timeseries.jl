@@ -32,8 +32,9 @@ function run_inversion(unw_stack_file::String;
 
     # Now: can we load the input stack into memory? or do we need distributed?
     flat_dset = use_stackavg ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
-    stack_file_size = size(unw_stack_file, flat_dset)
-    can_fit_mem = stack_file_size * 2 > getmemavail()  # Pad by 2x for memory check
+    stack_file_size = _stack_size_mb(unw_stack_file, flat_dset)
+    can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
+    println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
 
     outdset = use_stackavg ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if use_stackavg
@@ -57,7 +58,7 @@ function run_inversion(unw_stack_file::String;
         #                       constant_velocity, alpha, L1)
         # end
         if can_fit_mem
-            unw_stack = h5read(unw_stack_file, in_dset)[:, :, valid_igram_indices]
+            @time unw_stack = h5read(unw_stack_file, flat_dset)[:, :, valid_igram_indices]
             velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
                                      constant_velocity, alpha, L1)
         else
