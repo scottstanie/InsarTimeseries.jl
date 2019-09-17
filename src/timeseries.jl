@@ -6,6 +6,7 @@ const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
 const P2MM = 365 * 10 * PHASE_TO_CM   # mm / year
 
+_stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(filename, dset)) / 1e6 
 
 """Runs SBAS inversion on all unwrapped igrams
 
@@ -29,17 +30,19 @@ function run_inversion(unw_stack_file::String;
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
+    # Now: can we load the input stack into memory? or do we need distributed?
+    flat_dset = use_stackavg ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
+    stack_file_size = size(unw_stack_file, flat_dset)
+    can_fit_mem = stack_file_size * 2 > getmemavail()  # Pad by 2x for memory check
 
+    outdset = use_stackavg ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if use_stackavg
         is_hdf5 = false
-        flat_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
-        outdset = "stack"
         is_3d = true  # TODO: stack avg should really be 2d velo
     else
         is_hdf5 = true
-        flat_dset = STACK_FLAT_SHIFTED_DSET
         println("Performing SBAS solution")
         println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
@@ -53,10 +56,16 @@ function run_inversion(unw_stack_file::String;
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
         #                       constant_velocity, alpha, L1)
         # end
-        outdset = "velos"
-        velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
-                                 geolist, intlist, valid_igram_indices, 
-                                 constant_velocity, alpha, L1)
+        if can_fit_mem
+            unw_stack = h5read(unw_stack_file, in_dset)[:, :, valid_igram_indices]
+            velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
+                                     constant_velocity, alpha, L1)
+        else
+            velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
+                                     geolist, intlist, valid_igram_indices, 
+                                     constant_velocity, alpha, L1)
+        end
+
         is_3d = false
     end
     ####################33
