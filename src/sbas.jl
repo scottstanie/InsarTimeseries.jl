@@ -18,32 +18,36 @@ using Distributed
 #     return vstack
 # end
 
-function proc_pixel(row, col, unw_stack_file, in_dset, valid_igram_indices,
-                    outfile, outdset, B, geolist, intlist, rho, alpha, lu_tuple, L1=true)
+function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
+                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true;
+                    row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
     # Also load correlations for cutoff
     # TODO: if we dont care about corr, don't waste time loading this
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
-
-    intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, # cor_pixel=cor_pixel,
-                                                     mean_sigma_cutoff=2)
+    #
+    soln_p2mm = _calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        # f[outdset][row, col] = Float32.(P2MM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, lu_tuple=lu_tuple))
-        if length(unw_clean) < 50  # TODO: justify this minimum data
-            # TODO: record which pixels had this problem
-            # println("WARNING: (row, col) ($row, $col) had only $(length(unw_clean)) igrams left")
-            f[outdset][row, col] = Float32(0)
-        else
-            soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
-            f[outdset][row, col] = Float32.(P2MM * soln)
-        end
+        f[outdset][row, col] = soln_p2mm
         f["counts"][row, col] = length(unw_clean)
     end
 
+end
+
+function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true)
+    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=1)
+
+    if length(unw_clean) < 50  # TODO: justify this minimum data
+        soln_p2mm = Float32(0)
+    else
+        soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
+        soln_p2mm = Float32.(P2MM * soln)
+    end
+    return soln_p2mm
 end
 
 partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
@@ -65,13 +69,6 @@ function merge_partial_files(outfile, dsets...)
     end
 end
 
-import Base.size
-function size(h5file::String, dset::String)
-    h5open(h5file) do f
-        return size(f[dset])
-    end
-end
-
 function run_sbas(unw_stack_file::String,
                   dset::String,
                   outfile::String,
@@ -85,7 +82,6 @@ function run_sbas(unw_stack_file::String,
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    lu_tuple = factor(Float64.(B))
     # TODO: do I ever really care about the abstol to change as variable?
     rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack_file, dset)
@@ -104,8 +100,9 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
     # @time @sync @distributed for (row, col) in collect(Iterators.product(1:1000, 1:2500))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
-        proc_pixel(row, col, unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, B, geolist, intlist, rho, alpha, lu_tuple, L1)
+        proc_pixel(unw_stack_file, dset, valid_igram_indices, outfile, 
+                   outdset, B, geolist, intlist, rho, alpha, L1,
+                   row=row, col=col)
     end
     println("Merging files into $outfile")
     @time merge_partial_files(outfile, outdset, "counts")
@@ -114,6 +111,33 @@ end
 
 # Need the .I so we can use to load from h5 
 get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!load_mask(do_permute))]
+
+# If we can load all stack file into memory, will be much quicker
+function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
+                  outfile::String,
+                  outdset::String,
+                  geolist,
+                  intlist, 
+                  constant_velocity::Bool, 
+                  alpha::Float32,
+                  L1::Bool=false) 
+
+    B = prepB(geolist, intlist, constant_velocity, alpha)
+    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
+    # TODO: do I ever really care about the abstol to change as variable?
+    rho, alpha, abstol = 1.0, 1.6, 1e-3
+    nrows, ncols, _ = size(unw_stack_file, dset)
+ 
+    outstack = Array{Float32, 2}(undef, (nrows, ncols))
+    @time Threads.@threads for row in 1:nrows
+        for col in 1:ncols
+            outstack[row, col] = _calc_soln(unw_stack[row, col, :], B, geolist, intlist, rho, alpha, L1)
+        end
+    end
+    println("Writing solution into $outfile")
+    h5write(outfile, outdset, outstack)
+    return outfile, outdset
+end
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion
