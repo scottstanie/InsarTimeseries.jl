@@ -1,4 +1,7 @@
 import Base.view
+import Base.size
+import Base.eltype
+
 using Dates
 using HDF5
 
@@ -53,4 +56,26 @@ end
 function Base.view(dset::HDF5Dataset, i::Int, j::Int, k::Colon)
     # Hack for 1D depth slice to have 1D instead of (1, 1, N)
     return view(dset[i, j, k], 1, 1, :)
+end
+
+
+function Base.size(h5file::String, dset::String)
+    h5open(h5file) do f
+        return size(f[dset])
+    end
+end
+function Base.eltype(h5file::String, dset::String)
+    h5open(h5file) do f
+        return eltype(f[dset])
+    end
+end
+
+"""Get the number of megabytes of RAM available
+Note this is higher than "Sys.free_memory()"
+"""
+function getmemavail()
+    out = Pipe()
+    lines = read(`free -m`, String)
+    memline = split(lines, '\n')[2]
+    return parse(Float64, split(memline)[end])
 end
