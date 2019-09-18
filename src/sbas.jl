@@ -65,13 +65,6 @@ function merge_partial_files(outfile, dsets...)
     end
 end
 
-import Base.size
-function size(h5file::String, dset::String)
-    h5open(h5file) do f
-        return size(f[dset])
-    end
-end
-
 function run_sbas(unw_stack_file::String,
                   dset::String,
                   outfile::String,
