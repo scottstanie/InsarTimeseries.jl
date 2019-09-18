@@ -5,7 +5,7 @@ __precompile__(true)
 
 module InsarTimeseries
 
-# Include apertools Python modeules here to make available to all
+# Include apertools Python modules here to make available to all
 using PyCall
 const sario = PyNULL()
 const gps = PyNULL()
@@ -17,9 +17,9 @@ function __init__()
     copy!(utils, pyimport("apertools.utils"))
 end
 
+using Sario
 
 include("./common.jl")
-include("./loading.jl")
 include("./prepare.jl")
 include("./stackavg.jl")
 include("./optimize.jl")
