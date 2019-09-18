@@ -155,12 +155,6 @@ function peel_nsigma(geo, int, val, B; nsigma=3)
     return _remove_largest(geo, int, val, B, dates_to_remove)
 end
 
-function _remove_largest(geo, int, val, B, dates_to_remove)
-    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
-    geo2 = [g for g in geo if !(g in dates_to_remove)]
-    return geo2, int2, val2, B2
-end
-
 """Return the days of `geo` which are more than nsigma away from mean"""
 function nsigma_days(geo, int, val, nsigma=3)
     # means = mean_abs_val(geo, int, val)
@@ -171,10 +165,16 @@ function nsigma_days(geo, int, val, nsigma=3)
     means = oneway_val(geo, int, val, median)  # TODO: change "means" if its not means
 
     # # FOR PRINTING ONLY
-    # low, high = two_way_cutoff(means, nsigma)
-    # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
+    low, high = two_way_cutoff(means, nsigma)
+    println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
 
     return geo[two_way_outliers(means, nsigma)]
+end
+
+function _remove_largest(geo, int, val, B, dates_to_remove)
+    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
+    geo2 = [g for g in geo if !(g in dates_to_remove)]
+    return geo2, int2, val2, B2
 end
 
 
@@ -226,8 +226,9 @@ end
 Returns a Bool array the size of `geolist` with `true` marking the outliers"""
 function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
     # means = mean_abs_val(geolist, intlist, unw_vals)
-    means = abs.(mean_oneway_val(geolist, intlist, unw_vals))
+    # means = abs.(oneway_val(geolist, intlist, unw_vals, mean))
     # means = mean_oneway_val(geolist, intlist, unw_vals)
+    means = oneway_val(geolist, intlist, unw_vals, median)
 
     cutoff_val = median(means) + mednsigma(means, nsigma)
     println("Using cutoff of $cutoff_val: $(median(means)) + $(mednsigma(means, nsigma))")

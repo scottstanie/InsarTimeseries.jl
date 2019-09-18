@@ -7,6 +7,7 @@ using HDF5
 
 const DATE_FMT = "yyyymmdd"
 
+# TODO: remove duplication with Sario constants
 const MASK_FILENAME = "masks.h5"
 const UNW_FILENAME = "unw_stack.h5"
 const CC_FILENAME = "cc_stack.h5"
@@ -59,11 +60,6 @@ function Base.view(dset::HDF5Dataset, i::Int, j::Int, k::Colon)
 end
 
 
-function Base.size(h5file::String, dset::String)
-    h5open(h5file) do f
-        return size(f[dset])
-    end
-end
 function Base.eltype(h5file::String, dset::String)
     h5open(h5file) do f
         return eltype(f[dset])
