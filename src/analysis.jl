@@ -129,9 +129,7 @@ iqr(arr) = quantile(arr, .75) - quantile(arr, .25)
 """ 3* the sigma valud as calculated using MAD"""
 mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
 
-_get_cutoff(arr, nsigma) = median(arr) + mednsigma(arr, nsigma)
-
-two_way_cutoff(arr, nsigma) = (median(arr) - mednsigma(arr, nsigma), 
+two_way_cutoff(arr, nsigma) = (min(0, median(arr) - mednsigma(arr, nsigma)),  # Make sure it's negative
                                median(arr) + mednsigma(arr, nsigma))
 
 # TODO: which of these do I really need?
