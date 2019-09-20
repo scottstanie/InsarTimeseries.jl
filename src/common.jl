@@ -5,8 +5,6 @@ import Base.eltype
 using Dates
 using HDF5
 
-const DATE_FMT = "yyyymmdd"
-
 # TODO: remove duplication with Sario constants
 const MASK_FILENAME = "masks.h5"
 const UNW_FILENAME = "unw_stack.h5"

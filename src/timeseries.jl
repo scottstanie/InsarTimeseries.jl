@@ -95,7 +95,7 @@ function run_inversion(unw_stack_file::String=UNW_FILENAME;
             sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
         end
 
-        save_geolist_to_h5(outfile, geolist, overwrite=true)
+        Sario.save_geolist_to_h5(outfile, geolist, overwrite=true)
         save_reference(outfile, unw_stack_file, outdset, flat_dset)
     end
 
@@ -104,8 +104,8 @@ end
 
 
 function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
-    geolist = load_geolist_from_h5(unw_stack_file)
-    intlist = load_intlist_from_h5(unw_stack_file)
+    geolist = Sario.load_geolist_from_h5(unw_stack_file)
+    intlist = Sario.load_intlist_from_h5(unw_stack_file)
 
     # If we are ignoreing some indices, remove them from for all pixels
     valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file, max_temporal_baseline)
@@ -160,20 +160,49 @@ function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, tim
     return phi_arr
 end
 
-function save_line_fit(unreg_fname)
-    geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
-    geolist_nums = [( g - geolist[1]).value for g in geolist]
-    f = h5open(unreg_fname)
-    dset = f["stack"]
-    fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
-    fout = h5open(fname_out, "w")
-    d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
-    dset_out = fout["stack"]
-    for i in 1:size(dset, 1)
-        for j in 1:size(dset, 2)
-            p = polyfit(geolist_nums, vec(dset[i, j, :]), 1)
-            dset_out[i, j] = p(geolist_nums[end])
+function save_deformation(h5file,
+                          deformation,
+                          dem_rsc;
+                          dset_name=STACK_DSET,
+                          do_permute=true,
+                          unw_stack_file="unw_stack.h5")
+    Sario.save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
+    sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+end
+
+function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_dset, overwrite=true)
+    # Delete if exists
+    if overwrite
+        h5open(h5file) do f
+            if exists(attrs(f[dset_name]), REFERENCE_ATTR)
+                a_delete(f[dset_name], REFERENCE_ATTR)
+            end
+            if exists(attrs(f[dset_name]), REFERENCE_STATION_ATTR)
+                a_delete(f[dset_name], REFERENCE_STATION_ATTR)
+            end
         end
     end
-    close(fout); close(f)
+    # Read ref. unfo from unw file, save what was used to deformation result file
+    reference = get(h5readattr(unw_stack_file, stack_flat_shifted_dset), REFERENCE_ATTR, "")
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_ATTR => reference))
+    reference_station = get(h5readattr(unw_stack_file, stack_flat_shifted_dset), REFERENCE_STATION_ATTR, "")
+    h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR => reference_station))
 end
+
+# function save_line_fit(unreg_fname)
+#     geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
+#     geolist_nums = [( g - geolist[1]).value for g in geolist]
+#     f = h5open(unreg_fname)
+#     dset = f["stack"]
+#     fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
+#     fout = h5open(fname_out, "w")
+#     d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
+#     dset_out = fout["stack"]
+#     for i in 1:size(dset, 1)
+#         for j in 1:size(dset, 2)
+#             p = polyfit(geolist_nums, vec(dset[i, j, :]), 1)
+#             dset_out[i, j] = p(geolist_nums[end])
+#         end
+#     end
+#     close(fout); close(f)
+# end
