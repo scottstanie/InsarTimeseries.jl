@@ -117,9 +117,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[FFMPEG]]
 deps = ["BinaryProvider", "Libdl"]
-git-tree-sha1 = "1dd2128ff10894081f30931b355dc892d1352de9"
+git-tree-sha1 = "f65cf703281fb7917beca5ead1c67e6d60ef9597"
 uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
-version = "0.2.2"
+version = "0.2.3"
 
 [[FixedPointNumbers]]
 git-tree-sha1 = "d14a6fa5890ea3a7e5dcab6811114f132fec2b4b"
@@ -153,6 +153,11 @@ deps = ["BinaryProvider", "Blosc", "Libdl", "Mmap"]
 git-tree-sha1 = "635ae44613c8c8dcf5d5b0084bfa00abea498e1f"
 uuid = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 version = "0.12.0"
+
+[[InsarLOS]]
+path = "/Users/scott/repos/InsarLOS"
+uuid = "bdef267a-7fa5-4bf0-b628-7eda8cd1af64"
+version = "0.1.0"
 
 [[InteractiveUtils]]
 deps = ["Markdown"]
