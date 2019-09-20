@@ -158,15 +158,20 @@ end
 """Return the days of `geo` which are more than nsigma away from mean"""
 function nsigma_days(geo, int, val, nsigma=3)
     # means = mean_abs_val(geo, int, val)
-    # means = median_abs_val(geo, int, val)  # TODO: change "means" if its not means
+    # means = median_abs_val(geo, int, val); println("median abs")
+    # @show mednsigma(means, nsigma)
+    # TODO: change "means" if its not means
     # means = abs.(oneway_val(geo, int, val, mean))
     # means = abs.(oneway_val(geo, int, val, median))
     # means = oneway_val(geo, int, val, mean)
-    means = oneway_val(geo, int, val, median)  # TODO: change "means" if its not means
+    
+    means = oneway_val(geo, int, val, median); # println("median oneway")
+    # @show mednsigma(means, nsigma)
+    # TODO: change "means" if its not means
 
     # # FOR PRINTING ONLY
-    low, high = two_way_cutoff(means, nsigma)
-    println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
+    # low, high = two_way_cutoff(means, nsigma)
+    # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
 
     return geo[two_way_outliers(means, nsigma)]
 end

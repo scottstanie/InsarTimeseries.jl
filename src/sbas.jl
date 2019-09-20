@@ -111,7 +111,7 @@ function run_sbas(unw_stack_file::String,
 end
 
 # Need the .I so we can use to load from h5 
-get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!load_mask(do_permute))]
+get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(do_permute))]
 
 # If we can load all stack file into memory, will be much quicker
 function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},

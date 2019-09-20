@@ -18,7 +18,7 @@ Returns:
 
     deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; 
+function run_inversion(unw_stack_file::String=UNW_FILENAME; 
                        outfile::Union{String,Nothing}=nothing, 
                        use_stackavg::Bool=false, 
                        constant_velocity::Bool=true, 
