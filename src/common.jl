@@ -66,6 +66,14 @@ function Base.eltype(h5file::String, dset::String)
     end
 end
 
+# Allow the HDF5 `names` to work on just filenam
+import Base.names
+function names(fname::AbstractString)
+    h5open(fname) do f
+        return names(f)
+    end
+end
+
 """Get the number of megabytes of RAM available
 Note this is higher than "Sys.free_memory()"
 """
