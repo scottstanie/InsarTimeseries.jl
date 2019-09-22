@@ -10,30 +10,25 @@ _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(file
 
 """Runs SBAS inversion on all unwrapped igrams
 
-Returns:
-
-    geolist (list[datetime]): dates of each SAR acquisition
-
-    phi_arr (ndarray): absolute phases of every pixel at each time
-
-    deformation (ndarray): matrix of deformations at each pixel and time
 """
-function run_inversion(unw_stack_file::String; 
+function run_inversion(;unw_stack_file::String,
                        outfile::Union{String,Nothing}=nothing, 
-                       use_stackavg::Bool=false, 
+                       stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
                        ignore_geo_file=nothing, 
                        max_temporal_baseline::Union{Int, Nothing}=nothing,
                        alpha::Float32=0.0f0,
                        L1::Bool=false,  
                        use_distributed=true)
+    if isnothing(outfile)
+        outfile = _default_outfile()
+    end
                        
-
     # the valid igram indices is out of all layers in the stack and mask files 
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
     # Now: can we load the input stack into memory? or do we need distributed?
-    flat_dset = use_stackavg ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
+    flat_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
     stack_file_size = _stack_size_mb(unw_stack_file, flat_dset)
     can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
 
@@ -42,8 +37,8 @@ function run_inversion(unw_stack_file::String;
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
-    outdset = use_stackavg ? "stack" : "velos"  # TODO: get this back to hwere not only velos
-    if use_stackavg
+    outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
+    if stack_average
         is_hdf5 = false
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)

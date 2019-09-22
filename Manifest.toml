@@ -155,6 +155,7 @@ uuid = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 version = "0.12.0"
 
 [[InsarLOS]]
+deps = ["Glob", "LinearAlgebra", "SQLite", "Sario"]
 path = "/Users/scott/repos/InsarLOS"
 uuid = "bdef267a-7fa5-4bf0-b628-7eda8cd1af64"
 version = "0.1.0"
@@ -372,6 +373,14 @@ deps = ["DataAPI", "DataStructures", "LinearAlgebra", "Missings", "Printf", "Ran
 git-tree-sha1 = "c53e809e63fe5cf5de13632090bc3520649c9950"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 version = "0.32.0"
+
+[[TOML]]
+deps = ["Dates"]
+git-tree-sha1 = "70c12a7129b147aa9e43325c86f32f7fbb88245a"
+repo-rev = "master"
+repo-url = "https://github.com/wildart/TOML.jl.git"
+uuid = "191fdcea-f9f2-43e0-b922-d33f71e2abc3"
+version = "0.4.0"
 
 [[TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
