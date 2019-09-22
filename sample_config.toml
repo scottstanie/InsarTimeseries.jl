@@ -1,0 +1,31 @@
+### Files used in solving
+unw_stack_file = "unw_stack.h5"
+input_dset = "stack_flat_shifted"
+
+outfile = "deformation.h5"
+# This will be the dataset in the output file
+outdset = "velos"
+
+# name of .h5 file with mask data
+mask_stack_file = "masks.h5"
+
+ignore_geo_file = ""
+
+# If we want to add specific extra, list comma separated
+# TODO: implement or remove
+ignore_geo_dates = ""
+
+max_temporal_baseline = 500
+
+### Type of solver ###
+constant_velocity = true
+# Instead of SBAS: just average all igrams by date in a stack
+stack_average = false
+
+### Extra solver options ### 
+# Use L1 norm for SBAS cost instead of L2 least squares
+L1 = true
+
+# (SBAS) Strength of Tikhonov regularization
+alpha = 0.0
+

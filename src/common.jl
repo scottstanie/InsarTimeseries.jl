@@ -39,6 +39,8 @@ Base.in(date::Date, igram_list::AbstractArray{Igram}) = [date in igram for igram
 
 temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
 temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]
+span(dates::AbstractArray{Date, 1}) = (dates[end] - dates[1]).value
+span(igrams::AbstractArray{Igram, 1}) = (sort(igrams)[end][2] - sort(igrams)[1][1]).value
 
 
 # Extend views to work for datasets

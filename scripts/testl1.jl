@@ -404,25 +404,29 @@ function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baseline
     return fig, axes
 end
 
-function plot_big_days(geolist, intlist, vals, B, to_cm=true, label=nothing)
+function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=1)
     scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
     v = vals .* scale   
 
     plt.figure()
     plt.scatter(B, v, label=label)
 
-    means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
-    highest_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
+    # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
+    # highest_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
+    
+    highest_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma)
     ym = maximum(abs.(v)) * 1.2
     ylims = to_cm ? (-ym, ym) : (0, ym)  # correlation: 0 as bottom
 
-    for ii in 1:3
-        hh = highest_days[ii][2]
+    # for ii in 1:3
+    for (ii, hh) in enumerate(highest_days)
+        # hh = highest_days[ii][2]
         plt.scatter(InsarTimeseries.Blins_by_date(hh, intlist, B),
                                          InsarTimeseries.vals_by_date(hh, intlist, v),
+                                         color="red",
                                          label="highest $ii")
         plt.ylim(ylims)
     end
-    plt.legend()
+    # plt.legend()
     plt.show(block=false)
 end
