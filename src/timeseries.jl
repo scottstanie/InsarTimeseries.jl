@@ -45,16 +45,18 @@ function run_inversion(; unw_stack_file::String="",
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates)
-            return run_inversion(split_dates=[], split_count=split_count+1, min_date=d1, max_date=d2,
+            odf, ods = run_inversion(split_dates=[], split_count=split_count+1, min_date=d1, max_date=d2,
                                  unw_stack_file=unw_stack_file, input_dset=input_dset, 
                                  outfile=outfile, outdset=outdset, stack_average=stack_average, 
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
                                  use_distributed=use_distributed, kwargs...)
+            # TODO: figure out how to collect/return the multiple dsets
         end
     else
         split_count += 1
     end
+    cur_outdset = outdset * String(split_count)
     
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
@@ -73,7 +75,7 @@ function run_inversion(; unw_stack_file::String="",
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
-    # outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
+    # cur_outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if stack_average
         is_hdf5 = false
         println("Averaging stack for solution")
@@ -88,20 +90,20 @@ function run_inversion(; unw_stack_file::String="",
         # TODO: also do this for the masks
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
-        # outdset = "stack"
+        # cur_outdset = "stack"
         # h5open(unw_stack_file) do unw_file
         #     unw_stack = unw_file[input_dset]
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
         #                       constant_velocity, alpha, L1)
         # end
         if use_distributed
-            velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, outdset,
+            velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                      geolist, intlist, valid_igram_indices, 
                                      constant_velocity, alpha, L1)
         else
             # If we want to read the whole stack in at once:
             @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
-            velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
+            velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
                                      constant_velocity, alpha, L1)
         end
 
@@ -127,9 +129,9 @@ function run_inversion(; unw_stack_file::String="",
     end
 
     save_geolist_to_h5(outfile, geolist, overwrite=true)
-    save_reference(outfile, unw_stack_file, outdset, input_dset)
+    save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
 
-    return outfile, outdset
+    return outfile, cur_outdset
 end
 
 
