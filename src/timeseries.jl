@@ -18,7 +18,8 @@ function run_inversion(config_file::Dict{AbstractString, Any})
     conf_dict = TOML.parsefile(config_file)
     # Convert to symbols so it works to pass as kwargs
     symbol_dict = Dict(Symbol(k) => v for (k, v) in conf_dict)
-    return run_inversion(symbol_dict...)
+    outfile, outdset = run_inversion(symbol_dict...)
+    h5writeattr(outfile, outdset, conf_dict)
 end 
 
 function run_inversion(; unw_stack_file::String="",
@@ -30,7 +31,7 @@ function run_inversion(; unw_stack_file::String="",
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
                        split_dates::AbstractArray=[],
-                       split_count=1,
+                       split_count=0,
                        min_date::DateOrNone=nothing,
                        max_date::DateOrNone=nothing,
                        alpha::Float32=0.0f0,
@@ -44,13 +45,15 @@ function run_inversion(; unw_stack_file::String="",
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates)
-            return run_inversion(split_dates=[], unw_stack_file=unw_stack_file, 
-                                 input_dset=input_dset, outfile=outfile, outdset=outdset, 
-                                 stack_average=stack_average, constant_velocity=constant_velocity, 
-                                 ignore_geo_file=ignore_geo_file, 
+            return run_inversion(split_dates=[], split_count=split_count+1, min_date=d1, max_date=d2,
+                                 unw_stack_file=unw_stack_file, input_dset=input_dset, 
+                                 outfile=outfile, outdset=outdset, stack_average=stack_average, 
+                                 constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
                                  use_distributed=use_distributed, kwargs...)
         end
+    else
+        split_count += 1
     end
     
     # the valid igram indices is out of all possible layers in the stack
@@ -192,6 +195,13 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     println("Ignoring $(length(igram_date_list) - length(valid_igrams)) igrams total")
 
     return valid_geo_indices, valid_igram_indices
+end
+
+"""Get min,max pairs to split up interval of dates"""
+function _get_pairs(dates)
+    isempty(dates) && return (nothing, nothing)
+    d1, dlast = (nothing, dates[1]), (dates[1], nothing)
+    return [d1, zip(dates[1:end-1], dates[2:end])..., dlast]
 end
 
 """Finds the number of days between successive .geo files"""
