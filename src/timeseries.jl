@@ -23,6 +23,7 @@ function run_inversion(config_file::Dict{AbstractString, Any})
     h5writeattr(outfile, outdset, conf_dict)
 end 
 
+# TODO: overwrites in the dset
 function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
@@ -46,7 +47,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates)
             println("Running inversion on date split: ($(_strnothing(d1)), $(_strnothing(d2))) ")
-            odf, ods = run_inversion(split_dates=[], split_count=split_count+1, min_date=d1, max_date=d2,
+            split_count += 1
+            odf, ods = run_inversion(split_dates=[], split_count=split_count, min_date=d1, max_date=d2,
                                  unw_stack_file=unw_stack_file, input_dset=input_dset, 
                                  outfile=outfile, outdset=outdset, stack_average=stack_average, 
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
@@ -54,8 +56,11 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                                  use_distributed=use_distributed)
             # TODO: figure out how to collect/return the multiple dsets
         end
+        return outfile, outdset
     else
-        split_count += 1
+        if split_count == 0
+            split_count += 1
+        end
     end
     cur_outdset = outdset * string(split_count)
     
@@ -112,6 +117,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     end
     ####################
 
+    dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
     # TODO: clean up this saving... maybe do it in a post step? handle it with config?
     if is_3d
         timediffs = day_diffs(geolist)
@@ -121,14 +127,15 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         deformation = PHASE_TO_CM .* phi_arr
 
         println("Saving deformation to $outfile")
-        @time save_deformation(outfile, deformation, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
+        @time save_deformation(outfile, deformation, dem_rsc,
+                               do_permute=!is_hdf5, dset_name=cur_outdset)
+    else
+        sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
     end
 
-    dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
-    sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 
     Sario.save_geolist_to_h5(outfile, geolist, overwrite=true)
-    save_reference(outfile, unw_stack_file, outdset, input_dset)
+    save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
 
     return outfile, cur_outdset
 end
@@ -258,8 +265,7 @@ function save_deformation(h5file,
                           deformation,
                           dem_rsc;
                           dset_name=STACK_DSET,
-                          do_permute=true,
-                          unw_stack_file="unw_stack.h5")
+                          do_permute=true)
     Sario.save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
     sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 end
