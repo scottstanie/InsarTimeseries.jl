@@ -7,6 +7,8 @@ const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
 const P2MM = 365 * 10 * PHASE_TO_CM   # mm / year
 
+const DateOrNone = Union{Date, Nothing}
+
 _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(filename, dset)) / 1e6 
 
 """Runs SBAS inversion on all unwrapped igrams
@@ -22,11 +24,15 @@ end
 function run_inversion(; unw_stack_file::String="",
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
-                       outdset::String="velos1",
+                       outdset::String="velos",
                        stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
+                       split_dates::AbstractArray=[],
+                       split_count=1,
+                       min_date::DateOrNone=nothing,
+                       max_date::DateOrNone=nothing,
                        alpha::Float32=0.0f0,
                        L1::Bool=false,  
                        use_distributed=true,
@@ -35,9 +41,23 @@ function run_inversion(; unw_stack_file::String="",
         outfile = _default_outfile()
     end
 
+    # Now for each split date, run this function on a section
+    if !isempty(split_dates)
+        for (d1, d2) in _get_pairs(split_dates)
+            return run_inversion(split_dates=[], unw_stack_file=unw_stack_file, 
+                                 input_dset=input_dset, outfile=outfile, outdset=outdset, 
+                                 stack_average=stack_average, constant_velocity=constant_velocity, 
+                                 ignore_geo_file=ignore_geo_file, 
+                                 max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
+                                 use_distributed=use_distributed, kwargs...)
+        end
+    end
+    
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
-                                                                 max_temporal_baseline)
+                                                                 max_temporal_baseline,
+                                                                 min_date=min_date,
+                                                                 max_date=max_date)
 
     # # Dont need shift for avg
     # input_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET
@@ -110,7 +130,8 @@ function run_inversion(; unw_stack_file::String="",
 end
 
 
-function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
+function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline;
+                             min_date::DateOrNone=nothing, max_date::DateOrNone=nothing)
     geolist = load_geolist_from_h5(unw_stack_file)
     intlist = load_intlist_from_h5(unw_stack_file)
 
@@ -120,7 +141,6 @@ function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_base
     return geolist[geo_idxs], intlist[igram_idxs], igram_idxs
 end
 
-const DateOrNone = Union{Date, Nothing}
 """Cut down the full list of interferograms and geo dates
 
 - Cuts date ranges (e.g. piecewise linear solution) with  `min_date` and `max_date`

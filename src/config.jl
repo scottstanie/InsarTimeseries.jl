@@ -16,7 +16,7 @@ DEFAULT_KEYS = Dict(
 
     "outfile" => _default_outfile(),
     # This will be the dataset in the output file
-    "outdset" => "velos1",
+    "outdset" => "velos",
 
     # name of .h5 file with mask data
     "mask_stack_file" => "masks.h5",

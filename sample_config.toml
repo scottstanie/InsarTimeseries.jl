@@ -4,7 +4,7 @@ input_dset = "stack_flat_shifted"
 
 outfile = "deformation.h5"
 # This will be the dataset in the output file
-outdset = "velos1"
+outdset = "velos"
 
 # name of .h5 file with mask data
 mask_stack_file = "masks.h5"
