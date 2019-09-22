@@ -142,7 +142,7 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
         end
     end
 
-    println("Writing solution into $outfile")
+    println("Writing solution into $outfile : $outdset")
     h5open(outfile, "cw") do f
         f[outdset] = outstack
         f["counts"] = countstack

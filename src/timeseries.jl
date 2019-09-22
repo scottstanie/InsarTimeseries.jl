@@ -10,6 +10,7 @@ const P2MM = 365 * 10 * PHASE_TO_CM   # mm / year
 const DateOrNone = Union{Date, Nothing}
 
 _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(filename, dset)) / 1e6 
+_strnothing(aa) = isnothing(aa) ? "nothing" : aa 
 
 """Runs SBAS inversion on all unwrapped igrams
 
@@ -22,7 +23,7 @@ function run_inversion(config_file::Dict{AbstractString, Any})
     h5writeattr(outfile, outdset, conf_dict)
 end 
 
-function run_inversion(; unw_stack_file::String="",
+function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
                        outdset::String="velos",
@@ -30,14 +31,13 @@ function run_inversion(; unw_stack_file::String="",
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
-                       split_dates::AbstractArray=[],
+                       split_dates=[],
                        split_count=0,
                        min_date::DateOrNone=nothing,
                        max_date::DateOrNone=nothing,
                        alpha::Float32=0.0f0,
                        L1::Bool=false,  
-                       use_distributed=true,
-                       kwargs...)
+                       use_distributed=true)
     if isempty(outfile)
         outfile = _default_outfile()
     end
@@ -45,18 +45,19 @@ function run_inversion(; unw_stack_file::String="",
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates)
+            println("Running inversion on date split: ($(_strnothing(d1)), $(_strnothing(d2))) ")
             odf, ods = run_inversion(split_dates=[], split_count=split_count+1, min_date=d1, max_date=d2,
                                  unw_stack_file=unw_stack_file, input_dset=input_dset, 
                                  outfile=outfile, outdset=outdset, stack_average=stack_average, 
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
-                                 use_distributed=use_distributed, kwargs...)
+                                 use_distributed=use_distributed)
             # TODO: figure out how to collect/return the multiple dsets
         end
     else
         split_count += 1
     end
-    cur_outdset = outdset * String(split_count)
+    cur_outdset = outdset * string(split_count)
     
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
@@ -135,6 +136,7 @@ end
 
 function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline;
                              min_date::DateOrNone=nothing, max_date::DateOrNone=nothing)
+    @show unw_stack_file
     geolist = Sario.load_geolist_from_h5(unw_stack_file)
     intlist = Sario.load_intlist_from_h5(unw_stack_file)
 
@@ -156,6 +158,7 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
 
     if isempty(ignore_geo_file)
         println("Not ignoring any .geo dates")
+        ignore_geos = []
     else
         ignore_geos = sort(sario.find_geos(filename=ignore_geo_file, parse=true))
         println("Ignoring the following .geo dates:")
