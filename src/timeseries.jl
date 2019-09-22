@@ -36,7 +36,8 @@ function run_inversion(; unw_stack_file::String="",
     end
 
     # the valid igram indices is out of all possible layers in the stack
-    geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
+    geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
+                                                                 max_temporal_baseline)
 
     # # Dont need shift for avg
     # input_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET
@@ -114,13 +115,20 @@ function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_base
     intlist = load_intlist_from_h5(unw_stack_file)
 
     # If we are ignoreing some indices, remove them from for all pixels
-    valid_geo_indices, valid_igram_indices = find_valid_indices(geolist, intlist, ignore_geo_file, max_temporal_baseline)
-    return geolist[valid_geo_indices], intlist[valid_igram_indices], valid_igram_indices
+    geo_idxs, igram_idxs = find_valid_indices(geolist, intlist, min_date, max_date, 
+                                              ignore_geo_file, max_temporal_baseline)
+    return geolist[geo_idxs], intlist[igram_idxs], igram_idxs
 end
 
+const DateOrNone = Union{Date, Nothing}
+"""Cut down the full list of interferograms and geo dates
 
-"""Read extra file to ignore certain dates of interferograms"""
+- Cuts date ranges (e.g. piecewise linear solution) with  `min_date` and `max_date`
+- Can ignore whole dates by reading `ignore_geo_file`
+- Prunes long time baseline interferograms with `max_temporal_baseline`
+"""
 function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, 
+                            min_date::DateOrNone=nothing, max_date=DateOrNone=nothing,
                             ignore_geo_file::String="", max_temporal_baseline::Int=500)
 
     if isempty(ignore_geo_file)
@@ -137,6 +145,17 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
     valid_igrams = [ig for ig in igram_date_list if !(ig in ignore_geos)]
 
+    # Remove geos and igrams outside of min/max range
+    if !isnothing(min_date)
+        println("Removing data before $min_date")
+        valid_geos = [g for g in valid_geos if  g < min_date]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] < min_date || ig[2] < min_date)]
+    end
+    if !isnothing(max_date)
+        println("Removing data after $max_date")
+        valid_geos = [g for g in valid_geos if g > max_date ]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] > max_date || ig[2] > max_date)]
+    end
 
     ### Remove long time baseline igrams ###
     valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
