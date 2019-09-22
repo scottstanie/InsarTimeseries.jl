@@ -12,20 +12,21 @@ _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(file
 """Runs SBAS inversion on all unwrapped igrams
 
 """
-function run_inversion(config_file::Dict{String, Any})
+function run_inversion(config_file::Dict{AbstractString, Any})
     conf_dict = TOML.parsefile(config_file)
-    return run_inversion(conf_dict...)
+    # Convert to symbols so it works to pass as kwargs
+    symbol_dict = Dict(Symbol(k) => v for (k, v) in conf_dict)
+    return run_inversion(symbol_dict...)
 end 
 
-function run_inversion(;
-                       unw_stack_file::String="",
+function run_inversion(; unw_stack_file::String="",
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
                        outdset::String="velos1",
                        stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
-                       max_temporal_baseline::Int=1000,
+                       max_temporal_baseline::Int=500,
                        alpha::Float32=0.0f0,
                        L1::Bool=false,  
                        use_distributed=true,
@@ -117,6 +118,42 @@ function load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_base
     return geolist[valid_geo_indices], intlist[valid_igram_indices], valid_igram_indices
 end
 
+
+"""Read extra file to ignore certain dates of interferograms"""
+function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, 
+                            ignore_geo_file::String="", max_temporal_baseline::Int=500)
+
+    if isempty(ignore_geo_file)
+        println("Not ignoring any .geo dates")
+    else
+        ignore_geos = sort(sario.find_geos(filename=ignore_geo_file, parse=true))
+        println("Ignoring the following .geo dates:")
+        println(ignore_geos)
+    end
+
+    # TODO: do I want to be able to pass an array of dates to ignore?
+
+    # First filter by remove igrams with either date in `ignore_geo_file`
+    valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
+    valid_igrams = [ig for ig in igram_date_list if !(ig in ignore_geos)]
+
+
+    ### Remove long time baseline igrams ###
+    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+
+    # This is just for logging purposes:
+    too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
+    println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
+
+
+    ### Collect remaining geo dates and igrams
+    valid_geo_indices = indexin(valid_geos, geo_date_list)
+    valid_igram_indices = indexin(valid_igrams, igram_date_list)
+
+    println("Ignoring $(length(igram_date_list) - length(valid_igrams)) igrams total")
+
+    return valid_geo_indices, valid_igram_indices
+end
 
 """Finds the number of days between successive .geo files"""
 function day_diffs(geolist::Array{Date, 1})
