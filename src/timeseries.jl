@@ -1,6 +1,7 @@
 using Dates
 using Statistics
 using LinearAlgebra
+import TOML
 
 const SENTINEL_WAVELENGTH = 5.5465763  # cm
 const PHASE_TO_CM = SENTINEL_WAVELENGTH / (-4 * π )
@@ -11,25 +12,35 @@ _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(file
 """Runs SBAS inversion on all unwrapped igrams
 
 """
-function run_inversion(;unw_stack_file::String,
-                       outfile::Union{String,Nothing}=nothing, 
+function run_inversion(config_file::Dict{String, Any})
+    conf_dict = TOML.parsefile(config_file)
+    return run_inversion(conf_dict...)
+end 
+
+function run_inversion(;
+                       unw_stack_file::String="",
+                       input_dset::String=STACK_FLAT_SHIFTED_DSET,
+                       outfile::String="", 
+                       outdset::String="velos1",
                        stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
-                       ignore_geo_file=nothing, 
-                       max_temporal_baseline::Union{Int, Nothing}=nothing,
+                       ignore_geo_file::String="", 
+                       max_temporal_baseline::Int=1000,
                        alpha::Float32=0.0f0,
                        L1::Bool=false,  
-                       use_distributed=true)
-    if isnothing(outfile)
+                       use_distributed=true,
+                       kwargs...)
+    if isempty(outfile)
         outfile = _default_outfile()
     end
-                       
-    # the valid igram indices is out of all layers in the stack and mask files 
+
+    # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, max_temporal_baseline)
 
+    # # Dont need shift for avg
+    # input_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET
     # Now: can we load the input stack into memory? or do we need distributed?
-    flat_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET  # Dont need shift for avg
-    stack_file_size = _stack_size_mb(unw_stack_file, flat_dset)
+    stack_file_size = _stack_size_mb(unw_stack_file, input_dset)
     can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
 
     # Note: as of version 1.3.0rc2, my threaded version on preloaded matrix is slower than
@@ -37,11 +48,11 @@ function run_inversion(;unw_stack_file::String,
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
-    outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
+    # outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if stack_average
         is_hdf5 = false
         println("Averaging stack for solution")
-        vstack = run_stackavg(unw_stack_file, flat_dset, geolist, intlist)
+        vstack = run_stackavg(unw_stack_file, input_dset, geolist, intlist)
         is_3d = true  # TODO: stack avg should really be 2d velo
     else
         is_hdf5 = true
@@ -54,17 +65,17 @@ function run_inversion(;unw_stack_file::String,
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
         # outdset = "stack"
         # h5open(unw_stack_file) do unw_file
-        #     unw_stack = unw_file[flat_dset]
+        #     unw_stack = unw_file[input_dset]
         #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
         #                       constant_velocity, alpha, L1)
         # end
         if use_distributed
-            velo_file_out = run_sbas(unw_stack_file, flat_dset, outfile, outdset,
+            velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, outdset,
                                      geolist, intlist, valid_igram_indices, 
                                      constant_velocity, alpha, L1)
         else
             # If we want to read the whole stack in at once:
-            @time unw_stack = h5read(unw_stack_file, flat_dset)[:, :, valid_igram_indices]
+            @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
             velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
                                      constant_velocity, alpha, L1)
         end
@@ -82,19 +93,18 @@ function run_inversion(;unw_stack_file::String,
     end
 
     dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
-    if !isnothing(outfile)
-        if is_3d
-            println("Saving deformation to $outfile")
-            @time save_deformation(outfile, deformation, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
-        else
-            sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
-        end
 
-        save_geolist_to_h5(outfile, geolist, overwrite=true)
-        save_reference(outfile, unw_stack_file, outdset, flat_dset)
+    if is_3d
+        println("Saving deformation to $outfile")
+        @time save_deformation(outfile, deformation, dem_rsc, unw_stack_file=unw_stack_file, do_permute=!is_hdf5)
+    else
+        sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
     end
 
-    # return (geolist, phi_arr, deformation)
+    save_geolist_to_h5(outfile, geolist, overwrite=true)
+    save_reference(outfile, unw_stack_file, outdset, input_dset)
+
+    return outfile, outdset
 end
 
 

@@ -20,14 +20,13 @@ end
 using Sario
 
 include("./common.jl")
+include("./config.jl")
 include("./prepare.jl")
 include("./stackavg.jl")
 include("./optimize.jl")
 include("./sbas.jl")
 include("./timeseries.jl")
 include("./mask.jl")
-include("./projections.jl")
-include("./los.jl")
 include("./analysis.jl")
 
 

@@ -1,8 +1,10 @@
 read_geolist_file(filename::String) = sario.find_geos(filename=filename)
 
 """Read extra file to ignore certain dates of interferograms"""
-function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, ignore_geo_file, max_temporal_baseline)
-    if isnothing(ignore_geo_file) && isnothing(max_temporal_baseline)
+function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Array{Igram, 1}, ignore_geo_file::String="", max_temporal_baseline::Int=2000)
+
+    geo_span = geo_date_list[end] - 
+    if isempty(ignore_geo_file) && max_temporal_baseline > geo_span
         return 1:length(geo_date_list), 1:length(igram_date_list)
     end
 
@@ -15,15 +17,14 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     valid_igrams = [ig for ig in igram_date_list if !(ig in ignore_geos)]
 
     # Now also remove igrams spanning longer than `max_temporal_baseline`
-    #
-    # Compute for logging purposes:
-    if !isnothing(max_temporal_baseline)
-        # First filtering is just for logging purposes:
-        too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
-        println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
+    # first part computed for logging purposes:
 
-        valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
-    end
+    # First filtering is just for logging purposes:
+    too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
+    println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
+
+    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+
 
     valid_geo_indices = indexin(valid_geos, geo_date_list)
     valid_igram_indices = indexin(valid_igrams, igram_date_list)

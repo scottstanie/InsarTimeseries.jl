@@ -376,9 +376,9 @@ version = "0.32.0"
 
 [[TOML]]
 deps = ["Dates"]
-git-tree-sha1 = "70c12a7129b147aa9e43325c86f32f7fbb88245a"
+git-tree-sha1 = "346e0114aebf533ea5b4e06d6442c7e5b272c745"
 repo-rev = "master"
-repo-url = "https://github.com/wildart/TOML.jl.git"
+repo-url = "https://github.com/scottstanie/TOML.jl"
 uuid = "191fdcea-f9f2-43e0-b922-d33f71e2abc3"
 version = "0.4.0"
 
