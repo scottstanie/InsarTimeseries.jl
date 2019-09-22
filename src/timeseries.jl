@@ -117,7 +117,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     end
     ####################
 
-    dem_rsc = sario.load_dem_from_h5(unw_stack_file) 
+    dem_rsc = Sario.load_dem_from_h5(unw_stack_file) 
     # TODO: clean up this saving... maybe do it in a post step? handle it with config?
     if is_3d
         timediffs = day_diffs(geolist)
@@ -130,9 +130,10 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         @time save_deformation(outfile, deformation, dem_rsc,
                                do_permute=!is_hdf5, dset_name=cur_outdset)
     else
-        sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+        Sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
     end
 
+    # TODO: I should also save the intlist... as well as the max baseline/config stuff
 
     Sario.save_geolist_to_h5(outfile, geolist, overwrite=true)
     save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
