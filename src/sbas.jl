@@ -15,6 +15,9 @@ import Glob
 #     return vstack
 # end
 
+"""Helper to make a path to same directory as `dset`, with new name `counts`"""
+_count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
+# _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
 function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
                     outfile, outdset, B, geolist, intlist, rho, alpha, L1=true;
                     row=nothing, col=nothing)
@@ -30,7 +33,7 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = soln_p2mm
-        f["counts"][row, col] = igram_count
+        f[_count_dset(outdset)][row, col] = igram_count
     end
 
 end
@@ -91,19 +94,19 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for id in Distributed.workers()
         h5open(string(id)*outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
-            d_create(fout, "counts", datatype(Int32), dataspace(nrows, ncols))
+            d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
         end
     end
  
-    @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:1000, 1:2500))
+    # @time @sync @distributed for (row, col) in get_unmasked_idxs()
+    @time @sync @distributed for (row, col) in collect(Iterators.product(1:10, 1:25))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
         proc_pixel(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, geolist, intlist, rho, alpha, L1,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
-    @time merge_partial_files(outfile, outdset, "counts")
+    @time merge_partial_files(outfile, outdset, _count_dset(outdset))
     return outfile, outdset
 end
 
@@ -145,7 +148,7 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
     println("Writing solution into $outfile : $outdset")
     h5open(outfile, "cw") do f
         f[outdset] = outstack
-        f["counts"] = countstack
+        f[_count_dset(outdset)] = countstack
     end
     return outfile, outdset
 end
