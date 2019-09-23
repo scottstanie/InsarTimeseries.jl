@@ -62,7 +62,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
         end
     end
-    cur_outdset = outdset * string(split_count)
+    # Make the dset one within the group, numbered by which split this is
+    cur_outdset = "$outdset/$split_count"
     
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
@@ -70,6 +71,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                                                                  min_date=min_date,
                                                                  max_date=max_date)
 
+
+    println("$cur_outdset geolist range: : $(extrema(geolist))")
     # # Dont need shift for avg
     # input_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET
     # Now: can we load the input stack into memory? or do we need distributed?
@@ -118,6 +121,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     ####################
 
     dem_rsc = Sario.load_dem_from_h5(unw_stack_file) 
+    Sario.save_dem_to_h5(outfile, dem_rsc, overwrite=true)
     # TODO: clean up this saving... maybe do it in a post step? handle it with config?
     if is_3d
         timediffs = day_diffs(geolist)
@@ -126,16 +130,13 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         # Multiply by wavelength ratio to go from phase to cm
         deformation = PHASE_TO_CM .* phi_arr
 
-        println("Saving deformation to $outfile")
-        @time save_deformation(outfile, deformation, dem_rsc,
-                               do_permute=!is_hdf5, dset_name=cur_outdset)
-    else
-        Sario.save_dem_to_h5(outfile, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
+        println("Saving deformation to $outfile: $cur_outdset")
+        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=!is_hdf5)
     end
 
     # TODO: I should also save the intlist... as well as the max baseline/config stuff
 
-    Sario.save_geolist_to_h5(outfile, geolist, overwrite=true)
+    Sario.save_geolist_to_h5(outfile, cur_outdset, geolist, overwrite=true)
     save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
 
     return outfile, cur_outdset
@@ -181,14 +182,14 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
 
     # Remove geos and igrams outside of min/max range
     if !isnothing(min_date)
-        println("Removing data before $min_date")
-        valid_geos = [g for g in valid_geos if  g < min_date]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] < min_date || ig[2] < min_date)]
+        println("Keeping data after min_date: $min_date")
+        valid_geos = [g for g in valid_geos if g > min_date]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] > min_date || ig[2] > min_date)]
     end
     if !isnothing(max_date)
-        println("Removing data after $max_date")
-        valid_geos = [g for g in valid_geos if g > max_date ]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] > max_date || ig[2] > max_date)]
+        println("Keeping data only before max_date: $max_date")
+        valid_geos = [g for g in valid_geos if g < max_date ]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date || ig[2] < max_date)]
     end
 
     ### Remove long time baseline igrams ###
@@ -260,15 +261,6 @@ function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, tim
     phi_arr = cumsum(coalesce.(phi_diffs, 0))
     pushfirst!(phi_arr, 0)
     return phi_arr
-end
-
-function save_deformation(h5file,
-                          deformation,
-                          dem_rsc;
-                          dset_name=STACK_DSET,
-                          do_permute=true)
-    Sario.save_hdf5_stack(h5file, dset_name, deformation, do_permute=do_permute)
-    sario.save_dem_to_h5(h5file, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=true)
 end
 
 function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_dset, overwrite=true)

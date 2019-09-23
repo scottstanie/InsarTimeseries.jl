@@ -73,6 +73,11 @@ function names(fname::AbstractString)
         return names(f)
     end
 end
+function names(fname::AbstractString, group::AbstractString)
+    h5open(fname) do f
+        return names(f[group])
+    end
+end
 
 """Get the number of megabytes of RAM available
 Note this is higher than "Sys.free_memory()"
