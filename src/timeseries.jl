@@ -93,10 +93,10 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     else
         is_hdf5 = true
         println("Performing SBAS solution")
-        println("Reading unw stack")
+
+        # println("Reading unw stack")
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
         # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
-        # TODO: also do this for the masks
 
         # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
         # cur_outdset = "stack"
@@ -184,12 +184,12 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     if !isnothing(min_date)
         println("Keeping data after min_date: $min_date")
         valid_geos = [g for g in valid_geos if g > min_date]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] > min_date || ig[2] > min_date)]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] > min_date && ig[2] > min_date)]
     end
     if !isnothing(max_date)
         println("Keeping data only before max_date: $max_date")
         valid_geos = [g for g in valid_geos if g < max_date ]
-        valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date || ig[2] < max_date)]
+        valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date && ig[2] < max_date)]
     end
 
     ### Remove long time baseline igrams ###
