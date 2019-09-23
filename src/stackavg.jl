@@ -16,7 +16,7 @@ function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array
 
     picked_igram_indices = indices_from_full(chosen_igrams, full_igram_list)
     println("Out of $(length(picked_igram_indices)) desired igrams, "*
-            "$(sum(isnothing.(picked_igram_indices))) are not available")
+            "$(sum(isnothing.(picked_igram_indices))) are missing")
     filter!(.!isnothing, picked_igram_indices)
 
     # Load only these 
