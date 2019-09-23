@@ -53,7 +53,7 @@ max_temporal_baseline = 500
 # max_temporal_baseline = 1200
 
 # NOTE: not using the ignore file for now- using all .geos
-GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, nothing, max_temporal_baseline);
+GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, "", max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 
@@ -404,29 +404,46 @@ function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baseline
     return fig, axes
 end
 
-function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=1)
+function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=1, color=nothing)
+
+    # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
+    # high_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
+    high_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma)
+    return plot_days(geolist, intlist, vals, B, high_days, to_cm=to_cm, label=label, color=color)
+end
+
+function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothing, color=nothing)
     scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
     v = vals .* scale   
 
     plt.figure()
     plt.scatter(B, v, label=label)
 
-    # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
-    # highest_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
-    
-    highest_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma)
     ym = maximum(abs.(v)) * 1.2
     ylims = to_cm ? (-ym, ym) : (0, ym)  # correlation: 0 as bottom
 
     # for ii in 1:3
-    for (ii, hh) in enumerate(highest_days)
+    for (ii, dd) in enumerate(date_arr)
         # hh = highest_days[ii][2]
-        plt.scatter(InsarTimeseries.Blins_by_date(hh, intlist, B),
-                                         InsarTimeseries.vals_by_date(hh, intlist, v),
-                                         color="red",
-                                         label="highest $ii")
+        plt.scatter(InsarTimeseries.Blins_by_date(dd, intlist, B),
+                                         InsarTimeseries.vals_by_date(dd, intlist, v),
+                                         color=color,
+                                         label="date=$dd")
         plt.ylim(ylims)
     end
-    # plt.legend()
+    plt.legend()
     plt.show(block=false)
+end
+
+function plotsplit(fname; vm=20, n=2)
+    vs = [permutedims(h5read(fname, "velos/$ii")) for ii in 1:n]
+
+    fig, axes = plt.subplots(1, n, squeeze=false)
+    for ii = 1:n
+        vi = vs[ii]
+        axes[ii].imshow(vi, vmin=-vm, vmax=vm, cmap="seismic_wide")
+    end
+    fig.suptitle(fname)
+    plt.show(block=false)
+    return fig, axes, vs
 end
