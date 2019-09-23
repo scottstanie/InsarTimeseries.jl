@@ -98,8 +98,8 @@ function run_sbas(unw_stack_file::String,
         end
     end
  
-    # @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    @time @sync @distributed for (row, col) in collect(Iterators.product(1:10, 1:25))
+    @time @sync @distributed for (row, col) in get_unmasked_idxs()
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:10, 1:25))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
         proc_pixel(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, B, geolist, intlist, rho, alpha, L1,
