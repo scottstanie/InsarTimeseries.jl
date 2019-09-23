@@ -33,6 +33,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
                        split_dates=[],
+                       gap=1,
                        split_count=0,
                        min_date::DateOrNone=nothing,
                        max_date::DateOrNone=nothing,
@@ -45,7 +46,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     isfile(outfile) && string(split_count) in names(outfile, outdset) && error("$outdset/$split_count exists in $outfile already")
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
-        for (d1, d2) in _get_pairs(split_dates)
+        for (d1, d2) in _get_pairs(split_dates, gap)
             println("Running inversion on date split: ($(_strnothing(d1)), $(_strnothing(d2))) ")
             split_count += 1
             odf, ods = run_inversion(split_dates=[], split_count=split_count, min_date=d1, max_date=d2,
@@ -164,6 +165,7 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
                             min_date::DateOrNone=nothing, max_date=DateOrNone=nothing,
                             ignore_geo_file::String="", max_temporal_baseline::Int=500)
 
+    ig1 = length(igram_date_list)  # For logging purposes, what do we start with
     if isempty(ignore_geo_file)
         println("Not ignoring any .geo dates")
         ignore_geos = []
@@ -178,6 +180,7 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
     # First filter by remove igrams with either date in `ignore_geo_file`
     valid_geos = [g for g in geo_date_list if !(g in ignore_geos)]
     valid_igrams = [ig for ig in igram_date_list if !(ig in ignore_geos)]
+    println("Ignoring $(ig1 - length(valid_igrams)) igrams listed in $ignore_geo_file")
 
     # Remove geos and igrams outside of min/max range
     if !isnothing(min_date)
@@ -191,28 +194,32 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
         valid_igrams = [ig for ig in valid_igrams if (ig[1] < max_date && ig[2] < max_date)]
     end
 
-    ### Remove long time baseline igrams ###
-    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
-
     # This is just for logging purposes:
     too_long_igrams = filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
     println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
+
+    ### Remove long time baseline igrams ###
+    valid_igrams = filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
 
 
     ### Collect remaining geo dates and igrams
     valid_geo_indices = indexin(valid_geos, geo_date_list)
     valid_igram_indices = indexin(valid_igrams, igram_date_list)
 
-    println("Ignoring $(length(igram_date_list) - length(valid_igrams)) igrams total")
+    println("Ignoring $(ig1 - length(valid_igrams)) igrams total")
 
     return valid_geo_indices, valid_igram_indices
 end
 
-"""Get min,max pairs to split up interval of dates"""
-function _get_pairs(dates)
+"""Get min,max pairs to split up interval of dates
+gap=1 means form adjacent pairs
+gap=2 skips a date in between, makes overlapping pairs to get larger, redundant estimates
+"""
+function _get_pairs(dates, gap=1)
     isempty(dates) && return (nothing, nothing)
-    d1, dlast = (nothing, dates[1]), (dates[1], nothing)
-    return [d1, zip(dates[1:end-1], dates[2:end])..., dlast]
+    length(dates) < gap && error("Need at least $gap dates if gap=$gap")
+    dates_pad = [nothing; dates; nothing]
+    return collect(zip(dates_pad[1:end-gap], dates_pad[(gap+1):end]))
 end
 
 """Finds the number of days between successive .geo files"""

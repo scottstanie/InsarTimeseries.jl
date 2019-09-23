@@ -24,10 +24,12 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
     # Also load correlations for cutoff
-    # TODO: if we dont care about corr, don't waste time loading this
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
-    #
-    soln_p2mm, igram_count = calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1)
+    # cor_thresh = 0.05
+    cor_pixel, cor_thresh = nothing, 0.0
+    
+    soln_p2mm, igram_count = calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1;
+                                       cor_pixel=cor_pixel, cor_thresh=cor_thresh)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
@@ -38,8 +40,11 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
 
 end
 
-function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true)::Tuple{Float32, Int64}
-    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=3)
+function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
+                   cor_pixel=nothing, cor_thresh=0.0)::Tuple{Float32, Int64}
+    sigma = 3
+    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=sigma,
+                                                        cor_pixel=cor_pixel, cor_thresh=cor_thresh)
 
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
