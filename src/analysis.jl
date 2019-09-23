@@ -35,6 +35,7 @@ function _good_idxs(bad_date_arr::AbstractArray{Date}, intlist)
                     (b in intlist for b in bad_date_arr),
                     init=falses(size(intlist)));
 end
+
 function _good_idxs(bad_igram_arr::AbstractArray{Igram}, intlist)
     return [!(ig in bad_igram_arr) for ig in intlist]
 end
@@ -162,10 +163,10 @@ function nsigma_days(geo, int, val, nsigma=3)
     # @show mednsigma(means, nsigma)
     # TODO: change "means" if its not means
     # means = abs.(oneway_val(geo, int, val, mean))
-    # means = abs.(oneway_val(geo, int, val, median))
+    means = abs.(oneway_val(geo, int, val, median))
     # means = oneway_val(geo, int, val, mean)
     
-    means = oneway_val(geo, int, val, median); # println("median oneway")
+    # means = oneway_val(geo, int, val, median); # println("median oneway")
     # @show mednsigma(means, nsigma)
     # TODO: change "means" if its not means
 

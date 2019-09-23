@@ -39,7 +39,7 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
 end
 
 function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true)::Tuple{Float32, Int64}
-    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=1)
+    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=3)
 
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data

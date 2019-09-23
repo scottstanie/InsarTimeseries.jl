@@ -42,7 +42,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     if isempty(outfile)
         outfile = _default_outfile()
     end
-
+    isfile(outfile) && string(split_count) in names(outfile, outdset) && error("$outdset/$split_count exists in $outfile already")
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates)
@@ -54,7 +54,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
                                  use_distributed=use_distributed)
-            # TODO: figure out how to collect/return the multiple dsets
         end
         return outfile, outdset
     else
