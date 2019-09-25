@@ -90,6 +90,22 @@ pos(x) = max.(x, 0)
 shrinkage(x, kappa) = pos(1 .- kappa ./ abs.(x)) .* x
 
 
+
+# ### Alternate: Solve the L1 fitting problem using Convex
+# # Note: this had a memory leak earlier when run on many pixels,
+# # possibly from the ECOS library
+# function l1_fit(A, b, x::Union{Convex.Variable, Nothing}=nothing, quiet=true)
+#     solver = ECOS.ECOSSolver(verbose=0)
+#     if isnothing(x)
+#         x = Convex.Variable(size(A, 2))
+#     end
+# 
+#     problem = Convex.minimize(norm(A*x - b, 1))
+#     Convex.solve!(problem, solver)
+#     return x.value
+# end
+
+
 #### IRLS algorithm functions: #### 
 l1_objective(A, x, b) = sum(abs.(A*x-b))
 
@@ -115,9 +131,9 @@ function irls(A::AbstractArray{<:AbstractFloat, 2}, b::AbstractArray{<:AbstractF
 end
 
 
+
 # # Function compatible for run_sbas
 # function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; iters=50, p=1) where {T<:AbstractFloat}
 #     return irls(B, pixel, iters=iters, p=p)
 # end
-
 

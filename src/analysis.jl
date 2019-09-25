@@ -198,6 +198,7 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
     #   will be all noise- we can't reliably sense such quickly moving ground
     # TODO: verify this third criteria?
 
+    # @show std(unw_pixel)
     # @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
     geo_clean, intlist_clean, unw_clean, B_clean = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
@@ -224,6 +225,7 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
         intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
     end
     # @show "fast: ", size(intlist_clean)
+    # @show std(unw_clean)
     return geo_clean, intlist_clean, unw_clean, B_clean
 end
 
@@ -250,8 +252,8 @@ function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
 end
 
 function largest_n_dates(geo, int, val, n=length(geo))
-    means = mean_abs_val(geo, int, val)
-    # means = abs.(oneway_val(geo, int, unw_vals, mean))
+    # means = mean_abs_val(geo, int, val)
+    means = abs.(oneway_val(geo, int, val, median)); println("largest abs(oneway)")
 
     # Sort by the means to order the geolist
     dates_tup = top_n(means, geo, n)[2]
