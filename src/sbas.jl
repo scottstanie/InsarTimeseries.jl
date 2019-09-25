@@ -7,7 +7,7 @@ import Glob
 _count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
 # _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
 function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
-                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true
+                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true,
                     prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
@@ -36,6 +36,7 @@ function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
     else
         _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=sigma,
                                                             cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+    end
 
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
@@ -81,6 +82,7 @@ function run_sbas(unw_stack_file::String,
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
+    prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
     # TODO: do I ever really care about the abstol to change as variable?
     rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack_file, dset)
