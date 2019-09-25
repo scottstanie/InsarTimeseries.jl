@@ -32,6 +32,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
+                       prune=true,
                        split_dates=[],
                        gap=1,
                        split_count=0,
@@ -108,12 +109,12 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         if use_distributed
             velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                      geolist, intlist, valid_igram_indices, 
-                                     constant_velocity, alpha, L1)
+                                     constant_velocity, alpha, L1, prune)
         else
             # If we want to read the whole stack in at once:
             @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
             velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
-                                     constant_velocity, alpha, L1)
+                                     constant_velocity, alpha, L1, prune)
         end
 
         is_3d = false
