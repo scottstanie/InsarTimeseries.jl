@@ -2,25 +2,13 @@ using Distributed
 using Printf
 import Glob
 
-# function run_sbas(unw_stack::Union{HDF5Dataset, Array{Float32, 3}}, 
-#                   geolist,
-#                   intlist, 
-#                   valid_igram_indices, 
-#                   constant_velocity::Bool, 
-#                   alpha::Float32,
-#                   L1::Bool=false) 
-# 
-#     B = prepB(geolist, intlist, constant_velocity, alpha)
-#     @time vstack = invert_sbas(unw_stack, B, valid_igram_indices, extra_zeros=extra_zeros, L1=L1)
-#     return vstack
-# end
 
 """Helper to make a path to same directory as `dset`, with new name `counts`"""
 _count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
 # _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
 function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
-                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true;
-                    row=nothing, col=nothing)
+                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true
+                    prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
     # Also load correlations for cutoff
@@ -29,7 +17,7 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
     cor_pixel, cor_thresh = nothing, 0.0
     
     soln_p2mm, igram_count = calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1;
-                                       cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+                                       cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
 
     # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
@@ -41,10 +29,13 @@ function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
 end
 
 function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
-                   cor_pixel=nothing, cor_thresh=0.0)::Tuple{Float32, Int64}
+                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Float32, Int64}
     sigma = 3
-    _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=sigma,
-                                                        cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+    if prune
+        unw_clean, B_clean = unw_pixel, B
+    else
+        _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=sigma,
+                                                            cor_pixel=cor_pixel, cor_thresh=cor_thresh)
 
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
@@ -75,6 +66,7 @@ function merge_partial_files(outfile, dsets...)
     end
 end
 
+"""Run sbas on multiple processes"""
 function run_sbas(unw_stack_file::String,
                   dset::String,
                   outfile::String,
@@ -84,7 +76,8 @@ function run_sbas(unw_stack_file::String,
                   valid_igram_indices, 
                   constant_velocity::Bool, 
                   alpha::Float32,
-                  L1::Bool=false) 
+                  L1::Bool=false,
+                  prune=true) 
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
@@ -118,7 +111,7 @@ end
 # Need the .I so we can use to load from h5 
 get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(do_permute))]
 
-# If we can load all stack file into memory, will be much quicker
+""" If we can load all stack file into memory, might be much quicker"""
 function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
                   outfile::String,
                   outdset::String,
@@ -126,7 +119,8 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
                   intlist, 
                   constant_velocity::Bool, 
                   alpha::Float32,
-                  L1::Bool=false) 
+                  L1::Bool=false,
+                  prune::Bool=true) 
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
@@ -142,7 +136,7 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
     # last_time = time()
     @time Threads.@threads for col in 1:ncols
         for row in 1:nrows
-            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1)
+            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
             outstack[row, col] = soln_p2mm
             countstack[row, col] = igram_count
             # pix_count += 1
