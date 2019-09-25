@@ -1,5 +1,9 @@
 """Function to calculate a simple stack averaging solution"""
 
+"""Averages all igrams in a stack
+
+Returns a 2D array of velocities: mm per year
+"""
 function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1}; stack_all=true)
 
     # Figure out which of all the igrams we want to use
@@ -27,9 +31,9 @@ function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
     timediffs = temporal_baseline(chosen_igrams)
-    phase_sum = sum(unw_stack, dims=3)
+    phase_sum = sum(unw_stack, dims=3)[:, :, 1]
     avg_velo = phase_sum ./ sum(timediffs)
-    return avg_velo
+    return Float32.(P2MM * avg_velo)
 end
 
 
