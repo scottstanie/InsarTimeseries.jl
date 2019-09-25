@@ -74,8 +74,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
 
     println("$cur_outdset geolist range: : $(extrema(geolist))")
-    # # Dont need shift for avg
-    # input_dset = stack_average ? STACK_FLAT_DSET : STACK_FLAT_SHIFTED_DSET
     # Now: can we load the input stack into memory? or do we need distributed?
     stack_file_size = _stack_size_mb(unw_stack_file, input_dset)
     can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
@@ -87,12 +85,19 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
     # cur_outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
     if stack_average
-        is_hdf5 = false
+        # Dont need shift for avg
+        input_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         vstack = run_stackavg(unw_stack_file, input_dset, geolist, intlist)
-        is_3d = true  # TODO: stack avg should really be 2d velo
+
+        println("Writing solution into $outfile : $outdset")
+        h5open(outfile, "cw") do f
+            f[cur_outdset] = permutedims(vstack)
+            # TODO: Do I care to add this for stack when it's all the same?
+            # f[_count_dset(cur_outdset)] = countstack
+        end
+        is_3d = false  
     else
-        is_hdf5 = true
         println("Performing SBAS solution")
 
         # println("Reading unw stack")
@@ -117,6 +122,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                                      constant_velocity, alpha, L1, prune)
         end
 
+        # TODO: "is_3d" needs to only be for unreg full deformation solution...
+        # Haven't worked that back in yet
         is_3d = false
     end
     ####################
@@ -132,7 +139,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         deformation = PHASE_TO_CM .* phi_arr
 
         println("Saving deformation to $outfile: $cur_outdset")
-        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=!is_hdf5)
+        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
     end
 
     # TODO: I should also save the intlist... as well as the max baseline/config stuff
