@@ -142,32 +142,35 @@ function zero_masked_areas(directory; input_exts=[".int", ".cc"], overwrite=fals
         # in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
         wp = _get_workerpool(8)
         println("Starting zeroing areas for $input_ext")
-        @time pmap((name_in, name_out, mask_idx) -> _load_and_run(zero_file, name_in, name_out, mask_idx, return_amp=true),
+        @time pmap((name_in, name_out, mask_idx) -> _load_and_run(zero_file, name_in, name_out, mask_idx,
+                                                                  return_amp=true, do_permute=false),
                    wp, in_files, out_files, idxs)
         println("completed zeroing for $input_ext")
     end
 end
 
-function zero_file(arr3d::AbstractArray{T, 3}, mask_idx) where {T <: Number}
-    mask = _read_mask(mask_idx)
+function zero_file(arr3d::AbstractArray{T, 3}, mask_idx; do_permute=true) where {T <: Number}
+    mask = _read_mask(mask_idx, do_permute)
     data = @view arr3d[:, :, 2]
     data[mask] .= 0
     return arr3d
 end
 
-function zero_file(arr::AbstractArray{T, 2}, mask_idx) where {T <: Number}
-    mask = _read_mask(mask_idx)
+function zero_file(arr::AbstractArray{T, 2}, mask_idx; do_permute=true) where {T <: Number}
+    mask = _read_mask(mask_idx, do_permute)
     arr[mask] .= 0
     return arr
 end
 
 
-_read_mask(mask_idx) = permutedims(Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, 
-                                                (:, :, mask_idx))[:, :, 1]))
+function _read_mask(mask_idx, do_permute=true)
+    m = Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx))[:, :, 1])
+    return do_permute ? permutedims(m) : m
+end
 
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
-function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true)
+function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true, do_permute=false)
     println("Writing deramped unws to $output_ext files")
     in_files = find_files(input_ext, directory)
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
@@ -183,7 +186,7 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
-    pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx),
+    pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx, do_permute=do_permute),
         wp, in_todo, out_todo, idxs_todo)
     println("Deramping stack complete")
 end
@@ -192,13 +195,13 @@ sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
 
 
 function remove_ramp(z, mask::AbstractArray{<:Number})
-    z_masked = copy(z)
-    z_masked[mask] .= NaN
-    return z - estimate_ramp(z_masked)
+    # z_masked = copy(z)  # Do I really want a copy??
+    z[mask] .= NaN
+    return z - estimate_ramp(z)
 end
 
-function remove_ramp(z, mask_idx::Int)
-    mask = _read_mask(mask_idx)
+function remove_ramp(z, mask_idx::Int; do_permute=true)
+    mask = _read_mask(mask_idx, do_permute)
     remove_ramp(z, mask)
 end
 
