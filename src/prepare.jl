@@ -17,7 +17,7 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
     # Step 2: use these masks to zero bad ares to zero in .int and .cc files
     # Note: this may have been run already after making .int files, before unwrapping
     if zero_masked
-        zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+        zero_masked_areas(igram_path, input_exts=[".int", ".cc", ".unw"])
     end
 
     create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite, do_repack=true)
@@ -25,6 +25,9 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
     create_hdf5_stack(unw_stack_file, ".unwflat", dset_name=STACK_FLAT_DSET, overwrite=overwrite)
+
+    # TODO: do we need this after I have "NaN"s in the deramp function?
+    # zero_masked_areas(igram_path, input_exts=[".unwflat"])
 
     if isnothing(ref_station) && isnothing(ref_row) && isnothing(ref_col)
     # TODO: auto pick, redo that logic here
@@ -118,7 +121,10 @@ function save_masks(igram_path, geo_path; overwrite=false,
             permutedims(sum(geo_mask_stack, dims=3)[:, :, 1]))
 end
 
-function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1})
+function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1}, overwrite::Bool)
+    if overwrite
+        return in_files, out_files, collect(1:length(in_files))
+    end
     in_todo = Array{String, 1}()
     out_todo = similar(in_todo)
     for (i, o) in zip(in_files, out_files)
@@ -132,7 +138,7 @@ end
 
 
 # Step 2 functions: zeroing bad areas
-function zero_masked_areas(directory; input_exts=[".int", ".cc"], overwrite=false)
+function zero_masked_areas(directory; input_exts=[".int", ".cc"])
     for input_ext in input_exts
         in_files = find_files(input_ext, directory)
         out_files = in_files  # We are saving over the same file, just setting pixels to 0
@@ -140,6 +146,7 @@ function zero_masked_areas(directory; input_exts=[".int", ".cc"], overwrite=fals
 
         # TODO: should we check for 0s in masked areas? maybe in the real function
         # in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
+
         wp = _get_workerpool(8)
         println("Starting zeroing areas for $input_ext")
         @time pmap((name_in, name_out, mask_idx) -> _load_and_run(zero_file, name_in, name_out, mask_idx,
@@ -176,13 +183,15 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
 
     # If we already have these files made, skip the function
-    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
+    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files, overwrite)
 
     println("$(length(out_todo)) files remain, overwrite = $overwrite")
+    out_todo = overwrite ? in_todo : out_todo  # If we have overwrite=true, 
     if length(out_todo) == 0 && !overwrite
         println("skipping")
         return nothing
     end
+
 
     wp = _get_workerpool(8)
     println("Starting stack deramp ")
@@ -213,7 +222,7 @@ Since it is an order 1 surface, it will be 3 numbers, a, b, c from
      ax + by + c = z
 """
 # TODO: Fix the mem-allocations here
-function estimate_ramp(z::Array{<:AbstractFloat, 2})
+function estimate_ramp(z::AbstractArray{<:AbstractFloat, 2})
     A = ones((length(z), 3))
     coeffs = Array{eltype(A), 1}(undef, (3,))
     z_fit = similar(z)
@@ -453,7 +462,7 @@ Pass a function `f` to operate on each image
 function loop_over_files(f, directory::String, input_ext::String, output_ext::String;
                          looks=(1, 1), out_dir=nothing,
                          max_procs::Union{Nothing, Int}=nothing,
-                        overwrite=false)
+                         overwrite=false)
     in_files = find_files(input_ext, directory)
     println("Looping over files: $in_files")
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
@@ -462,7 +471,7 @@ function loop_over_files(f, directory::String, input_ext::String, output_ext::St
         out_files = [joinpath(out_dir, splitpath(f)[end]) for f in out_files]
     end
 
-    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files)
+    in_todo, out_todo, idxs_todo = _remaining_files(in_files, out_files, overwrite)
     println("$(length(out_todo)) files remain, overwrite = $overwrite")
     if length(out_todo) == 0 && !overwrite
         println("skipping")
@@ -471,7 +480,7 @@ function loop_over_files(f, directory::String, input_ext::String, output_ext::St
 
     wp = _get_workerpool(max_procs)
     pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks),
-         wp, in_files, out_files)
+         wp, in_todo, out_todo)
     # @sync @distributed for fname in in_files
     # end
 end
