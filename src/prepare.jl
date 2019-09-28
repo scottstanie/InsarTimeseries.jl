@@ -156,21 +156,22 @@ function zero_masked_areas(directory; input_exts=[".int", ".cc"])
     end
 end
 
-function zero_file(arr3d::AbstractArray{T, 3}, mask_idx; do_permute=true) where {T <: Number}
+# TODO: if i wanna make these true, default, i need to redo the _load_and_run arg passing
+function zero_file(arr3d::AbstractArray{T, 3}, mask_idx; do_permute=false) where {T <: Number}
     mask = _read_mask(mask_idx, do_permute)
     data = @view arr3d[:, :, 2]
     data[mask] .= 0
     return arr3d
 end
 
-function zero_file(arr::AbstractArray{T, 2}, mask_idx; do_permute=true) where {T <: Number}
+function zero_file(arr::AbstractArray{T, 2}, mask_idx; do_permute=false) where {T <: Number}
     mask = _read_mask(mask_idx, do_permute)
     arr[mask] .= 0
     return arr
 end
 
 
-function _read_mask(mask_idx, do_permute=true)
+function _read_mask(mask_idx, do_permute=false)
     m = Bool.(h5read(MASK_FILENAME, IGRAM_MASK_DSET, (:, :, mask_idx))[:, :, 1])
     return do_permute ? permutedims(m) : m
 end
@@ -209,9 +210,9 @@ function remove_ramp(z, mask::AbstractArray{<:Number})
     return z - estimate_ramp(z)
 end
 
-function remove_ramp(z, mask_idx::Int; do_permute=true)
+function remove_ramp(z, mask_idx::Int; do_permute=false)
     mask = _read_mask(mask_idx, do_permute)
-    remove_ramp(z, mask)
+    return remove_ramp(z, mask)
 end
 
 
