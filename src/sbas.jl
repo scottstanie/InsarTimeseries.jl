@@ -7,64 +7,70 @@ import Glob
 """Helper to make a path to same directory as `dset`, with new name `counts`"""
 _count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
 # _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
-function proc_pixel(unw_stack_file, in_dset, valid_igram_indices,
-                    outfile, outdset, B, geolist, intlist, rho, alpha, L1=true,
-                    prune=true; row=nothing, col=nothing)
+
+function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
+                           outfile, outdset, geolist, intlist, rho, alpha,
+                           L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
     # Also load correlations for cutoff
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
     # cor_thresh = 0.05
-    cor_pixel, cor_thresh = nothing, 0.0
+    # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_p2mm, igram_count = calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1;
-                                       cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
+    soln_p2mm, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1;
+                                                  cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
 
-    # Now with the fully clean igram list, invert
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = soln_p2mm
         f[_count_dset(outdset)][row, col] = igram_count
     end
-
 end
 
-function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
-                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Float32, Int64}
+function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
+                          outfile, outdset, geolist, intlist, rho, alpha,
+                          L1=true, prune=true; row=nothing, col=nothing)
+    unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+
+    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1;
+                                                   cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
+
+    timediffs = day_diffs(geo_clean)
+    phi_arr = integrate_velocities(soln_velos, timediffs)
+
+    dist_outfile = string(Distributed.myid()) * outfile
+    h5open(dist_outfile, "r+") do f
+        f[outdset][row, col, :] = phi_arr
+        f[_count_dset(outdset)][row, col] = igram_count
+    end
+end
+
+function calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1=true;
+                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Array{Float32, 1}, Int64, geo_clean}
     sigma = 3
     if !prune
-        geo_clean, intlist_clean, unw_clean, B_clean = geolist, intlist, unw_pixel, B
+        geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     else
-        geo_clean, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, 
-                                                                    mean_sigma_cutoff=sigma,
-                                                                    cor_pixel=cor_pixel,
-                                                                    cor_thresh=cor_thresh)
+        geo_clean, intlist_clean, unw_clean = prune_igrams(geolist, intlist, unw_pixel,
+                                                           mean_sigma_cutoff=sigma,
+                                                           cor_pixel=cor_pixel,
+                                                           cor_thresh=cor_thresh)
     end
 
-    # TODO: redo the B calculation if 
+    B = prepB(geolist, intlist, constant_velocity, alpha)
+    # TODO: redo the B calculation if geolist changes
+    # # TODO: how to integrate for all dates when geos have been removed
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
-        soln_p2mm = Float32(0)
+        soln_p2mm = [Float32(0)]
     else
         soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
-        soln_p2mm = Float32.(P2MM * soln[1])
+        soln_p2mm = Float32.(P2MM * soln)
     end
-    return soln_p2mm, igram_count
+    return soln_p2mm, igram_count, geo_clean
 end
 
-    # TODO: clean up this saving... maybe do it in a post step? handle it with config?
-    if is_3d
-        timediffs = day_diffs(geolist)
-        println("Integrating velocities to phases")
-        @time phi_arr = integrate_velocities(vstack, timediffs)
-        # Multiply by wavelength ratio to go from phase to cm
-        deformation = PHASE_TO_CM .* phi_arr
-
-        println("Saving deformation to $outfile: $cur_outdset")
-        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
-    end
-
-    # TODO: I should also save the intlist... as well as the max baseline/config stuff
 
 """Run sbas on multiple processes"""
 function run_sbas(unw_stack_file::String,
@@ -79,7 +85,6 @@ function run_sbas(unw_stack_file::String,
                   L1::Bool=false,
                   prune=true) 
 
-    B = prepB(geolist, intlist, constant_velocity, alpha)
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
     # TODO: do I ever really care about the abstol to change as variable?
@@ -94,11 +99,14 @@ function run_sbas(unw_stack_file::String,
         end
     end
  
+    # Choose the correct processing function based on if we choose constant
+    # TODO: is using multiple dispatch here better in any way (clarity/speed)?
+    proc_func = constant_velocity ? proc_pixel_linear : proc_pixel_daily
+
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(1:10, 1:25))
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
-        proc_pixel(unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, B, geolist, intlist, rho, alpha, L1,
+        proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
+                   outdset, geolist, intlist, rho, alpha, L1,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
@@ -260,9 +268,44 @@ function merge_partial_files(outfile, dsets...)
     end
 end
 
+
+"""Finds the number of days between successive .geo files"""
+function day_diffs(geolist::Array{Date, 1})
+    [difference.value for difference in diff(geolist)]
+end
+
+# TODO: clean up this saving... maybe do it in a post step? handle it with config?
+function save_3d(outfile, cur_outdset, geolist, vstack)
+    timediffs = day_diffs(geolist)
+    println("Integrating velocities to phases")
+    @time phi_arr = integrate_velocities(vstack, timediffs)
+
+    # Multiply by wavelength ratio to go from phase to cm
+    deformation = PHASE_TO_CM .* phi_arr
+
+    @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
+end
+
+"""Takes velocity solution output and finds phases
+
+Arguments:
+    velocities come from invert_sbas
+    timediffs are the days between each SAR acquisitions
+        length will be 1 less than num SAR acquisitions
+"""
+function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
+    phi_diffs = velocities .* timediffs
+    phi_arr = cumsum(coalesce.(phi_diffs, 0))
+    pushfirst!(phi_arr, 0)
+    return phi_arr
+end
+
+
+# TODO: I should also save the intlist... as well as the max baseline/config stuff
+
 ### Outlier functions ######
 # TODO: figure out which should go in separate file for cleanliness
-function prune_igrams(geolist, intlist, unw_pixel, B;
+function prune_igrams(geolist, intlist, unw_pixel;  # B;
                       cor_pixel=nothing, cor_thresh=0.0,
                       mean_sigma_cutoff=3, 
                       fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
@@ -278,13 +321,15 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
     # @show std(unw_pixel)
     # @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
-    geo_clean, intlist_clean, unw_clean, B_clean = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
+    geo_clean, intlist_clean, unw_clean = peel_nsigma(geolist, intlist, unw_pixel, nsigma=mean_sigma_cutoff)
+    # geo_clean, intlist_clean, unw_clean, B_clean = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
+
     # @show "outlier: ", size(intlist_clean)
 
     # 2. low correlation cleaning
     if cor_thresh > 0 && !isnothing(cor_pixel)
         low_cor_igrams = intlist[cor_pixel .< cor_thresh]
-        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
+        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
     end
     # @show "cor: ", size(intlist_clean)
 
@@ -299,7 +344,8 @@ function prune_igrams(geolist, intlist, unw_pixel, B;
         too_long_igrams = [ig for ig in intlist_clean 
                            if temporal_baseline(ig) > day_cutoff]
 
-        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
+        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, too_long_igrams)
+        # intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
     end
     # @show "fast: ", size(intlist_clean)
     # @show std(unw_clean)
@@ -316,6 +362,13 @@ function remove_igrams(intlist, unw_vals, B,
 end
 
 """Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
+function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals)
+    unw_clean = unw_vals[good_idxs]
+    intlist_clean = intlist[good_idxs]
+    return intlist_clean, unw_clean, B_clean 
+end
+
+# If we pass the B, also remove rows for bad idxs
 function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
