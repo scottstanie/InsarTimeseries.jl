@@ -27,7 +27,7 @@ end
 function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
-                       outgroup::String="velos",
+                       # outgroup::String="velos",
                        stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
@@ -64,6 +64,9 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
         end
     end
+    # averaging or linear means output will is 3D array (not just map of velocities)
+    is_3d = !(stack_average || constant_velocity)
+    outgroup = is_3d ? "stack" : "velos"
     # Make the dset one within the group, numbered by which split this is
     cur_outdset = "$outgroup/$split_count"
     
@@ -86,9 +89,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     println("Using Distributed to solve: $use_distributed")
 
 
-    # averaging or linear means output will is 3D array (not just map of velocities)
-    is_3d = !(stack_average || constant_velocity)
-    cur_outdset = is_3d ? "stack" : "velos"
 
     if stack_average
         # Dont need shift for avg
@@ -107,7 +107,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         #     @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
         #     velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
         #                              constant_velocity, alpha, L1, prune)
-        end
+        # end
 
     end
 
@@ -201,52 +201,7 @@ function _get_pairs(dates, gap=1)
     return collect(zip(dates_pad[1:end-gap], dates_pad[(gap+1):end]))
 end
 
-"""Finds the number of days between successive .geo files"""
-function day_diffs(geolist::Array{Date, 1})
-    [difference.value for difference in diff(geolist)]
-end
 
-
-"""Takes velocity solution output and finds phases
-
-Arguments:
-    velocities come from invert_sbas
-    timediffs are the days between each SAR acquisitions
-        length will be 1 less than num SAR acquisitions
-"""
-function integrate_velocities(vstack::Array{<:AbstractFloat, 3}, timediffs::Array{Int, 1})
-    nrows, ncols, _ = size(vstack)
-    num_geos = length(timediffs) + 1
-    phi_stack = zeros(nrows, ncols, num_geos)
-    phi_diffs = zeros(num_geos - 1)
-
-    phi_arr = zeros(num_geos)  # Buffer to hold each result
-    for j = 1:ncols
-        for i = 1:nrows
-            varr = view(vstack, i, j, :)
-            phi_stack[i, j, :] .= integrate1D!(phi_diffs, phi_arr, varr, timediffs)
-        end
-    end
-    return phi_stack
-end
-
-function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
-    # multiply each column of vel array: each col is a separate solution
-    phi_diffs .= velocities .* timediffs
-
-    # Now the final phase results are the cumulative sum of delta phis
-    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
-    phi_arr[2:end] .= cumsum(coalesce.(phi_diffs, 0))
-    return phi_arr
-end
-
-# Older 1D version with allocations
-function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
-    phi_diffs = velocities .* timediffs
-    phi_arr = cumsum(coalesce.(phi_diffs, 0))
-    pushfirst!(phi_arr, 0)
-    return phi_arr
-end
 
 function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_dset, overwrite=true)
     # Delete if exists
@@ -266,21 +221,3 @@ function save_reference(h5file, unw_stack_file, dset_name, stack_flat_shifted_ds
     reference_station = get(h5readattr(unw_stack_file, stack_flat_shifted_dset), REFERENCE_STATION_ATTR, "")
     h5writeattr(h5file, dset_name, Dict(REFERENCE_STATION_ATTR => reference_station))
 end
-
-# function save_line_fit(unreg_fname)
-#     geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
-#     geolist_nums = [( g - geolist[1]).value for g in geolist]
-#     f = h5open(unreg_fname)
-#     dset = f["stack"]
-#     fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
-#     fout = h5open(fname_out, "w")
-#     d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
-#     dset_out = fout["stack"]
-#     for i in 1:size(dset, 1)
-#         for j in 1:size(dset, 2)
-#             p = polyfit(geolist_nums, vec(dset[i, j, :]), 1)
-#             dset_out[i, j] = p(geolist_nums[end])
-#         end
-#     end
-#     close(fout); close(f)
-# end

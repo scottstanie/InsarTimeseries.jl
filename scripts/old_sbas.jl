@@ -148,5 +148,52 @@ function log_count(pix_count, total_pixels, nlayers; every=100_000, last_time=no
         return last_time
     end
 end
+
+# function save_line_fit(unreg_fname)
+#     geolist = InsarTimeseries.load_geolist_from_h5(unreg_fname)
+#     geolist_nums = [( g - geolist[1]).value for g in geolist]
+#     f = h5open(unreg_fname)
+#     dset = f["stack"]
+#     fname_out = replace(unreg_fname, ".h5" => "_linefit.h5")
+#     fout = h5open(fname_out, "w")
+#     d_create(fout, "stack", datatype(Float32), dataspace( (size(dset, 1), size(dset, 2)) ))
+#     dset_out = fout["stack"]
+#     for i in 1:size(dset, 1)
+#         for j in 1:size(dset, 2)
+#             p = polyfit(geolist_nums, vec(dset[i, j, :]), 1)
+#             dset_out[i, j] = p(geolist_nums[end])
+#         end
+#     end
+#     close(fout); close(f)
+# end
+#
             # pix_count += 1
             # last_time = log_count(pix_count, total_pixels, 1, every=10000, last_time=last_time)
+            
+
+function integrate_velocities(vstack::Array{<:AbstractFloat, 3}, timediffs::Array{Int, 1})
+    nrows, ncols, _ = size(vstack)
+    num_geos = length(timediffs) + 1
+    phi_stack = zeros(nrows, ncols, num_geos)
+    phi_diffs = zeros(num_geos - 1)
+
+    phi_arr = zeros(num_geos)  # Buffer to hold each result
+    for j = 1:ncols
+        for i = 1:nrows
+            varr = view(vstack, i, j, :)
+            phi_stack[i, j, :] .= integrate1D!(phi_diffs, phi_arr, varr, timediffs)
+        end
+    end
+    return phi_stack
+end
+
+function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
+    # multiply each column of vel array: each col is a separate solution
+    phi_diffs .= velocities .* timediffs
+
+    # Now the final phase results are the cumulative sum of delta phis
+    # This is equivalent to replacing missing with 0s (like np.ma.cumsum does)
+    phi_arr[2:end] .= cumsum(coalesce.(phi_diffs, 0))
+    return phi_arr
+end
+

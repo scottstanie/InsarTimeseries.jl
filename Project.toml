@@ -6,6 +6,7 @@ version = "0.1.0"
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"

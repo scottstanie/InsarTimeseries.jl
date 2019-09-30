@@ -47,9 +47,9 @@ version = "0.6.2"
 
 [[CategoricalArrays]]
 deps = ["Compat", "DataAPI", "Future", "JSON", "Missings", "Printf", "Reexport", "Unicode"]
-git-tree-sha1 = "5f4400b24adb1fbed17a9dcc1e8ab8aaf5b03d1f"
+git-tree-sha1 = "cc8b9d6b65ce76e934e14e3738af3abcc1019790"
 uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
-version = "0.6.0"
+version = "0.7.0"
 
 [[ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -111,6 +111,12 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
+[[Dierckx]]
+deps = ["BinaryProvider", "Libdl", "Random", "Test"]
+git-tree-sha1 = "27a74763c20938a814da26f31a9e8408d16fec44"
+uuid = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
+version = "0.4.1"
+
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -156,7 +162,9 @@ version = "0.12.0"
 
 [[InsarLOS]]
 deps = ["Glob", "LinearAlgebra", "SQLite", "Sario"]
-path = "/Users/scott/repos/InsarLOS"
+git-tree-sha1 = "62a8422e62eb61ee49dedd302d52bfd41fa2357b"
+repo-rev = "master"
+repo-url = "git@github.com:scottstanie/InsarLOS.jl.git"
 uuid = "bdef267a-7fa5-4bf0-b628-7eda8cd1af64"
 version = "0.1.0"
 
