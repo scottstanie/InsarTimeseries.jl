@@ -19,12 +19,12 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_p2mm, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true,
+    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true,
                                                   L1; prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        f[outdset][row, col] = soln_p2mm
+        f[outdset][row, col] = P2MM * soln_p2mm
         f[_count_dset(outdset)][row, col] = igram_count
     end
 end
@@ -42,7 +42,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     phi_clean = integrate_velocities(soln_velos, timediffs)
 
     # Then linearly interpolate between these for the removed phases
-    phi_arr = interpolate_phase(geo_clean, phi_clean, geolist)
+    phi_arr = PHASE_TO_CM * interpolate_phase(geo_clean, phi_clean, geolist)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -63,15 +63,15 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L
                                                            cor_thresh=cor_thresh)
     end
 
-    B = prepB(geolist, intlist, constant_velocity, alpha)
+    B = prepB(geo_clean, int_clean, constant_velocity, alpha)
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
-        soln_p2mm = [Float32(0)]
+        soln_phase = [Float32(0)]
     else
         soln = L1 ? invert_pixel(unw_clean, B, rho=rho, alpha=alpha) : B \ unw_clean
-        soln_p2mm = Float32.(P2MM * soln)
+        soln_phase = Float32.(soln)
     end
-    return soln_p2mm, igram_count, geo_clean
+    return soln_phase, igram_count, geo_clean
 end
 
 
@@ -115,7 +115,7 @@ function run_sbas(unw_stack_file::String,
     end
  
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(100:200, 100:200))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, geolist, intlist, rho, alpha, L1, prune,
                    row=row, col=col)
