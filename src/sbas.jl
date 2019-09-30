@@ -24,7 +24,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        f[outdset][row, col] = P2MM * soln_p2mm
+        f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
     end
 end
@@ -63,7 +63,7 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L
                                                            cor_thresh=cor_thresh)
     end
 
-    B = prepB(geo_clean, int_clean, constant_velocity, alpha)
+    B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
         soln_phase = [Float32(0)]
@@ -346,7 +346,7 @@ function prune_igrams(geolist, intlist, unw_pixel;  # B;
     # 3. with rought velocity estimate, find igrams with too long of baseline
     # Here we assume beyond some wavelength fraction is too long to sense in one igram
     if fast_cm_cutoff < 5
-        Blin = prepB(geolist, intlist, true)
+        Blin = prepB(geo_clean, intlist_clean, true)
         velo_cm = PHASE_TO_CM * (Blin \ unw_clean)[1]  # cm / day
         # rho, alpha, abstol = 1.0, 1.6, 1e-3
         # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
