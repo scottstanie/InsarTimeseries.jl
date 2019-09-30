@@ -42,6 +42,8 @@ temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igra
 span(dates::AbstractArray{Date, 1}) = (dates[end] - dates[1]).value
 span(igrams::AbstractArray{Igram, 1}) = (sort(igrams)[end][2] - sort(igrams)[1][1]).value
 
+_get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
+
 
 # Extend views to work for datasets
 function Base.view(dset::HDF5Dataset, I::Vararg{Any})

@@ -219,8 +219,6 @@ function solve_gps_ts(station_name, reference_station=nothing)
     slope_gps_mm_yr = 365 * 10 * slope
 end
 
-_get_day_nums(dts) = [( d - dts[1]).value for d in dts]
-
 function fit_line(dts, data)
     day_nums = _get_day_nums(dts)
     p = Polynomials.polyfit(day_nums, data, 1)
