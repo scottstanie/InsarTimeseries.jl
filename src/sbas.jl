@@ -63,8 +63,14 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L
                                                            cor_thresh=cor_thresh)
     end
 
-    B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
     igram_count = length(unw_clean)
+
+    B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
+
+    if alpha > 0
+        unw_clean = vcat(unw_clean, zeros(size(B, 1) - length(unw_clean)))
+    end
+
     if igram_count < 50  # TODO: justify this minimum data
         soln_phase = [Float32(0)]
     else
@@ -148,21 +154,11 @@ function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
 
-    # # TODO: this should be a test, not a check in the code
-    # if size(B, 2) != (length(diff(geolist)))
-    #     println("Shapes of B $(size(B)) and geolist $(size(geolist)) not compatible")
-    # end
-
-    # TODO: solve for stacks too big for memory
-    # if alpha > 0
-    #     println("Regularizing solution with alpha = $alpha")
-    #     B = augment_B(B, alpha)
-    #     extra_zeros = size(B, 1) - length(intlist)
-    # else
-    #     # No regularization added to pixels
-    #     extra_zeros = 0
-    # end
-    return B  # , extra_zeros
+    if alpha > 0
+        println("Regularizing solution with alpha = $alpha")
+        B = augment_B(B, alpha)
+    end
+    return B
 end
 
 # In case we make each pixel inversion more complicated (extra penalty functions, etc.)
