@@ -2,9 +2,10 @@
 
 """Averages all igrams in a stack
 
-Returns a 2D array of velocities: mm per year
+saves a 2D array of velocities: mm per year
 """
-function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1}; stack_all=true)
+function run_stackavg(unw_stack_file::String, input_dset::String, outfile::String, outdset::String,
+                      geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1}; stack_all=true)
 
     # Figure out which of all the igrams we want to use
     # chosen_igrams = pick_igrams(geolist)
@@ -24,19 +25,28 @@ function run_stackavg(unw_stack_file::String, stack_dset::String, geolist::Array
     filter!(.!isnothing, picked_igram_indices)
 
     # Load only these 
-    # stack_dset = STACK_DSET
-    # stack_dset = STACK_FLAT_DSET
-    println("Reading $(length(picked_igram_indices)) igrams out of '$stack_dset' dataset from file ")
-    @time unw_stack = load_hdf5_stack(unw_stack_file, stack_dset, picked_igram_indices)
+    # input_dset = STACK_DSET
+    # input_dset = STACK_FLAT_DSET
+    println("Reading $(length(picked_igram_indices)) igrams out of '$input_dset' dataset from file ")
+    @time unw_stack = load_hdf5_stack(unw_stack_file, input_dset, picked_igram_indices)
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
     timediffs = temporal_baseline(chosen_igrams)
     phase_sum = sum(unw_stack, dims=3)[:, :, 1]
     avg_velo = phase_sum ./ sum(timediffs)
-    return Float32.(P2MM * avg_velo)
+
+    # Finally, save as a mm/year velocity
+    out = Float32.(P2MM * avg_velo)
+
+    println("Writing solution into $outfile : $outdset")
+    h5open(outfile, "cw") do f
+        f[outdset] = permutedims(out)
+        # TODO: Do I care to add this for stack when it's all the same?
+        # f[_count_dset(cur_outdset)] = countstack
+    end
+
+    return outfile, outdset
 end
-
-
 
 
 """Given the set of acquisition dates, find which pairs should be used 
