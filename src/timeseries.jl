@@ -114,20 +114,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
     dem_rsc = Sario.load_dem_from_h5(unw_stack_file) 
     Sario.save_dem_to_h5(outfile, dem_rsc, overwrite=true)
-    # TODO: clean up this saving... maybe do it in a post step? handle it with config?
-    if is_3d
-        timediffs = day_diffs(geolist)
-        println("Integrating velocities to phases")
-        @time phi_arr = integrate_velocities(vstack, timediffs)
-        # Multiply by wavelength ratio to go from phase to cm
-        deformation = PHASE_TO_CM .* phi_arr
-
-        println("Saving deformation to $outfile: $cur_outdset")
-        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
-    end
-
-    # TODO: I should also save the intlist... as well as the max baseline/config stuff
-
     Sario.save_geolist_to_h5(outfile, cur_outdset, geolist, overwrite=true)
     save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
 
