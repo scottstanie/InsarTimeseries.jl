@@ -19,8 +19,8 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_p2mm, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1;
-                                                  cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
+    soln_p2mm, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true,
+                                                  L1; prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -34,8 +34,8 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
 
-    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1;
-                                                   cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
+    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, false,
+                                                   L1; prune=prune)
 
     # First find the phase for only the clean dates we solved for
     timediffs = day_diffs(geo_clean)
@@ -51,8 +51,8 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     end
 end
 
-function calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1=true;
-                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Array{Float32, 1}, Int64, geo_clean}
+function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L1=true;
+                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Array{Float32, 1}, Int64, Array}
     sigma = 3
     if !prune
         geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
@@ -68,7 +68,7 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1=true;
     if igram_count < 50  # TODO: justify this minimum data
         soln_p2mm = [Float32(0)]
     else
-        soln = L1 ? invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha) : B_clean \ unw_clean
+        soln = L1 ? invert_pixel(unw_clean, B, rho=rho, alpha=alpha) : B \ unw_clean
         soln_p2mm = Float32.(P2MM * soln)
     end
     return soln_p2mm, igram_count, geo_clean
@@ -96,8 +96,15 @@ function run_sbas(unw_stack_file::String,
 
     # Choose the correct processing function and size based on if we choose constant
     # TODO: is using multiple dispatch here better in any way (clarity/speed)?
-    proc_func = constant_velocity ? proc_pixel_linear : proc_pixel_daily
-    outsize = constant_velocity ? (nrows, ncols) : (nrows, ncols, length(geolist))
+    if constant_velocity
+        println("Using constant velocity for inversion solution")
+        proc_func = proc_pixel_linear
+        outsize = (nrows, ncols)
+    else
+        println("Not using linear: Finding solution for each day")
+        proc_func = proc_pixel_daily
+        outsize = (nrows, ncols, length(geolist))
+    end
 
     println("Making new writing file for each of $(length(Distributed.workers()))")
     @time @sync @distributed for id in Distributed.workers()
@@ -110,7 +117,7 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, geolist, intlist, rho, alpha, L1,
+                   outdset, geolist, intlist, rho, alpha, L1, prune,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
@@ -145,7 +152,7 @@ function prepB(geolist, intlist, constant_velocity=false, alpha=0)
 
     # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
     if constant_velocity
-        println("Using constant velocity for inversion solution")
+        # println("Using constant velocity for inversion solution")
         B = sum(B, dims=2)
     end
 
@@ -335,14 +342,15 @@ function prune_igrams(geolist, intlist, unw_pixel;  # B;
     # 2. low correlation cleaning
     if cor_thresh > 0 && !isnothing(cor_pixel)
         low_cor_igrams = intlist[cor_pixel .< cor_thresh]
-        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
+        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, low_cor_igrams)
     end
     # @show "cor: ", size(intlist_clean)
 
     # 3. with rought velocity estimate, find igrams with too long of baseline
     # Here we assume beyond some wavelength fraction is too long to sense in one igram
     if fast_cm_cutoff < 5
-        velo_cm = PHASE_TO_CM * (B_clean \ unw_clean)[1]  # cm / day
+        Blin = prepB(geolist, intlist, true)
+        velo_cm = PHASE_TO_CM * (Blin \ unw_clean)[1]  # cm / day
         # rho, alpha, abstol = 1.0, 1.6, 1e-3
         # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
         day_cutoff = fast_cm_cutoff / abs(velo_cm)
@@ -355,23 +363,23 @@ function prune_igrams(geolist, intlist, unw_pixel;  # B;
     end
     # @show "fast: ", size(intlist_clean)
     # @show std(unw_clean)
-    return geo_clean, intlist_clean, unw_clean, B_clean
+    return geo_clean, intlist_clean, unw_clean
 end
 
-function remove_igrams(intlist, unw_vals, B,
+function remove_igrams(intlist, unw_vals,
                        bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}...)
     good_idxs = trues(size(intlist))
     for item in bad_items
         good_idxs .&= _good_idxs(item, intlist)
     end
-    return remove_by_idx(good_idxs, intlist, unw_vals, B)
+    return remove_by_idx(good_idxs, intlist, unw_vals)
 end
 
 """Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
 function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals)
     unw_clean = unw_vals[good_idxs]
     intlist_clean = intlist[good_idxs]
-    return intlist_clean, unw_clean, B_clean 
+    return intlist_clean, unw_clean
 end
 
 # If we pass the B, also remove rows for bad idxs
@@ -424,11 +432,11 @@ end
 
 
 """Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
-function peel_nsigma(geo, int, val, B; nsigma=3)
+function peel_nsigma(geo, int, val; nsigma=3)
     dates_to_remove = nsigma_days(geo, int, val, nsigma)
-    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
+    int2, val2 = remove_igrams(int, val, dates_to_remove)
     geo2 = [g for g in geo if !(g in dates_to_remove)]
-    return geo2, int2, val2, B2
+    return geo2, int2, val2
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
