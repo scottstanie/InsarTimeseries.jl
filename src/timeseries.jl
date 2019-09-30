@@ -81,6 +81,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
     # Note: as of version 1.3.0rc2, my threaded version on preloaded matrix is slower than
     # distributed reading/writing... not sure why but oh well
+    # TODO: figure if it's worth having non-process version
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
@@ -97,15 +98,15 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     else
         println("Performing linear SBAS solution")
 
-        if use_distributed
-            velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
-                                     geolist, intlist, valid_igram_indices, 
-                                     constant_velocity, alpha, L1, prune)
-        else
-            # If we want to read the whole stack in at once:
-            @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
-            velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
-                                     constant_velocity, alpha, L1, prune)
+        velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
+                                 geolist, intlist, valid_igram_indices, 
+                                 constant_velocity, alpha, L1, prune)
+        # if use_distributed
+        # else
+        #     # If we want to read the whole stack in at once:
+        #     @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
+        #     velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
+        #                              constant_velocity, alpha, L1, prune)
         end
 
     end
