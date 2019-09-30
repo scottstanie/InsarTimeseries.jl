@@ -3,6 +3,7 @@ using StatsBase: mad
 using Printf
 import Glob
 import Dierckx
+import SparseArrays: spdiagm
 
 
 """Helper to make a path to same directory as `dset`, with new name `counts`"""
@@ -68,7 +69,7 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L
     B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
 
     if alpha > 0
-        unw_clean = vcat(unw_clean, zeros(size(B, 1) - length(unw_clean)))
+        unw_clean = augment_zeros(B, unw_clean)
     end
 
     if igram_count < 50  # TODO: justify this minimum data
@@ -249,12 +250,22 @@ end
 
 
 
+_D(n) = spdiagm(0 => -ones(n-1), 1=>ones(n-1))[1:end-1, :]
 
-"""For Tikhonov regularization, pad the B matrix with alpha*I"""
-function augment_B(B::Array{Float32, 2}, alpha::Float32)
-    return Float32.(vcat(B, alpha*I))
+"""For Tikhonov regularization, pad the B matrix with alpha*D"""
+function augment_B(B::Array{Float32, 2}, alpha::Real)
+    extra = alpha*I
+    n = size(B, 2)
+    return Float64.(vcat(B, alpha * _D(n)))  # Note: as of 9/29/19, qr has bug for sparse float32 matrices
 end
 
+augment_zeros(B, unw) = vcat(unw, zeros(size(B, 1) - length(unw)))
+
+# function augment_B(B::Array{Float32, 2}, alpha::Float32)
+#     extra = alpha*I
+#     return Float32.(vcat(B, ))
+# end
+ 
 # TODO: this can't work for huge stacks
 function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Float32)
     B = Float32.(vcat(B, alpha*I))
