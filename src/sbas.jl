@@ -141,6 +141,9 @@ end
 
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
+    if constant_velocity
+        return Float32.(reshape(temporal_baseline(intlist), :, 1))
+    end
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
@@ -149,12 +152,6 @@ function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # if size(B, 2) != (length(diff(geolist)))
     #     println("Shapes of B $(size(B)) and geolist $(size(geolist)) not compatible")
     # end
-
-    # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
-    if constant_velocity
-        # println("Using constant velocity for inversion solution")
-        B = sum(B, dims=2)
-    end
 
     # TODO: solve for stacks too big for memory
     # if alpha > 0
