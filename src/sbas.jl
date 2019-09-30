@@ -1,4 +1,5 @@
 using Distributed
+using StatsBase: mad
 using Printf
 import Glob
 
@@ -112,15 +113,18 @@ function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion
     # A = build_A_matrix(geolist, intlist)
     B = build_B_matrix(geolist, intlist)
-    if size(B, 2) != (length(diff(geolist)))
-        println("Shapes of B $(size(B)) and geolist $(size(geolist)) not compatible")
-    end
+
+    # # TODO: this should be a test, not a check in the code
+    # if size(B, 2) != (length(diff(geolist)))
+    #     println("Shapes of B $(size(B)) and geolist $(size(geolist)) not compatible")
+    # end
 
     # Only estimate 1 parameter for constant velocity B: sum all timediffs along rows
     if constant_velocity
         println("Using constant velocity for inversion solution")
         B = sum(B, dims=2)
     end
+
     # TODO: solve for stacks too big for memory
     # if alpha > 0
     #     println("Regularizing solution with alpha = $alpha")
@@ -254,4 +258,138 @@ function merge_partial_files(outfile, dsets...)
     for f in partial_files(outfile)
         rm(f)
     end
+end
+
+### Outlier functions ######
+# TODO: figure out which should go in separate file for cleanliness
+function prune_igrams(geolist, intlist, unw_pixel, B;
+                      cor_pixel=nothing, cor_thresh=0.0,
+                      mean_sigma_cutoff=3, 
+                      fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
+    # 3 Reasons for removing igrams:
+    # 1. remove all from .geo dates with huge averages (whole day is garbage)
+    # 2. remove very low correlation
+    #   NOTE: for now, we are skipping... doesn't seem to make much difference generally
+    # 3. remove longer igrams w/ longer baseline than is possible
+    #   e.g. if we have 2.5 cm/year velocity, anything longer than ~1 year
+    #   will be all noise- we can't reliably sense such quickly moving ground
+    # TODO: verify this third criteria?
+
+    # @show std(unw_pixel)
+    # @show "start", size(intlist)
+    # 1. find outliers in this pixels' values and remove them
+    geo_clean, intlist_clean, unw_clean, B_clean = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
+    # @show "outlier: ", size(intlist_clean)
+
+    # 2. low correlation cleaning
+    if cor_thresh > 0 && !isnothing(cor_pixel)
+        low_cor_igrams = intlist[cor_pixel .< cor_thresh]
+        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, low_cor_igrams)
+    end
+    # @show "cor: ", size(intlist_clean)
+
+    # 3. with rought velocity estimate, find igrams with too long of baseline
+    # Here we assume beyond some wavelength fraction is too long to sense in one igram
+    if fast_cm_cutoff < 5
+        velo_cm = PHASE_TO_CM * (B_clean \ unw_clean)[1]  # cm / day
+        # rho, alpha, abstol = 1.0, 1.6, 1e-3
+        # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
+        day_cutoff = fast_cm_cutoff / abs(velo_cm)
+        # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
+        too_long_igrams = [ig for ig in intlist_clean 
+                           if temporal_baseline(ig) > day_cutoff]
+
+        intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
+    end
+    # @show "fast: ", size(intlist_clean)
+    # @show std(unw_clean)
+    return geo_clean, intlist_clean, unw_clean, B_clean
+end
+
+function remove_igrams(intlist, unw_vals, B,
+                       bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}...)
+    good_idxs = trues(size(intlist))
+    for item in bad_items
+        good_idxs .&= _good_idxs(item, intlist)
+    end
+    return remove_by_idx(good_idxs, intlist, unw_vals, B)
+end
+
+"""Pass directly the indexes of good ones igrams (removes all BUT the good_idxs)"""
+function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals, B)
+    B_clean = B[good_idxs, :]
+    unw_clean = unw_vals[good_idxs]
+    intlist_clean = intlist[good_idxs]
+    return intlist_clean, unw_clean, B_clean 
+end
+
+function _good_idxs(bad_date_arr::AbstractArray{Date}, intlist)
+    return .!reduce((x, y)-> x .| y, 
+                    (b in intlist for b in bad_date_arr),
+                    init=falses(size(intlist)));
+end
+
+function _good_idxs(bad_igram_arr::AbstractArray{Igram}, intlist)
+    return [!(ig in bad_igram_arr) for ig in intlist]
+end
+
+_good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
+
+
+
+""" 3* the sigma valud as calculated using MAD
+Used for robust variance est. (as a cutoff for outliers)
+See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
+mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
+
+two_way_cutoff(arr, nsigma) = (min(0, median(arr) - mednsigma(arr, nsigma)),  # Make sure it's negative
+                               median(arr) + mednsigma(arr, nsigma))
+
+
+"""Simpler means by day: just abs. value of phases, either mean or median"""
+mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
+                                            for d in geolist];
+median_abs_val(geolist, intlist, unw_vals) = [median(abs.(vals_by_date(d, intlist, unw_vals)))
+                                              for d in geolist];
+
+"""Get the values (unw, cc, etc.) of one date"""
+vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
+
+"""Get the values (unw, cc, etc.) grouped by each date"""
+vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d in date_arr]
+
+function two_way_outliers(arr, nsigma)
+    low, high = two_way_cutoff(arr, nsigma)
+    return (arr .< low) .| (arr .> high)
+end
+
+
+"""Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
+function peel_nsigma(geo, int, val, B; nsigma=3)
+    dates_to_remove = nsigma_days(geo, int, val, nsigma)
+    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
+    geo2 = [g for g in geo if !(g in dates_to_remove)]
+    return geo2, int2, val2, B2
+end
+
+"""Return the days of `geo` which are more than nsigma away from mean"""
+function nsigma_days(geo, int, val, nsigma=3)
+    means = mean_abs_val(geo, int, val)
+    # means = median_abs_val(geo, int, val)  #; println("median abs")
+    # @show mednsigma(means, nsigma)
+    # TODO: change "means" if its not means
+    # means = abs.(oneway_val(geo, int, val, mean))
+    # means = abs.(oneway_val(geo, int, val, median))
+    # means = oneway_val(geo, int, val, mean)
+    
+    # means = oneway_val(geo, int, val, median); # println("median oneway")
+    # @show mednsigma(means, nsigma)
+    # TODO: change "means" if its not means
+    out_idxs = two_way_outliers(means, nsigma)
+
+    # # FOR PRINTING ONLY
+    # low, high = two_way_cutoff(means, nsigma)
+    # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
+    # println("Number removed: $(sum(out_idxs))")
+    return geo[out_idxs]
 end
