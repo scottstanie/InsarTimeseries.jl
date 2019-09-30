@@ -435,8 +435,19 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     plt.show(block=false)
 end
 
-function plotsplit(fname; vm=20, n=2)
-    vs = [permutedims(h5read(fname, "velos/$ii")) for ii in 1:n]
+function read_last(fname, dset, do_permute=true)
+    sz = size(fname, dset)
+    if length(sz) > 2 
+        data = h5read(fname, dset, (:, :, sz[3]))[:, :, 1]
+    else
+        data = h5read(fname, dset)
+    end
+    return do_permute ? permutedims(data) : data
+end
+
+function plotsplit(fname; vm=20, n=1, group="velos")
+    vs = [read_last(fname, "$group/$ii") for ii in 1:n]
+    # elseif group == "stack"
 
     fig, axes = plt.subplots(1, n, squeeze=false)
     for ii = 1:n
