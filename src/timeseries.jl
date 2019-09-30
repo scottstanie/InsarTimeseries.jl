@@ -10,7 +10,7 @@ const P2MM = 365 * 10 * PHASE_TO_CM   # mm / year
 const DateOrNone = Union{Date, Nothing}
 
 _stack_size_mb(filename, dset) = prod(size(filename, dset)) * sizeof(eltype(filename, dset)) / 1e6 
-_strnothing(aa) = isnothing(aa) ? "nothing" : aa 
+_strnothing(aa) = isnothing(aa) ? "nothing" : aa   # Since we can't string(nothing)
 
 """Runs SBAS inversion on all unwrapped igrams
 
@@ -27,7 +27,7 @@ end
 function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
-                       outdset::String="velos",
+                       outgroup::String="velos",
                        stack_average::Bool=false, 
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
@@ -44,7 +44,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     if isempty(outfile)
         outfile = _default_outfile()
     end
-    isfile(outfile) && string(split_count) in names(outfile, outdset) && error("$outdset/$split_count exists in $outfile already")
+    isfile(outfile) && string(split_count) in names(outfile, outgroup) && error("$outgroup/$split_count exists in $outfile already")
+
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates, gap)
@@ -52,19 +53,19 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
             odf, ods = run_inversion(split_dates=[], split_count=split_count, min_date=d1, max_date=d2,
                                  unw_stack_file=unw_stack_file, input_dset=input_dset, 
-                                 outfile=outfile, outdset=outdset, stack_average=stack_average, 
+                                 outfile=outfile, outgroup=outgroup, stack_average=stack_average, 
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
                                  use_distributed=use_distributed)
         end
-        return outfile, outdset
+        return outfile, outgroup
     else
         if split_count == 0
             split_count += 1
         end
     end
     # Make the dset one within the group, numbered by which split this is
-    cur_outdset = "$outdset/$split_count"
+    cur_outdset = "$outgroup/$split_count"
     
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(unw_stack_file, ignore_geo_file, 
@@ -83,34 +84,19 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
-    # cur_outdset = stack_average ? "stack" : "velos"  # TODO: get this back to hwere not only velos
+
+    # averaging or linear means output will is 3D array (not just map of velocities)
+    is_3d = !(stack_average || constant_velocity)
+    cur_outdset = is_3d ? "stack" : "velos"
+
     if stack_average
         # Dont need shift for avg
         input_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
-        vstack = run_stackavg(unw_stack_file, input_dset, geolist, intlist)
-
-        println("Writing solution into $outfile : $outdset")
-        h5open(outfile, "cw") do f
-            f[cur_outdset] = permutedims(vstack)
-            # TODO: Do I care to add this for stack when it's all the same?
-            # f[_count_dset(cur_outdset)] = countstack
-        end
-        is_3d = false  
+        velo_file_out = run_stackavg(unw_stack_file, input_dset, outfile, cur_outdset, geolist, intlist)
     else
-        println("Performing SBAS solution")
+        println("Performing linear SBAS solution")
 
-        # println("Reading unw stack")
-        # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET)
-        # @time unw_stack = load_hdf5_stack(unw_stack_file, STACK_FLAT_SHIFTED_DSET, valid_igram_indices)
-
-        # vstack = run_sbas(unw_stack, geolist, intlist, constant_velocity, alpha)
-        # cur_outdset = "stack"
-        # h5open(unw_stack_file) do unw_file
-        #     unw_stack = unw_file[input_dset]
-        #     vstack = run_sbas(unw_stack, geolist, intlist, valid_igram_indices,
-        #                       constant_velocity, alpha, L1)
-        # end
         if use_distributed
             velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                      geolist, intlist, valid_igram_indices, 
@@ -122,10 +108,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                                      constant_velocity, alpha, L1, prune)
         end
 
-        # TODO: "is_3d" needs to only be for unreg full deformation solution...
-        # Haven't worked that back in yet
-        is_3d = false
     end
+
     ####################
 
     dem_rsc = Sario.load_dem_from_h5(unw_stack_file) 
