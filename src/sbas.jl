@@ -2,6 +2,7 @@ using Distributed
 using StatsBase: mad
 using Printf
 import Glob
+import Dierckx
 
 
 """Helper to make a path to same directory as `dset`, with new name `counts`"""
@@ -36,8 +37,12 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1;
                                                    cor_pixel=cor_pixel, cor_thresh=cor_thresh, prune=prune)
 
+    # First find the phase for only the clean dates we solved for
     timediffs = day_diffs(geo_clean)
-    phi_arr = integrate_velocities(soln_velos, timediffs)
+    phi_clean = integrate_velocities(soln_velos, timediffs)
+
+    # Then linearly interpolate between these for the removed phases
+    phi_arr = interpolate_phase(geo_clean, phi_clean, geolist)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -59,8 +64,6 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, L1=true;
     end
 
     B = prepB(geolist, intlist, constant_velocity, alpha)
-    # TODO: redo the B calculation if geolist changes
-    # # TODO: how to integrate for all dates when geos have been removed
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
         soln_p2mm = [Float32(0)]
@@ -91,18 +94,19 @@ function run_sbas(unw_stack_file::String,
     rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack_file, dset)
 
+    # Choose the correct processing function and size based on if we choose constant
+    # TODO: is using multiple dispatch here better in any way (clarity/speed)?
+    proc_func = constant_velocity ? proc_pixel_linear : proc_pixel_daily
+    outsize = constant_velocity ? (nrows, ncols) : (nrows, ncols, length(geolist))
+
     println("Making new writing file for each of $(length(Distributed.workers()))")
     @time @sync @distributed for id in Distributed.workers()
         h5open(string(id)*outfile, "w") do fout
-            d_create(fout, outdset, datatype(Float32), dataspace(nrows, ncols))
+            d_create(fout, outdset, datatype(Float32), dataspace(outsize))
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
         end
     end
  
-    # Choose the correct processing function based on if we choose constant
-    # TODO: is using multiple dispatch here better in any way (clarity/speed)?
-    proc_func = constant_velocity ? proc_pixel_linear : proc_pixel_daily
-
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
     # @time @sync @distributed for (row, col) in collect(Iterators.product(3500:3600, 1900:2000))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
@@ -116,6 +120,18 @@ end
 
 # Need the .I so we can use to load from h5 
 get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(do_permute))]
+
+
+"""Linearly interpolate the values between dates that we didn't solve for"""
+function interpolate_phase(geo_clean, phis, geolist_full)
+    return interp1d(_get_day_nums(geo_clean), phis, _get_day_nums(geolist_full))
+end
+
+function interp1d(x, y, xv, k=1)
+    sp = Dierckx.Spline1D(x, y, k=k)
+    return sp(xv)
+end
+
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion
@@ -274,17 +290,7 @@ function day_diffs(geolist::Array{Date, 1})
     [difference.value for difference in diff(geolist)]
 end
 
-# TODO: clean up this saving... maybe do it in a post step? handle it with config?
-function save_3d(outfile, cur_outdset, geolist, vstack)
-    timediffs = day_diffs(geolist)
-    println("Integrating velocities to phases")
-    @time phi_arr = integrate_velocities(vstack, timediffs)
 
-    # Multiply by wavelength ratio to go from phase to cm
-    deformation = PHASE_TO_CM .* phi_arr
-
-    @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
-end
 
 """Takes velocity solution output and finds phases
 
