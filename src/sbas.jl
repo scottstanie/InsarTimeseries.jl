@@ -31,13 +31,16 @@ end
 function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
                    cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Float32, Int64}
     sigma = 3
-    if prune
-        unw_clean, B_clean = unw_pixel, B
+    if !prune
+        geo_clean, intlist_clean, unw_clean, B_clean = geolist, intlist, unw_pixel, B
     else
-        _, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, mean_sigma_cutoff=sigma,
-                                                            cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+        geo_clean, intlist_clean, unw_clean, B_clean = prune_igrams(geolist, intlist, unw_pixel, B, 
+                                                                    mean_sigma_cutoff=sigma,
+                                                                    cor_pixel=cor_pixel,
+                                                                    cor_thresh=cor_thresh)
     end
 
+    # TODO: redo the B calculation if 
     igram_count = length(unw_clean)
     if igram_count < 50  # TODO: justify this minimum data
         soln_p2mm = Float32(0)
@@ -48,24 +51,19 @@ function calc_soln(unw_pixel, B, geolist, intlist, rho, alpha, L1=true;
     return soln_p2mm, igram_count
 end
 
-partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
+    # TODO: clean up this saving... maybe do it in a post step? handle it with config?
+    if is_3d
+        timediffs = day_diffs(geolist)
+        println("Integrating velocities to phases")
+        @time phi_arr = integrate_velocities(vstack, timediffs)
+        # Multiply by wavelength ratio to go from phase to cm
+        deformation = PHASE_TO_CM .* phi_arr
 
-function merge_partial_files(outfile, dsets...)
-    for dset in dsets
-        tmp = zeros(size(partial_files(outfile)[1], dset))
+        println("Saving deformation to $outfile: $cur_outdset")
+        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
+    end
 
-        for f in partial_files(outfile)
-            cur = h5read(f, dset)
-            tmp += cur
-        end
-        h5open(outfile, "cw") do fout
-            fout[dset] = tmp
-        end
-    end
-    for f in partial_files(outfile)
-        rm(f)
-    end
-end
+    # TODO: I should also save the intlist... as well as the max baseline/config stuff
 
 """Run sbas on multiple processes"""
 function run_sbas(unw_stack_file::String,
@@ -109,58 +107,6 @@ end
 
 # Need the .I so we can use to load from h5 
 get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(do_permute))]
-
-""" If we can load all stack file into memory, might be much quicker"""
-function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
-                  outfile::String,
-                  outdset::String,
-                  geolist,
-                  intlist, 
-                  constant_velocity::Bool, 
-                  alpha::Float32,
-                  L1::Bool=false,
-                  prune::Bool=true) 
-
-    B = prepB(geolist, intlist, constant_velocity, alpha)
-    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    # TODO: do I ever really care about the abstol to change as variable?
-    rho, alpha, abstol = 1.0, 1.6, 1e-3
-    nrows, ncols, _ = size(unw_stack)
- 
-    outstack = Array{Float32, 2}(undef, (nrows, ncols))
-    countstack = similar(outstack)
-    println("Out size: ($nrows, $ncols)")
-    pix_count, total_pixels = 0, nrows * ncols
-
-    @time Threads.@threads for col in 1:ncols
-        for row in 1:nrows
-            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
-            outstack[row, col] = soln_p2mm
-            countstack[row, col] = igram_count
-        end
-    end
-
-    println("Writing solution into $outfile : $outdset")
-    h5open(outfile, "cw") do f
-        f[outdset] = outstack
-        f[_count_dset(outdset)] = countstack
-    end
-    return outfile, outdset
-end
-
-    # TODO: clean up this saving... maybe do it in a post step? handle it with config?
-    if is_3d
-        timediffs = day_diffs(geolist)
-        println("Integrating velocities to phases")
-        @time phi_arr = integrate_velocities(vstack, timediffs)
-        # Multiply by wavelength ratio to go from phase to cm
-        deformation = PHASE_TO_CM .* phi_arr
-
-        println("Saving deformation to $outfile: $cur_outdset")
-        @time Sario.save_hdf5_stack(outfile, cur_outdset, deformation, do_permute=true)
-    end
-
-    # TODO: I should also save the intlist... as well as the max baseline/config stuff
 
 function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     # Prepare A and B matrix used for each pixel inversion
@@ -291,3 +237,21 @@ function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, al
     return B, unw_stack
 end
 
+partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
+
+function merge_partial_files(outfile, dsets...)
+    for dset in dsets
+        tmp = zeros(size(partial_files(outfile)[1], dset))
+
+        for f in partial_files(outfile)
+            cur = h5read(f, dset)
+            tmp += cur
+        end
+        h5open(outfile, "cw") do fout
+            fout[dset] = tmp
+        end
+    end
+    for f in partial_files(outfile)
+        rm(f)
+    end
+end
