@@ -39,6 +39,8 @@ cc400_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indic
 unw_vals400_nmhb = get_stack_vals("unw_stack.h5", "NMHB", 1, "stack_flat_shifted", valid_igram_indices400, reference_station=nothing);
 cc400_nmhb = get_stack_vals("cc_stack.h5", "NMHB", 1, "stack", valid_igram_indices400, reference_station=nothing);
 
+unw_vals400_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices400, reference_station=nothing);
+cc400_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices400, reference_station=nothing);
 # 
 #
 # TODO: CHANGE BACK 700 to 600

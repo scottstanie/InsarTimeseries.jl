@@ -41,6 +41,7 @@ function _get_station_rowcol(station_name)
                latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
 end
 
+
 """Function to take a velocity file and calculate the GPS errors at one station"""
 function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=false, avgfunc=median)
 
