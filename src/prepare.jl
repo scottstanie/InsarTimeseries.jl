@@ -463,7 +463,7 @@ Pass a function `f` to operate on each image
 function loop_over_files(f, directory::String, input_ext::String, output_ext::String;
                          looks=(1, 1), out_dir=nothing,
                          max_procs::Union{Nothing, Int}=nothing,
-                         overwrite=false)
+                         overwrite=false, kwargs...)
     in_files = find_files(input_ext, directory)
     println("Looping over files: $in_files")
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
@@ -480,7 +480,7 @@ function loop_over_files(f, directory::String, input_ext::String, output_ext::St
     end
 
     wp = _get_workerpool(max_procs)
-    pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks),
+    pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks, kwargs...),
          wp, in_todo, out_todo)
     # @sync @distributed for fname in in_files
     # end
@@ -488,9 +488,9 @@ end
 
 """To manually pass which files you want to run on and save to""" 
 function loop_over_files(f, in_files::Array{String, 1}, out_files::Array{String, 1};
-                         looks=(1, 1), max_procs::Union{Nothing, Int}=nothing)
+                         looks=(1, 1), max_procs::Union{Nothing, Int}=nothing, kwargs...)
     wp = _get_workerpool(max_procs)
-    pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks),
+    pmap((name_in, name_out) -> _load_and_run(f, name_in, name_out, looks=looks, kwargs...),
          wp, in_files, out_files)
 end
 
