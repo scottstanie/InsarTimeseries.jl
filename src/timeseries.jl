@@ -38,7 +38,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        split_count=0,
                        min_date::DateOrNone=nothing,
                        max_date::DateOrNone=nothing,
-                       alpha::Float32=0.0f0,
+                       alpha::Real=0.0,
                        L1::Bool=false,  
                        use_distributed=true)
     if isempty(outfile)
