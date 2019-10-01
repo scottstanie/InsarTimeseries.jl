@@ -91,12 +91,13 @@ function run_sbas(unw_stack_file::String,
                   intlist, 
                   valid_igram_indices, 
                   constant_velocity::Bool, 
-                  alpha::Float32,
+                  alpha::Real,
                   L1::Bool=false,
                   prune=true) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
+    alpha > 0 ? println("Regularizing solution with alpha = $alpha") : println("No regularization")
     # TODO: do I ever really care about the abstol to change as variable?
     rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack_file, dset)
@@ -156,7 +157,6 @@ function prepB(geolist, intlist, constant_velocity=false, alpha=0)
     B = build_B_matrix(geolist, intlist)
 
     if alpha > 0
-        println("Regularizing solution with alpha = $alpha")
         B = augment_B(B, alpha)
     end
     return B
@@ -267,7 +267,7 @@ augment_zeros(B, unw) = vcat(unw, zeros(size(B, 1) - length(unw)))
 # end
  
 # TODO: this can't work for huge stacks
-function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Float32)
+function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Real)
     B = Float32.(vcat(B, alpha*I))
     # Now make num rows match
     nrows, ncols, nlayers = size(unw_stack)
