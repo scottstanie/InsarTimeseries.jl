@@ -20,8 +20,8 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true,
-                                                  L1; prune=prune)
+    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true;
+                                                   L1=L1, prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -35,15 +35,10 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
 
-    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, false,
-                                                   L1; prune=prune)
+    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, false;
+                                                   L1=L1, prune=prune)
 
-    # First find the phase for only the clean dates we solved for
-    timediffs = day_diffs(geo_clean)
-    phi_clean = integrate_velocities(soln_velos, timediffs)
-
-    # Then linearly interpolate between these for the removed phases
-    phi_arr = PHASE_TO_CM * interpolate_phase(geo_clean, phi_clean, geolist)
+    phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -52,8 +47,18 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     end
 end
 
-function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L1=true;
-                   cor_pixel=nothing, cor_thresh=0.0, prune=true)::Tuple{Array{Float32, 1}, Int64, Array}
+function _unreg_to_cm(soln_velos, geolist_short, geolist_full)
+    # First find the phase for only the clean dates we solved for
+    timediffs = day_diffs(geolist_short)
+    phi_clean = integrate_velocities(soln_velos, timediffs)
+
+    # Then linearly interpolate between these for the removed phases
+    return PHASE_TO_CM * interpolate_phase(geolist_short, phi_clean, geolist_full)
+end
+
+function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity;
+                   L1=true, cor_pixel=nothing, cor_thresh=0.0, 
+                   prune=true)::Tuple{Array{Float32, 1}, Int64, Array}
     sigma = 3
     if !prune
         geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
@@ -75,7 +80,7 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity, L
     if igram_count < 50  # TODO: justify this minimum data
         soln_phase = [Float32(0)]
     else
-        soln = L1 ? invert_pixel(unw_clean, B, rho=rho, alpha=alpha) : B \ unw_clean
+        soln = L1 ? invert_pixel(unw_clean, Array(B), rho=rho, alpha=alpha) : B \ unw_clean
         soln_phase = Float32.(soln)
     end
     return soln_phase, igram_count, geo_clean
@@ -173,8 +178,8 @@ function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zero
 end
 
 # Defined in optimize.jl
-function invert_pixel(pixel::AbstractArray{T, 1}, B::AbstractArray{T,2}; 
-                      rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3) where {T<:AbstractFloat}
+function invert_pixel(pixel::AbstractArray{<:AbstractFloat}, B::AbstractArray{<:AbstractFloat}; 
+                      rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3)
     return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, 
                               lu_tuple=lu_tuple, abstol=abstol))
 end
