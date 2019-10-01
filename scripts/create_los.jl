@@ -1,13 +1,13 @@
 import Glob
 println("Loading:")
-@time include("../src/InsarTimeseries.jl")
+import InsarLOS
+import Sario
 
 if ispath("../extra_files/")
-    db_file = Glob.glob("../extra_files/*.db*")[1]
+    dbpath = Glob.glob("../extra_files/*.db*")[1]
 else
-    db_file = Glob.glob("../*.db*")[1]
+    dbpath = Glob.glob("../*.db*")[1]
 end
 
-dem_rsc = InsarTimeseries.sario.load("dem.rsc")
 
-@time InsarTimeseries.los_map(dem_rsc, db_file, "los_map.h5");
+@time InsarLOS.create_los_map(directory=".", dbpath=dbpath, outfile="los_map.h5");
