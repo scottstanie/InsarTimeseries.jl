@@ -5,14 +5,14 @@ using Dates
 using HDF5
 using LinearAlgebra
 using Statistics: mean
-using Plots
+# using Plots
+# pyplot()
 using PyCall: pyimport
 import Polynomials
 import NaNMath
 using Printf: @printf
-pyplot()
-# import PyPlot
-# plt = PyPlot
+import PyPlot
+plt = PyPlot
 
 nm = NaNMath
 # import Convex
@@ -149,6 +149,7 @@ function integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
 end
 
 function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title="", ylims=YLIMS)
+    # TODO: fix plotting to pyplot
     p = plot(geolist, insar_linear_ts, title=title, label="linear insar", ylabel="cm", 
              linewidth=3, ylims=ylims, legend=:bottomleft)
     plot!(p, geolist, insar_unreg_ts, label="unreg insar", marker=:o, linealpha=0.0)
@@ -157,8 +158,9 @@ end
 
 function plot_gps!(p, dts, gps_los_data, gps_poly)
     day_nums = _get_day_nums(dts)
-    plot!(p, dts, gps_los_data, marker=:x, color=:green, linealpha=0.0, markeralpha=0.5, markersize=1, label="gps")
-    plot!(p, dts, gps_poly(day_nums), color=:green, linewidth=3, label="gps line fit")
+    # TODO: fix plotting to pyplot
+    plt.plot(dts, gps_los_data, marker=:x, color=:green, linealpha=0.0, markeralpha=0.5, markersize=1, label="gps")
+    plt.plot(dts, gps_poly(day_nums), color=:green, linewidth=3, label="gps line fit")
 end
 
 _get_day_nums(dts) = [( d - dts[1]).value for d in dts]
@@ -457,4 +459,22 @@ function plotsplit(fname; vm=20, n=1, group="velos")
     fig.suptitle(fname)
     plt.show(block=false)
     return fig, axes, vs
+end
+
+function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
+    plt.figure()
+    colors = ["b", "g", "c", "r"]
+    prunes = [true, true, false, false]
+    alphas = [alpha, 0.0, alpha, 0.0]
+    labels = ["prune/$alpha", "prune/0", "no prune/$alpha", "no prune/0.0"]
+    constant = false
+    for ii = 1:4
+        soln_velos, igram_count, geo_clean = InsarTimeseries.calc_soln(pixel, geolist, intlist, 1.0, alphas[ii],
+                                                                       constant, L1=L1, prune=prunes[ii])
+        phi_arr = InsarTimeseries._unreg_to_cm(soln_velos, geo_clean, geolist);
+        plt.plot(geolist, phi_arr, colors[ii]*"-x", label=labels[ii])
+    end
+    plt.title(title)
+    plt.legend()
+    plt.show(block=false)
 end
