@@ -1,7 +1,15 @@
 import Glob
 println("Loading:")
-import InsarLOS
-import Sario
+try
+    import InsarLOS
+catch
+    println("insar los import error")
+end
+try
+    import Sario
+catch
+    println("Sario import error")
+end
 
 if ispath("../extra_files/")
     dbpath = Glob.glob("../extra_files/*.db*")[1]

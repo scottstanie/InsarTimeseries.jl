@@ -58,7 +58,7 @@ get_station_values(fname, station_list::Array{String}; kwargs...) = [_get_val_at
 function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false)
 
     # insar derived solution in a small patch
-    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset, window)
+    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window)
 
     slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, ref_station)
 
