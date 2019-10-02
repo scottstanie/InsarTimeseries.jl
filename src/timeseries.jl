@@ -44,13 +44,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
     if isempty(outfile)
         outfile = _default_outfile()
     end
-    # averaging or linear means output will is 3D array (not just map of velocities)
-    is_3d = !(stack_average || constant_velocity)
-    outgroup = is_3d ? "stack" : "velos"
-
-    isfile(outfile) && outgroup in names(outfile) &&
-                       string(split_count) in names(outfile, outgroup) &&
-                       error("$outgroup/$split_count exists in $outfile already")
 
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
@@ -59,7 +52,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
             odf, ods = run_inversion(split_dates=[], split_count=split_count, min_date=d1, max_date=d2,
                                  unw_stack_file=unw_stack_file, input_dset=input_dset, 
-                                 outfile=outfile, outgroup=outgroup, stack_average=stack_average, 
+                                 outfile=outfile, stack_average=stack_average, 
                                  constant_velocity=constant_velocity, ignore_geo_file=ignore_geo_file,
                                  max_temporal_baseline=max_temporal_baseline, alpha=alpha, L1=L1, 
                                  use_distributed=use_distributed)
@@ -70,6 +63,16 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
         end
     end
+
+    # averaging or linear means output will is 3D array (not just map of velocities)
+    is_3d = !(stack_average || constant_velocity)
+    outgroup = is_3d ? "stack" : "velos"
+
+    # Check if this file/dset already exists
+    isfile(outfile) && outgroup in names(outfile) &&
+                       string(split_count) in names(outfile, outgroup) &&
+                       error("$outgroup/$split_count already exists in $outfile")
+
     # Make the dset one within the group, numbered by which split this is
     cur_outdset = "$outgroup/$split_count"
     
