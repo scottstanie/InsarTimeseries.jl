@@ -64,7 +64,7 @@ function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=true, max_i
         end
 
     end
-    println("Caution: problem did not converge within $max_iter iterations, $(size(A)), $(size(b))")
+    println("Caution: problem did not converge within $max_iter iterations to within $abstol, $reltol (alpha: $alpha, rho: $rho, sizes: $(size(A)), $(size(b)))")
     return x
 end
 

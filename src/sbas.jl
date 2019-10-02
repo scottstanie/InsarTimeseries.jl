@@ -14,6 +14,9 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
                            L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    if any(isnan.(unw_pixel))
+        return
+    end
     
     # Also load correlations for cutoff
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
@@ -28,6 +31,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
     end
+    return
 end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
