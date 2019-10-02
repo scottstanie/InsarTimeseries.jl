@@ -6,9 +6,13 @@ import Dierckx
 import SparseArrays: spdiagm
 
 
-"""Helper to make a path to same directory as `dset`, with new name `counts`"""
-_count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
-# _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
+"""Helper to make a group path similar to `dset`, with new base"""
+_match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/')
+
+# E.g. `counts/1` when passed `stack/1`
+_count_dset(dset) = _match_dset_path(dset, "counts")
+# Used if we want to track the standard deviaition 
+_stddev_dset(dset) = _match_dset_path(dset, "stddev")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
@@ -30,6 +34,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
+        f[_stddev_dset(outdset)][row, col] = std(unw_pixel)
     end
     return
 end
@@ -48,6 +53,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col, :] = phi_arr
         f[_count_dset(outdset)][row, col] = igram_count
+        f[_stddev_dset(outdset)][row, col] = std(unw_pixel)
     end
 end
 
@@ -128,6 +134,7 @@ function run_sbas(unw_stack_file::String,
         h5open(string(id)*outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(outsize))
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
+            d_create(fout, _stddev_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
         end
     end
  
@@ -138,7 +145,7 @@ function run_sbas(unw_stack_file::String,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
-    @time merge_partial_files(outfile, outdset, _count_dset(outdset))
+    @time merge_partial_files(outfile, outdset, _count_dset(outdset), _stddev_dset(outdset))
     return outfile, outdset
 end
 
