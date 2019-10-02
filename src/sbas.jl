@@ -11,7 +11,7 @@ _count_dset(dset) = join(["counts"; split(dset, '/')[2:end]], '/')
 # _count_dset(dset) = join([split(dset, '/')[1:end-1]; "counts"], '/')
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
-                           outfile, outdset, geolist, intlist, rho, alpha,
+                           outfile, outdset, geolist, intlist, alpha,
                            L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     
@@ -20,7 +20,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, true;
+    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, alpha, true;
                                                    L1=L1, prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
@@ -31,11 +31,11 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
 end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
-                          outfile, outdset, geolist, intlist, rho, alpha,
+                          outfile, outdset, geolist, intlist, alpha,
                           L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
 
-    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, rho, alpha, false;
+    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, alpha, false;
                                                    L1=L1, prune=prune)
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
@@ -56,7 +56,7 @@ function _unreg_to_cm(soln_velos, geolist_short, geolist_full)
     return PHASE_TO_CM * interpolate_phase(geolist_short, phi_clean, geolist_full)
 end
 
-function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity;
+function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
                    prune=true)::Tuple{Array{Float32, 1}, Int64, Array}
     sigma = 3
@@ -68,7 +68,6 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity;
                                                            cor_pixel=cor_pixel,
                                                            cor_thresh=cor_thresh)
     end
-
     igram_count = length(unw_clean)
 
     B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
@@ -80,7 +79,7 @@ function calc_soln(unw_pixel, geolist, intlist, rho, alpha, constant_velocity;
     if igram_count < 50  # TODO: justify this minimum data
         soln_phase = [Float32(0)]
     else
-        soln = L1 ? invert_pixel(unw_clean, Array(B), rho=rho, alpha=alpha) : B \ unw_clean
+        soln = L1 ? invert_pixel_l1(unw_clean, B) : B \ unw_clean
         soln_phase = Float32.(soln)
     end
     return soln_phase, igram_count, geo_clean
@@ -103,8 +102,9 @@ function run_sbas(unw_stack_file::String,
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
     alpha > 0 ? println("Regularizing solution with alpha = $alpha") : println("No regularization")
-    # TODO: do I ever really care about the abstol to change as variable?
-    rho, alpha, abstol = 1.0, 1.6, 1e-3
+
+    # TODO: do I ever really care about these to change as variable?
+    # rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack_file, dset)
 
     # Choose the correct processing function and size based on if we choose constant
@@ -128,9 +128,9 @@ function run_sbas(unw_stack_file::String,
     end
  
     @time @sync @distributed for (row, col) in get_unmasked_idxs()
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(100:200, 100:200))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(195:200, 195:200))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, geolist, intlist, rho, alpha, L1, prune,
+                   outdset, geolist, intlist, alpha, L1, prune,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
@@ -178,8 +178,8 @@ function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zero
 end
 
 # Defined in optimize.jl
-function invert_pixel(pixel::AbstractArray{<:AbstractFloat}, B::AbstractArray{<:AbstractFloat}; 
-                      rho=1.0, alpha=1.8, lu_tuple=nothing, abstol=1e-3)
+function invert_pixel_l1(pixel::AbstractArray{<:AbstractFloat}, B::AbstractArray{<:AbstractFloat}; 
+                      rho=1.0, alpha=1.6, lu_tuple=nothing, abstol=1e-3)
     return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, 
                               lu_tuple=lu_tuple, abstol=abstol))
 end
@@ -361,7 +361,7 @@ function prune_igrams(geolist, intlist, unw_pixel;  # B;
         Blin = prepB(geo_clean, intlist_clean, true)
         velo_cm = PHASE_TO_CM * (Blin \ unw_clean)[1]  # cm / day
         # rho, alpha, abstol = 1.0, 1.6, 1e-3
-        # velo_cm = PHASE_TO_CM * invert_pixel(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
+        # velo_cm = PHASE_TO_CM * invert_pixel_l1(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
         day_cutoff = fast_cm_cutoff / abs(velo_cm)
         # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
         too_long_igrams = [ig for ig in intlist_clean 

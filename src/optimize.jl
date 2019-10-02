@@ -7,6 +7,7 @@ using LinearAlgebra: cholesky, ldiv!
 """Fit Ax = b using Huber loss in ADMM (alternatinve directions method of multiplers)
 Adapted from https://web.stanford.edu/~boyd/papers/admm/huber/huber_fit.html
 """
+# TODO: differentiate this from the regularization alpha
 function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=true, max_iter=1000, abstol=1e-4, reltol=1e-2)
     m, n = size(A)
     Atb = A'*b
@@ -63,7 +64,7 @@ function huber_fit(A, b, rho=1.0, alpha=1.0; lu_tuple=nothing, quiet=true, max_i
         end
 
     end
-    println("Caution: problem did not converge within $max_iter iterations")
+    println("Caution: problem did not converge within $max_iter iterations, $(size(A)), $(size(b))")
     return x
 end
 
