@@ -6,13 +6,19 @@ include("./testl1.jl")
 load_geolist_intlist = InsarTimeseries.load_geolist_intlist
 prune_igrams = InsarTimeseries.prune_igrams
 
-invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel(u, B, rho=1.0, alpha=1.5)
+invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel_l1(u, B)
 invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
-prunesolve(g, i, u, B, nsigma=3; cor_thresh=0.0, cor_pixel=nothing) = invt(prune_igrams(g, i, u, B, 
-                                                                                        mean_sigma_cutoff=nsigma,
-                                                                                        cor_thresh=cor_thresh,
-                                                                                        cor_pixel=cor_pixel)[end:-1:end-1]...)
+function prunesolve(g, i, u, B, nsigma=3;
+                   cor_thresh=0.0, cor_pixel=nothing)
 
+    constant = true
+    geo, ints, unws = prune_igrams(g, i, u,
+                                   mean_sigma_cutoff=nsigma,
+                                   cor_thresh=cor_thresh,
+                                   cor_pixel=cor_pixel)
+    B = InsarTimeseries.prepB(geo, ints, constant)
+    invt(B, unws)
+end
 rowcol2 = [245, 189]  # small/looked uplift
 # rowcol2 = [1224, 944]  # full uplift
 rowcol3 = [368, 131]  # Small/looked subs
