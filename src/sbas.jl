@@ -20,6 +20,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            L1=true, prune=true; row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
+        println("$row, $col: nan")
         return
     end
     
@@ -145,7 +146,7 @@ function run_sbas(unw_stack_file::String,
         end
     end
  
-    @time @sync @distributed for (row, col) in get_unmasked_idxs()
+    @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
     # @time @sync @distributed for (row, col) in collect(Iterators.product(195:200, 195:200))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, geolist, intlist, alpha, L1, prune,
@@ -158,7 +159,7 @@ function run_sbas(unw_stack_file::String,
 end
 
 # Need the .I so we can use to load from h5 
-get_unmasked_idxs(do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(do_permute))]
+get_unmasked_idxs(geolist, do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(geolist, do_permute))]
 
 
 """Linearly interpolate the values between dates that we didn't solve for"""
