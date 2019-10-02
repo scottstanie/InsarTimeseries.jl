@@ -12,9 +12,11 @@ function read_last(fname, dset, do_permute=true)
     return do_permute ? permutedims(data) : data
 end
 
-function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1, group="velos", twoway=true)
+function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1, 
+                   group="velos", title="", twoway=true)
     vs = [read_last(fname, "$group/$ii") for ii in 1:n]
     # elseif group == "stack"
+    #
 
     if isnothing(vm)
         vm = maximum([maximum(abs.(vv)) for vv in vs])
@@ -29,7 +31,11 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1, group="velos", t
         axim = axes[ii].imshow(vi, vmin=vmin, vmax=vmax, cmap=cmap)
     end
     fig.colorbar(axim, ax=axes[end])
-    fig.suptitle(fname)
+
+    if isempty(title)
+        title = "$fname: $group"
+    end
+    fig.suptitle(title)
     plt.show(block=false)
     return fig, axes, vs
 end

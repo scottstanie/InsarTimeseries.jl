@@ -42,18 +42,25 @@ function _get_station_rowcol(station_name)
 end
 
 
-"""Function to take a velocity file and calculate the GPS errors at one station"""
-function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbose=false, avgfunc=median)
-
-    # Load the insar soln in a small patch around the pixel
+"""Load the insar data in a small patch around the pixel"""
+function _get_val_at_station(insar_fname, station_name; dset="velos", window=5, kwargs...)
     # Note: swapping row and col due to julia/hdf5 transposes
     row, col = _get_station_rowcol(station_name)
     halfwin = div(window, 2)
     patch = h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
-    slope_insar_mm_yr = avgfunc(patch)
+    return mean(patch)
+end
 
-    # NOTE: CURRENLT IGNORING THE REFERENCE STATION AND FORCING IT TO BE NOTHING
-    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, nothing)
+get_station_values(fname, station_list::Array{String}; kwargs...) = [_get_val_at_station(fname, stat; kwargs...)
+                                                                     for stat in station_list]
+
+"""Function to take a velocity file and calculate the GPS errors at one station"""
+function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false)
+
+    # insar derived solution in a small patch
+    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset, window)
+
+    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, ref_station)
 
     if verbose
         @show station_name
@@ -64,8 +71,8 @@ function find_gps_error(insar_fname, station_name; dset="velos", window=5, verbo
 
     return slope_insar_mm_yr - slope_gps_mm_yr 
 end
-find_gps_error(fname, station_list::Array{String}; kwargs...) = [find_gps_error(fname, stat; kwargs...)
-                                                                 for stat in station_list]
+get_gps_error(fname, station_list::Array{String}; kwargs...) = [get_gps_error(fname, stat; kwargs...)
+                                                                for stat in station_list]
 
 """Given a list of errors from insar-gps, find the const to add
 to the insar solution image to minimize these errors

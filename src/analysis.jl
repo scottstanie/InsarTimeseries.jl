@@ -207,8 +207,7 @@ end
 
 """Find the linear fit of MM per year of the gps station"""
 function solve_gps_ts(station_name, reference_station=nothing)
-    # NOTE: CURRENLT IGNORING THE REFERENCE STATION AND FORCING IT TO BE NOTHING
-    dts, gps_los_data = get_gps_los(station_name, reference_station=nothing)
+    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
     # If we wanna compare with GPS subtracted too, do this:
     # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
 

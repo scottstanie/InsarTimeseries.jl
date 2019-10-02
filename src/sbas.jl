@@ -13,12 +13,13 @@ _match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/'
 _count_dset(dset) = _match_dset_path(dset, "counts")
 # Used if we want to track the standard deviaition 
 _stddev_dset(dset) = _match_dset_path(dset, "stddev")
+_stddev_raw_dset(dset) = _match_dset_path(dset, "stddev_raw")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
                            L1=true, prune=true; row=nothing, col=nothing)
-    unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
-    if any(isnan.(unw_pixel))
+    unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    if any(isnan.(unw_pixel_raw))
         return
     end
     
@@ -27,14 +28,15 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_phase, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, alpha, true;
-                                                   L1=L1, prune=prune)
+    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, true;
+                                                              L1=L1, prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_stddev_dset(outdset)][row, col] = std(unw_pixel)
+        f[_stddev_dset(outdset)][row, col] = std(unw_clean)
+        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw)
     end
     return
 end
@@ -42,10 +44,13 @@ end
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
                           L1=true, prune=true; row=nothing, col=nothing)
-    unw_pixel = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+    if any(isnan.(unw_pixel_raw))
+        return
+    end
 
-    soln_velos, igram_count, geo_clean = calc_soln(unw_pixel, geolist, intlist, alpha, false;
-                                                   L1=L1, prune=prune)
+    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, false;
+                                                              L1=L1, prune=prune)
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
 
@@ -53,7 +58,8 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col, :] = phi_arr
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_stddev_dset(outdset)][row, col] = std(unw_pixel)
+        f[_stddev_dset(outdset)][row, col] = std(unw_clean)
+        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw)
     end
 end
 
@@ -68,7 +74,7 @@ end
 
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune=true)::Tuple{Array{Float32, 1}, Int64, Array}
+                   prune=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
     sigma = 3
     if !prune
         geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
@@ -82,17 +88,17 @@ function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
 
     B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
 
-    if alpha > 0
-        unw_clean = augment_zeros(B, unw_clean)
-    end
+    # Last, pad with zeros if doing Tikh. regularization
+    unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
     if igram_count < 50  # TODO: justify this minimum data
         soln_phase = [Float32(0)]
     else
-        soln = L1 ? invert_pixel_l1(unw_clean, B) : B \ unw_clean
+        soln = L1 ? invert_pixel_l1(unw_final, B) : B \ unw_final
         soln_phase = Float32.(soln)
     end
-    return soln_phase, igram_count, geo_clean
+
+    return soln_phase, igram_count, geo_clean, unw_clean
 end
 
 
@@ -135,6 +141,7 @@ function run_sbas(unw_stack_file::String,
             d_create(fout, outdset, datatype(Float32), dataspace(outsize))
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
             d_create(fout, _stddev_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
+            d_create(fout, _stddev_raw_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
         end
     end
  
@@ -145,7 +152,8 @@ function run_sbas(unw_stack_file::String,
                    row=row, col=col)
     end
     println("Merging files into $outfile")
-    @time merge_partial_files(outfile, outdset, _count_dset(outdset), _stddev_dset(outdset))
+    @time merge_partial_files(outfile, outdset, _count_dset(outdset), 
+                              _stddev_dset(outdset), _stddev_raw_dset(outdset))
     return outfile, outdset
 end
 
