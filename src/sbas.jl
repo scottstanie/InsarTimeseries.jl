@@ -36,8 +36,8 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_stddev_dset(outdset)][row, col] = std(unw_clean)
-        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw)
+        f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* PHASE_TO_CM
+        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* PHASE_TO_CM
     end
     return
 end
@@ -155,12 +155,21 @@ function run_sbas(unw_stack_file::String,
     println("Merging files into $outfile")
     @time merge_partial_files(outfile, outdset, _count_dset(outdset), 
                               _stddev_dset(outdset), _stddev_raw_dset(outdset))
+
+    _save_std_attrs(unw_stack_file, outdset)
     return outfile, outdset
 end
 
 # Need the .I so we can use to load from h5 
-get_unmasked_idxs(geolist, do_permute=false) = [cart_idx.I for cart_idx in findall(.!Sario.load_mask(geolist, do_permute))]
+get_unmasked_idxs(geolist, do_permute=false) = [cart_idx.I for cart_idx in
+                                                findall(.!Sario.load_mask(geolist, do_permute=do_permute))]
 
+function _save_std_attrs(unw_stack_file, outdset)
+    attr_dict1 = Dict("description" => "original unwrapped (shifted) std. dev of pixels", "units" => "cm")
+    h5writeattr(unw_stack_file, _stddev_raw_dset(outdset), attr_dict1)
+    attr_dict2 = Dict("description" => "Final, outlier-removed std. dev of pixels", "units" => "cm")
+    h5writeattr(unw_stack_file, _stddev_dset(outdset), attr_dict2)
+end
 
 """Linearly interpolate the values between dates that we didn't solve for"""
 function interpolate_phase(geo_clean, phis, geolist_full)
