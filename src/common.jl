@@ -1,6 +1,4 @@
-import Base.view
-import Base.size
-import Base.eltype
+import Base: in, view, size, eltype, names
 
 using Dates
 using HDF5
@@ -31,7 +29,6 @@ const REFERENCE_STATION_ATTR = "reference_station"
 # Type alias for commonly used compositite type
 const Igram = Tuple{Date, Date}
 
-import Base.in
 # To check if either date of an igram is contained with a geo date list
 Base.in(igram::Igram, geo_date_list::AbstractArray{Date}) = ((igram[1] in geo_date_list) || (igram[2] in geo_date_list))
 
@@ -62,14 +59,13 @@ function Base.view(dset::HDF5Dataset, i::Int, j::Int, k::Colon)
 end
 
 
-function Base.eltype(h5file::String, dset::String)
+function eltype(h5file::String, dset::String)
     h5open(h5file) do f
         return eltype(f[dset])
     end
 end
 
 # Allow the HDF5 `names` to work on just filenam
-import Base.names
 function names(fname::AbstractString)
     h5open(fname) do f
         return names(f)
@@ -81,6 +77,15 @@ function names(fname::AbstractString, group::AbstractString)
     end
 end
 
+# From https://github.com/JuliaLang/julia/blob/master/base/broadcast.jl#L662
+# broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
+# # Default to collecting iterables — which will error for non-iterables
+# broadcastable(x) = collect(x)
+Base.broadcastable(x::HDF5Dataset) = read(x)
+Base.collect(x::HDF5Dataset) = collect(read(x))
+Base.iterate(x::HDF5Dataset) = iterate(read(x))
+Base.iterate(x::HDF5Dataset, state) = iterate(read(x), state)
+
 """Get the number of megabytes of RAM available
 Note this is higher than "Sys.free_memory()"
 """
@@ -90,3 +95,4 @@ function getmemavail()
     memline = split(lines, '\n')[2]
     return parse(Float64, split(memline)[end])
 end
+
