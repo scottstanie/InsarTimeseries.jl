@@ -409,6 +409,10 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
     end
     return stack_out
 end
+function shift_stack(stack_in, ref_row::Int, ref_col::Int; window::Int=5)
+    stack_out = Array{eltype(stack_in), ndims(stack_in)}(undef, size(stack_in))
+    return shift_stack(stack_in, stack_out, ref_row, ref_col; window=window)
+end
 
 function _shift_layer(layer, patch, ref_row, ref_col, half_win)
     patch .= layer[ref_row - half_win:ref_row + half_win, 
