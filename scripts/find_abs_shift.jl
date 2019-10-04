@@ -22,17 +22,25 @@ rms(arr::AbstractArray{T, 1}) where {T <: Any} = sqrt(mean(arr.^2))
 rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
 maxabs(x) = maximum(abs.(x))
 
-function print_errors(errors, station_name_list)
-    println("Name | error ")
-    println("=============")
-    for (err, name) in zip(errors, station_name_list)
-        # println("$name RESULTS:")
-        @printf("%s |  %.2f \n", name, err)
+"""Function to take a velocity file and calculate the GPS errors at one station"""
+function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false)
+
+    # insar derived solution in a small patch
+    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window)
+
+    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, ref_station)
+
+    if verbose
+        @show station_name
+        println("GPS velocity (mm / year): $slope_gps_mm_yr")
+        println("InSAR linear velocity (mm / year): $slope_insar_mm_yr")
+        println("==="^10)
     end
-    println("==============")
-    println("RMS  | Max-abs")
-    @printf("%.2f |  %.2f \n", rms(errors), maxabs(errors))
+
+    return slope_insar_mm_yr - slope_gps_mm_yr 
 end
+get_gps_error(fname, station_list::Array{String}; kwargs...) = get_gps_error.(fname, station_list; kwargs...)
+# ! note: dot broadcasting is same as [get_gps_error.(fname, stat; kwargs...) for stat in station_list]
 
 function _get_station_rowcol(station_name)
     dem_rsc = sario.load("dem.rsc")
@@ -54,26 +62,6 @@ end
 get_station_values(fname, station_list::Array{String}; kwargs...) = [_get_val_at_station(fname, stat; kwargs...)
                                                                      for stat in station_list]
 
-"""Function to take a velocity file and calculate the GPS errors at one station"""
-function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false)
-
-    # insar derived solution in a small patch
-    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window)
-
-    slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, ref_station)
-
-    if verbose
-        @show station_name
-        println("GPS velocity (mm / year): $slope_gps_mm_yr")
-        println("InSAR linear velocity (mm / year): $slope_insar_mm_yr")
-        println("==="^10)
-    end
-
-    return slope_insar_mm_yr - slope_gps_mm_yr 
-end
-get_gps_error(fname, station_list::Array{String}; kwargs...) = [get_gps_error(fname, stat; kwargs...)
-                                                                for stat in station_list]
-
 """Given a list of errors from insar-gps, find the const to add
 to the insar solution image to minimize these errors
 (converts the gps from relative to absolute)"""
@@ -94,5 +82,17 @@ function minimize_errors(error_list, search_range=-5:.1:5)
         end
     end
     return c_rms, c_maxabs, best_rms, best_maxabs
+end
+
+function print_errors(errors, station_name_list)
+    println("Name | error ")
+    println("=============")
+    for (err, name) in zip(errors, station_name_list)
+        # println("$name RESULTS:")
+        @printf("%s |  %.2f \n", name, err)
+    end
+    println("==============")
+    println("RMS  | Max-abs")
+    @printf("%.2f |  %.2f \n", rms(errors), maxabs(errors))
 end
 

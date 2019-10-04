@@ -13,7 +13,7 @@ function read_last(fname, dset, do_permute=true)
 end
 
 function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1, 
-                   group="velos", title="", twoway=true)
+                   group="velos", title="", twoway=true, shift=0)
     vs = [read_last(fname, "$group/$ii") for ii in 1:n]
     # elseif group == "stack"
     #
@@ -28,7 +28,7 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1,
     axim = nothing
     for ii = 1:n
         vi = vs[ii]
-        axim = axes[ii].imshow(vi, vmin=vmin, vmax=vmax, cmap=cmap)
+        axim = axes[ii].imshow(vi .+ shift, vmin=vmin, vmax=vmax, cmap=cmap)
     end
     fig.colorbar(axim, ax=axes[end])
 
