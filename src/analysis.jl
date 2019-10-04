@@ -14,6 +14,12 @@ function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, intlis
     return scale .* (velo_l1[1], velo_lstsq[1])
 end
 
+function shift_from(src::HDF5Dataset, shift::Real)
+    tmp = src .+ shift
+    tmp[src .== 0] .= 0;
+    return tmp
+end
+
 
 """For one set of unw_vals, loop through each day of geolist and remove.
 Solves once with no removals, and returns the difference of no removing
