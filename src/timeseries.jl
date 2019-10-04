@@ -23,7 +23,7 @@ function run_inversion(config_file::Dict{AbstractString, Any})
     h5writeattr(outfile, outdset, conf_dict)
 end 
 
-# TODO: overwrites in the dset
+# overwrites in the dset fail now... is that fine? force user to delete?
 function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        input_dset::String=STACK_FLAT_SHIFTED_DSET,
                        outfile::String="", 
@@ -40,6 +40,9 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        max_date::DateOrNone=nothing,
                        alpha::Real=0.0,
                        L1::Bool=false,  
+                       ref_station=nothing, # Note: these only work for stackavg...
+                       ref_row=nothing, 
+                       ref_col=nothing,
                        use_distributed=true)
     if isempty(outfile)
         outfile = _default_outfile()
@@ -100,7 +103,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         # Dont need shift for avg
         input_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
-        velo_file_out = run_stackavg(unw_stack_file, input_dset, outfile, cur_outdset, geolist, intlist)
+        velo_file_out = run_stackavg(unw_stack_file, input_dset, outfile, cur_outdset, geolist, intlist;
+                                    ref_station=ref_station, ref_row=ref_row, ref_col=ref_col)
     else
         println("Performing linear SBAS solution")
 

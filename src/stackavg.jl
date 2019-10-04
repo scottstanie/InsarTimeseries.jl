@@ -34,9 +34,10 @@ function run_stackavg(unw_stack_file::String, input_dset::String, outfile::Strin
     if isnothing(ref_station)
         println("Using $ref_station as reference")
         rsc_data = Sario.load_dem_from_h5(unw_stack_file)
-        ref_cow, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
+        ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
     end
     if (isnothing(ref_row) && isnothing(ref_col))
+        println("Shifting input stack to $ref_row, $ref_col")
         unw_stack .= shift_stack(unw_stack, ref_col, ref_row, window=window)
     end
 
