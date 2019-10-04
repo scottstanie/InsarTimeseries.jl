@@ -395,8 +395,8 @@ function shift_stack(stack_in, stack_out, ref_row::Int, ref_col::Int;
     layer = Array{Float32, 2}(undef, (nrows, ncols))
     layer_out = similar(layer)
 
-    @show stack_in
-    @show stack_out
+    @show typeof(stack_in)
+    @show typeof(stack_out)
 
     @inbounds for k = 1:nlayers
         layer .= view(stack_in, :, :, k)

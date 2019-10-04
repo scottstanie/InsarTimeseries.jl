@@ -31,14 +31,15 @@ function run_stackavg(unw_stack_file::String, input_dset::String, outfile::Strin
     println("Reading $(length(picked_igram_indices)) igrams out of '$input_dset' dataset from file ")
     @time unw_stack = load_hdf5_stack(unw_stack_file, input_dset, picked_igram_indices)
 
-    if isnothing(ref_station)
+    if !isnothing(ref_station)
         println("Using $ref_station as reference")
         rsc_data = Sario.load_dem_from_h5(unw_stack_file)
         ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
     end
-    if (isnothing(ref_row) && isnothing(ref_col))
+    if !(isnothing(ref_row) && isnothing(ref_col))
         println("Shifting input stack to $ref_row, $ref_col")
-        unw_stack .= shift_stack(unw_stack, ref_col, ref_row, window=window)
+        # Using col, row since we 
+        @time unw_stack .= shift_stack(unw_stack, ref_row, ref_col)  # , window=window
     end
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
