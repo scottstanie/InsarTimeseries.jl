@@ -6,7 +6,7 @@ Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 """Solve without a geo date, array of dates, or array of igrams"""
 function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, intlist, unw_vals, B; in_mm_yr=true)
     intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_vals, B, bad_items)
-    velo_l1 = InsarTimeseries.invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
+    velo_l1 = invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year if specified
     scale = in_mm_yr ? P2MM : 1
@@ -32,8 +32,7 @@ function compare_solutions(geolist, intlist, unw_vals, B)
 end
 
 function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, linear=true)
-    B = InsarTimeseries.build_B_matrix(geolist, intlist)
-    B = linear ? sum(B, dims=2) : B
+    B = prepB(geolist, intlist, constant_velocity=linear)
 
     l1_diffs = Array{Float32, 1}(undef, length(geolist))
     lstsq_diffs = similar(l1_diffs)
@@ -196,12 +195,13 @@ end
 ############################
 # GPS FUNCTIONS
 ############################
-function get_gps_los(station_name, geo_path="../"; reference_station=nothing)
-    dts, gps_los_data = InsarTimeseries.gps.load_gps_los_data(geo_path, station_name, 
-                                                              start_year=2015, end_year=2018,
-                                                              zero_mean=true, 
-                                                              reference_station=reference_station)
-    
+function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing)
+    dts, gps_los_data = gps.load_gps_los_data(geo_path=geo_path, los_map_file=los_map_file,
+                                              station_name=station_name, 
+                                              start_year=2015, end_year=2018,
+                                              zero_mean=true, 
+                                              reference_station=reference_station)
+
     return [convert(Date, d) for d in dts], gps_los_data
 end
 
