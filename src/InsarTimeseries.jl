@@ -1,13 +1,15 @@
+__precompile__(true)
+
 """Module InsarTimeseries
 """
+module InsarTimeseries
 
-__precompile__(true)
 
 using Sario
 
 include("./common.jl")
 include("./config.jl")
-include("./prepare.jl")
+# include("./prepare.jl")
 include("./stackavg.jl")
 include("./optimize.jl")
 include("./sbas.jl")
