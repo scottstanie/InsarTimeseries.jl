@@ -1,5 +1,3 @@
-import Polynomials
-
 Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
 
@@ -35,32 +33,6 @@ function compare_solutions(geolist, intlist, unw_vals, B)
         lstsq_diffs[idx] = lstsq - base_lstsq
     end
     return l1_diffs, lstsq_diffs
-end
-
-function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, linear=true)
-    B = prepB(geolist, intlist, constant_velocity=linear)
-
-    l1_diffs = Array{Float32, 1}(undef, length(geolist))
-    lstsq_diffs = similar(l1_diffs)
-
-    slope_gps_mm_yr = solve_gps_ts(station_name, nothing)
-
-    # First, solve with a dummy date so nothing is removed
-    base_l1, base_lstsq = solve_without(Date(2000,1,1), intlist, unw_vals, B)
-    base_l1_error = base_l1 - slope_gps_mm_yr
-    base_lstsq_error = base_lstsq - slope_gps_mm_yr
-    println("Base L1 error for $station_name = $base_l1_error")
-
-    for (idx, d) in enumerate(geolist)
-        l1, lstsq = solve_without(d, intlist, unw_vals, B)
-        l1d = l1 - slope_gps_mm_yr
-        lstsqd = lstsq - slope_gps_mm_yr
-
-        # Note: if base is larger, the diff will be positive (an improvement)
-        l1_diffs[idx] = abs(base_l1_error) - abs(l1d)
-        lstsq_diffs[idx] = abs(base_lstsq_error) - abs(lstsqd)
-    end
-    return l1_diffs, lstsq_diffs, base_l1_error
 end
 
 """Get the mean values of igrams, per date, always taking the igram to be  (date, other)
@@ -197,37 +169,4 @@ function find_inliers(B, vals, lof, n_neighbors=100, is1d=true)
 end
 
 
-
-############################
-# GPS FUNCTIONS
-############################
-function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing)
-    dts, gps_los_data = gps.load_gps_los_data(geo_path=geo_path, los_map_file=los_map_file,
-                                              station_name=station_name, 
-                                              start_year=2015, end_year=2018,
-                                              zero_mean=true, 
-                                              reference_station=reference_station)
-
-    return [convert(Date, d) for d in dts], gps_los_data
-end
-
-"""Find the linear fit of MM per year of the gps station"""
-function solve_gps_ts(station_name, reference_station=nothing)
-    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
-    # If we wanna compare with GPS subtracted too, do this:
-    # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
-
-    # Convert to "days since start" for line fitting
-    gps_poly = fit_line(dts, gps_los_data)
-    slope = length(gps_poly) == 2 ? Polynomials.coeffs(gps_poly)[2] : Polynomials.coeffs(gps_poly)[1]
-    # offset, slope = Polynomials.coeffs(gps_poly)
-    slope_gps_mm_yr = 365 * 10 * slope
-end
-
-function fit_line(dts, data)
-    day_nums = _get_day_nums(dts)
-    p = Polynomials.polyfit(day_nums, data, 1)
-    # p(day_nums[end])
-    return p
-end
 

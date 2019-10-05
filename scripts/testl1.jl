@@ -14,6 +14,17 @@ using Printf: @printf
 import PyPlot
 plt = PyPlot
 
+#TODO: functions needed to remove these python calls:
+# gps.load_gps_los_data
+# scripts/find_abs_shift.jl:    lon, lat = gps.station_lonlat(station_name)
+# scripts/testl1.jl:  lon, lat = gps.station_lonlat(station_name)
+# src/analysis.jl: dts, gps_los_data = InsarTimeseries.gps.load_gps_los_data(geo_path, station_name,
+# src/prepare.jl: ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
+# src/prepare.jl: geo_path = abspath(utils.get_parent_dir(igram_path))
+# src/prepare.jl: row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
+# srx/prepare.jl: utils.get_parent_dir(igram_path))
+# src/prepare.jl:    row_looks, col_looks = utils.find_looks_taken
+
 nm = NaNMath
 # import Convex
 # import ECOS
@@ -140,6 +151,7 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cuto
     return v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1
 end
 
+in
 function integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
     linear_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_lstsq, timediffs)
     unreg_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_lstsq, timediffs)

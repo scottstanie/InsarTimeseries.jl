@@ -1,5 +1,10 @@
 using Distributed: pmap, workers, WorkerPool
 
+using PyCall: pyimport
+sario = pyimport("apertools.sario")
+gps = pyimport("apertools.gps")
+
+
 function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
                         ref_col=nothing, ref_station=nothing, 
                         geo_path=nothing, window=5, zero_masked=true)
@@ -58,7 +63,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     end
 
     row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
-    dem_rsc = load(sario.find_rsc_file(directory=igram_path))
+    dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
@@ -69,11 +74,11 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     save_masks(igram_path, geo_path, overwrite=overwrite)
 
     # Finall, add the aux. information
-    dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
-    sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
+    dem_rsc = Sario.load(Sario.find_rsc_file(directory=igram_path))
+    Sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
                          overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    Sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    Sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
 end
 
 _get_geo_mask(arr) = (arr .== 0)
