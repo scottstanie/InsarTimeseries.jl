@@ -58,7 +58,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     end
 
     row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
-    dem_rsc = load(sario.find_rsc_file(directory=igram_path))
+    dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
@@ -69,11 +69,11 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     save_masks(igram_path, geo_path, overwrite=overwrite)
 
     # Finall, add the aux. information
-    dem_rsc = sario.load(sario.find_rsc_file(directory=igram_path))
-    sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
+    dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
+    Sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
                          overwrite=overwrite)
-    sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
-    sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    Sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    Sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
 end
 
 _get_geo_mask(arr) = (arr .== 0)
@@ -86,17 +86,17 @@ function save_masks(igram_path, geo_path; overwrite=false,
                     geo_dset_name=GEO_MASK_DSET,
                     igram_dset_name=IGRAM_MASK_DSET)
     # TODO?: add checks for overwrite
-    !sario.check_dset(mask_filename, geo_dset_name, overwrite) && return
-    !sario.check_dset(mask_filename, igram_dset_name, overwrite) && return
-    !sario.check_dset(mask_filename, GEO_MASK_SUM_DSET, overwrite) && return
+    !Sario.check_dset(mask_filename, geo_dset_name, overwrite) && return
+    !Sario.check_dset(mask_filename, igram_dset_name, overwrite) && return
+    !Sario.check_dset(mask_filename, GEO_MASK_SUM_DSET, overwrite) && return
 
     geo_mask_stack = load_stack(directory=igram_path,
                                 file_ext=".geo.mask")
 
 
-    int_date_list = sario.find_igrams(directory=igram_path)
-    int_file_list = sario.find_igrams(directory=igram_path, parse=false)
-    geo_date_list = sario.find_geos(directory=geo_path)
+    int_date_list = Sario.find_igrams(directory=igram_path)
+    int_file_list = Sario.find_igrams(directory=igram_path, parse=false)
+    geo_date_list = Sario.find_geos(directory=geo_path)
 
     nrows, ncols, _ = size(geo_mask_stack)
     int_mask_stack = Array{eltype(geo_mask_stack), 3}(undef, (nrows, ncols, length(int_file_list)))
@@ -263,11 +263,11 @@ function create_hdf5_stack(filename::String,
     println("Creating stack file $filename")
 
     get_file_ext(filename) in (".h5", ".hdf5") || ArgumentError("filename must end in .h5 or .hdf5")
-    !sario.check_dset(filename, dset_name, overwrite) && return
+    !Sario.check_dset(filename, dset_name, overwrite) && return
 
     file_list = find_files(file_ext, directory)
 
-    testf = sario.load(file_list[1])
+    testf = load(file_list[1])
     rows, cols = size(testf)
     # Note: since we're just loading/saving, don't permute on way in or way out
     shape = (cols, rows, length(file_list))
@@ -286,12 +286,12 @@ function create_hdf5_stack(filename::String,
     h5writeattr(filename, dset_name, Dict("filenames" => file_list))
 
     # Now save dem rsc as well
-    dem_rsc = sario.load(sario.find_rsc_file(directory=directory))
-    sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    sario.save_geolist_to_h5(directory, filename, overwrite=overwrite)
-    sario.save_intlist_to_h5(directory, filename, overwrite=overwrite)
+    dem_rsc = load(Sario.find_rsc_file(directory=directory))
+    Sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
+    Sario.save_geolist_to_h5(directory, filename, overwrite=overwrite)
+    Sario.save_intlist_to_h5(directory, filename, overwrite=overwrite)
 
-    !sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
+    !Sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
     mean_buf ./= length(file_list)
     h5write(filename, STACK_MEAN_DSET, mean_buf)
 
@@ -336,7 +336,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     end
     stack_flat_shifted_dset = stack_flat_dset * "_shifted"
 
-    !sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite) && return
+    !Sario.check_dset(unw_stack_file, stack_flat_shifted_dset, overwrite) && return
 
     if (isnothing(ref_row) || isnothing(ref_col))
         isnothing(ref_station) && throw(ArgumentError("Need ref_station if no ref_row/ref_col"))

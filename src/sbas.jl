@@ -147,7 +147,7 @@ function run_sbas(unw_stack_file::String,
     end
  
     @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(195:200, 195:200))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(1000:2000, 1000:2000))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, geolist, intlist, alpha, L1, prune,
                    row=row, col=col)
