@@ -36,8 +36,8 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* PHASE_TO_CM
-        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* PHASE_TO_CM
+        f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
+        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
     return
 end
@@ -59,8 +59,8 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col, :] = phi_arr
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* PHASE_TO_CM
-        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* PHASE_TO_CM
+        f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
+        f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
 end
 
