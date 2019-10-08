@@ -14,7 +14,7 @@ station_name_list78 = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM",
                        "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
 #
 # PATH 85
-station_name_list85 = ["TXKM", "TXMH", "TXFS", "TXAL"]
+station_name_list85 = ["TXKM", "TXMH", "TXFS", "TXAL", "NMHB", "TXAD"]
 # BAD station reasons: MDO1 (nothing 2014-2017), TXVH (started 2018), TXPC (ended 2017)
 
 # Functions for error evaluation
