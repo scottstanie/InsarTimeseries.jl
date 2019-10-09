@@ -211,6 +211,19 @@ function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; re
     return [convert(Date, d) for d in dts], gps_los_data
 end
 
+function get_gps_enu(station_name)
+    dts, enu_df = gps.load_station_enu(station_name, start_year=2015, end_year=2018, zero_mean=true)
+
+    # Convert from PyObjects to Arrays
+    dts = [convert(Date, d) for d in dts]
+    east = [r for r in enu_df.east]
+    north = [r for r in enu_df.north]
+    up = [r for r in enu_df.up]
+    return dts, east, north, up
+end
+
+
+
 """Find the linear fit of MM per year of the gps station"""
 function solve_gps_ts(station_name, reference_station=nothing)
     dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)

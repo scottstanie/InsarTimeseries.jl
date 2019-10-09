@@ -1,5 +1,6 @@
 using HDF5
 import PyPlot
+import Polynomials
 plt = PyPlot
 
 function read_last(fname, dset, do_permute=true)
@@ -90,3 +91,46 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     plt.show(block=false)
 end
 
+
+# Plot gps east up data
+function plot_eu(station_name, insar_slopes=nothing, marker=".")
+    dts, east, north, up = InsarTimeseries.get_gps_enu(station_name)
+
+    insar_east, insar_up = !isnothing(insar_slopes) ? insar_slopes : (nothing, nothing)
+
+    fig, axes = plt.subplots(1, 2)
+    axes[1].plot(dts, east, marker, label="gps")
+    axes[1].set_title("east")
+    axes[1].set_ylabel("cm")
+    axes[1].set_ylim((-2.5, 2.5))
+    if !isnothing(insar_east)
+        plot_insar(axes[1], dts, insar_east)
+    end
+
+    axes[2].plot(dts, up, marker, label="gps")
+    axes[2].set_title("up")
+    axes[2].set_ylim((-2.5, 2.5))
+    if !isnothing(insar_up)
+        plot_insar(axes[2], dts, insar_up)
+    end
+
+    fig.suptitle(station_name)
+    return fig, axes
+end
+
+function plot_insar(ax, dts, insar_slope; label="insar")
+    # Offset to be zero centered for 3 years, slope to be per day
+    p = Polynomials.Poly([-3(insar_slope / 2), insar_slope / 365])
+    dd = InsarTimeseries._get_day_nums(dts)
+    vals = p(dd)
+    ax.plot(dts, vals, label=label)
+end
+
+function plot_all(east, up)
+    station_overlap = ["TXMH", "TXFS", "TXAD", "TXS3", "NMHB"]
+    slopes = eastups(station_overlap, east, up) ./ 10
+    slope_by_station = collect(zip(slopes...))
+    for (idx, name) in enumerate(station_overlap)
+        plot_eu(name, slope_by_station[idx])
+    end
+end
