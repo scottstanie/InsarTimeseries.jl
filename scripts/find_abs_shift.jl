@@ -4,10 +4,11 @@ push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
 using HDF5
 using PyCall
 using Printf: @printf
+using MapImages
 
 gps = InsarTimeseries.gps
 sario = InsarTimeseries.sario
-latlon = pyimport("apertools.latlon")
+# latlon = pyimport("apertools.latlon")
 
 # PATH 78 
 station_name_list78 = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
@@ -43,10 +44,10 @@ get_gps_error(fname, station_list::Array{String}; kwargs...) = get_gps_error.(fn
 # ! note: dot broadcasting is same as [get_gps_error.(fname, stat; kwargs...) for stat in station_list]
 
 function _get_station_rowcol(station_name)
-    dem_rsc = sario.load("dem.rsc")
+    dem_rsc = Sario.load("dem.rsc")
     lon, lat = gps.station_lonlat(station_name)
     return map(x-> convert(Int, x), 
-               latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
+               MapImages.nearest_pixel(dem_rsc, lat, lon))
 end
 
 
