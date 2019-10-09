@@ -30,10 +30,13 @@ rowcol3 = [368, 131]  # Small/looked subs
 
 # geolistig, intlist400ig, valid_igram_indices400ig = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 400)
 geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 400)
+_, intlist500, valid_igram_indices500 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
 _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
 # geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", nothing, 400)
 B400 = InsarTimeseries.build_B_matrix(geolist, intlist400);
 Blin400 = sum(B400, dims=2);
+B500 = InsarTimeseries.build_B_matrix(geolist, intlist500);
+Blin500 = sum(B500, dims=2);
 Blin600 = sum(InsarTimeseries.build_B_matrix(geolist, intlist600), dims=2);
 
 unw_vals400_uplift = get_stack_vals("unw_stack.h5", rowcol2..., 1, "stack_flat_shifted", valid_igram_indices400, reference_station=nothing);
@@ -77,11 +80,12 @@ end
 
 #### Points for looked at the diffs:
 # Looked, path78 asc
-rowcol_asc = [226, 40]
+# rowcol_asc = [226, 40]
+rowcol_asc = [259, 82]  # Uplift looks stronger in stack than not
 # # Looked, path85 desc
 # rowcol_desc = [106, 400]
 
-unw_vals400_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices400, reference_station=nothing);
+unw_vals500_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 cc400_asc = get_stack_vals("cc_stack.h5", rowcol_asc..., 1, "stack", valid_igram_indices400, reference_station=nothing);
 unw_vals600_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices600, reference_station=nothing);
 # unw_vals400_desc = get_stack_vals("unw_stack.h5", rowcol_desc..., 1, "stack_flat_shifted", valid_igram_indices400, reference_station=nothing);
