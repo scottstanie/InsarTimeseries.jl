@@ -70,10 +70,13 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
 
     # Finall, add the aux. information
     dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
-    Sario.save_dem_to_h5(mask_filename, dem_rsc, dset_name=DEM_RSC_DSET,
-                         overwrite=overwrite)
-    Sario.save_geolist_to_h5(igram_path, mask_filename, overwrite=overwrite)
-    Sario.save_intlist_to_h5(igram_path, mask_filename, overwrite=overwrite)
+    Sario.save_dem_to_h5(mask_filename, dem_rsc, DEM_RSC_DSET, overwrite=overwrite)
+
+    geo_date_list = Sario.find_geos(directory=geo_path, parse=true)
+    Sario.save_geolist_to_h5(mask_filename, geo_date_list, overwrite=overwrite)
+
+    igram_list = Sario.find_igrams(directory=igram_path, parse=true)
+    Sario.save_intlist_to_h5(mask_filename, igram_list, overwrite=overwrite)
 end
 
 _get_geo_mask(arr) = (arr .== 0)
