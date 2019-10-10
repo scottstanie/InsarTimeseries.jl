@@ -344,8 +344,8 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
     if (isnothing(ref_row) || isnothing(ref_col))
         isnothing(ref_station) && throw(ArgumentError("Need ref_station if no ref_row/ref_col"))
         println("Using $ref_station as reference")
-        rsc_data = Sario.load_dem_from_h5(unw_stack_file)
-        ref_row, ref_col = gps.station_rowcol(station_name=ref_station, rsc_data=rsc_data)
+        demrsc = Sario.load_dem_from_h5(unw_stack_file)
+        ref_row, ref_col = MapImages.station_rowcol(ref_station, demrsc)
     end
     println("Starting shift_stack: using ($ref_row, $ref_col) as reference")
 
