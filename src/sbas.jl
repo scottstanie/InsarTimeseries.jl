@@ -11,8 +11,6 @@ _match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/'
 
 # E.g. `counts/1` when passed `stack/1`
 _count_dset(dset) = _match_dset_path(dset, "counts")
-
-_count_dset(dset) = _match_dset_path(dset, "counts")
 _excl_dset(dset) = _match_dset_path(dset, "excluded")
 # Used if we want to track the standard deviaition 
 # _stddev_dset(dset) = _match_dset_path(dset, "stddev")
