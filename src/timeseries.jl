@@ -159,7 +159,7 @@ function find_valid_indices(geo_date_list::Array{Date, 1}, igram_date_list::Arra
         println("Not ignoring any .geo dates")
         ignore_geos = []
     else
-        ignore_geos = sort(sario.find_geos(filename=ignore_geo_file, parse=true))
+        ignore_geos = sort(Sario.find_geos(filename=ignore_geo_file, parse=true))
         println("Ignoring the following .geo dates:")
         println(ignore_geos)
     end
