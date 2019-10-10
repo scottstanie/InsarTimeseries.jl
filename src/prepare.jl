@@ -521,7 +521,7 @@ end
 function find_looks_taken(igram_path;
                           geo_path="",
                           igram_dem_file="dem.rsc",
-                          geo_dem_file="elevation.dem.rsc"):
+                          geo_dem_file="elevation.dem.rsc")
     if isempty(geo_path)
         geo_path = dirname(abspath(igram_path))
     end
