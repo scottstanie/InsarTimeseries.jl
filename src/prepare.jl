@@ -54,10 +54,10 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
         mask_filename = abspath(joinpath(igram_path, MASK_FILENAME))
     end
     if isnothing(geo_path)
-        geo_path = abspath(utils.get_parent_dir(igram_path))
+        geo_path = abspath(dirname(igram_path))
     end
 
-    row_looks, col_looks = utils.find_looks_taken(igram_path, geo_path=geo_path)
+    row_looks, col_looks = find_looks_taken(igram_path, geo_path=geo_path)
     dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
@@ -515,4 +515,21 @@ function _get_workerpool(max_procs)
         m = min(max_procs, length(workers()))
         return WorkerPool(workers()[1:m])
     end
+end
+
+"""Calculates how many looks from .geo files to .int files"""
+function find_looks_taken(igram_path;
+                          geo_path="",
+                          igram_dem_file="dem.rsc",
+                          geo_dem_file="elevation.dem.rsc"):
+    if isempty(geo_path)
+        geo_path = dirname(abspath(igram_path))
+    end
+
+    geo_dem_rsc = load(joinpath(geo_path, geo_dem_file))
+    igram_dem_rsc = load(joinpath(igram_path, igram_dem_file))
+
+    row_looks = div(geo_dem_rsc.rows, igram_dem_rsc.rows)
+    col_looks = div(geo_dem_rsc.cols, igram_dem_rsc.cols)
+    return row_looks, col_looks
 end
