@@ -16,11 +16,11 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 # _stddev_dset(dset) = _match_dset_path(dset, "stddev")
 # _stddev_raw_dset(dset) = _match_dset_path(dset, "stddev_raw")
 
-is_excluded(total, subset) = .!isnothing.(indexin(total, subset))
+is_excluded(total, subset) = isnothing.(indexin(total, subset))
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
-                           L1=true, prune=true; row=nothing, col=nothing)
+                           L1=false, prune=true; row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         println("$row, $col: nan")
@@ -32,14 +32,15 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
     
-    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, true;
+    linear = true
+    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
                                                               L1=L1, prune=prune)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col] = is_excluded(geolist, geo_clean)
+        f[_excl_dset(outdset)][row, col, :] = is_excluded(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
@@ -48,13 +49,14 @@ end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
-                          L1=true, prune=true; row=nothing, col=nothing)
+                          L1=false, prune=true; row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         return
     end
 
-    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, false;
+    linear = false
+    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
                                                               L1=L1, prune=prune)
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
@@ -63,7 +65,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col, :] = phi_arr
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col] = is_excluded(geolist, geo_clean)
+        f[_excl_dset(outdset)][row, col, :] = is_excluded(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
@@ -135,18 +137,21 @@ function run_sbas(unw_stack_file::String,
         println("Using constant velocity for inversion solution")
         proc_func = proc_pixel_linear
         outsize = (nrows, ncols)
+        chunksize = (500, 500)
     else
         println("Not using linear: Finding solution for each day")
         proc_func = proc_pixel_daily
         outsize = (nrows, ncols, length(geolist))
+        chunksize = (10, 10, length(geolist))
     end
 
     println("Making new writing file for each of $(length(Distributed.workers()))")
     @time @sync @distributed for id in Distributed.workers()
         h5open(string(id)*outfile, "w") do fout
-            d_create(fout, outdset, datatype(Float32), dataspace(outsize))
+            d_create(fout, outdset, datatype(Float32), dataspace(outsize)) #, "chunk", chunksize)
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
-            d_create(fout, _excl_dset(outdset), datatype(Bool), dataspace(nrows, ncols))
+            d_create(fout, _excl_dset(outdset), datatype(Bool), dataspace(nrows, ncols, length(geolist)),
+                     "chunk", (10, 10, length(geolist)))
             # d_create(fout, _stddev_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
             # d_create(fout, _stddev_raw_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
         end
