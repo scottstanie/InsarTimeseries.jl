@@ -92,14 +92,13 @@ function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
     sigma = 3
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
-        geo_clean, intlist_clean, unw_clean = prune_igrams(geolist, intlist, unw_pixel,
-                                                           mean_sigma_cutoff=sigma)
+        geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
     end
     if cor_thresh > 0 && !isnothing(cor_pixel)
-        intlist_clean, unw_clean = prune_cor(intlist, unw_pixel, cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+        intlist_clean, unw_clean = prune_cor(intlist_clean, unw_clean, cor_pixel=cor_pixel, cor_thresh=cor_thresh)
     end
     if prune_fast
-        intlist_clean, unw_clean = shrink_baseline(geolist, intlist, unw_pixel)
+        intlist_clean, unw_clean = shrink_baseline(geo_clean, intlist_clean, unw_clean)
     end
 
     igram_count = length(unw_clean)
@@ -133,7 +132,8 @@ function run_sbas(unw_stack_file::String,
                   prune_fast=true) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
+    prune_outliers ? println("Pruning .geo dates for outliers") : println("Not pruning outliers.")
+    prune_fast ? println("Shrinking baseline on fast pixels") : println("Not shrinking baseline.")
     alpha > 0 ? println("Regularizing solution with alpha = $alpha") : println("No regularization")
 
     # TODO: do I ever really care about these to change as variable?
@@ -382,7 +382,7 @@ end
 #   will be all noise- we can't reliably sense such quickly moving ground
 #
 # TODO: figure out which should go in separate file for cleanliness
-function prune_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=3)
+function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=3)
     # TODO: verify this third criteria?
 
     # @show std(unw_pixel)
@@ -402,14 +402,14 @@ end
 
 # 3. with rought velocity estimate, find igrams with too long of baseline
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
-function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
+function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=1.0)
     Blin = prepB(geolist, intlist, true)
     velo_cm = PHASE_TO_CM * (Blin \ unw_pixel)[1]  # cm / day
     day_cutoff = fast_cm_cutoff / abs(velo_cm)
     too_long_igrams = [ig for ig in intlist
                        if temporal_baseline(ig) > day_cutoff]
 
-    intlist_clean, unw_clean = remove_igrams(intlist, unw_clean, too_long_igrams)
+    intlist_clean, unw_clean = remove_igrams(intlist, unw_pixel, too_long_igrams)
     return intlist_clean, unw_clean
 end
 
