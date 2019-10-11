@@ -22,7 +22,8 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
-                           L1=false, prune=true; row=nothing, col=nothing)
+                           L1=false; prune_outliers=true, prune_fast=true, 
+                           row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         println("$row, $col: nan")
@@ -36,7 +37,8 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     
     linear = true
     soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune=prune)
+                                                              L1=L1, prune_outliers=prune_outliers,
+                                                              prune_fast=prune_fast)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -51,7 +53,8 @@ end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
-                          L1=false, prune=true; row=nothing, col=nothing)
+                          L1=false; prune_outliers=true, prune_fast=true, 
+                          row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         return
@@ -59,7 +62,8 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
 
     linear = false
     soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune=prune)
+                                                              L1=L1, prune_outliers=prune_outliers,
+                                                              prune_fast=prune_fast)
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
 
@@ -84,30 +88,32 @@ end
 
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
+                   prune_outliers=true, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
     sigma = 3
-    if !prune
-        geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
-    else
+    geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
+    if prune_outliers
         geo_clean, intlist_clean, unw_clean = prune_igrams(geolist, intlist, unw_pixel,
-                                                           mean_sigma_cutoff=sigma,
-                                                           cor_pixel=cor_pixel,
-                                                           cor_thresh=cor_thresh)
+                                                           mean_sigma_cutoff=sigma)
     end
+    if cor_thresh > 0 && !isnothing(cor_pixel)
+        intlist_clean, unw_clean = prune_cor(intlist, unw_pixel, cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+    end
+    if prune_fast
+        intlist_clean, unw_clean = shrink_baseline(geolist, intlist, unw_pixel)
+    end
+
     igram_count = length(unw_clean)
 
     B = prepB(geo_clean, intlist_clean, constant_velocity, alpha)
-
     # Last, pad with zeros if doing Tikh. regularization
     unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
-    if igram_count < 50  # TODO: justify this minimum data
-        soln_phase = [Float32(0)]
-    else
-        soln = L1 ? invert_pixel_l1(unw_final, B) : B \ unw_final
-        soln_phase = Float32.(soln)
-    end
-
+    # if igram_count < 50  # TODO: justify this minimum data
+    #     soln_phase = [Float32(0)]
+    # else
+    soln = L1 ? invert_pixel_l1(unw_final, B) : B \ unw_final
+    soln_phase = Float32.(soln)
+    # end
     return soln_phase, igram_count, geo_clean, unw_clean
 end
 
@@ -123,7 +129,8 @@ function run_sbas(unw_stack_file::String,
                   constant_velocity::Bool, 
                   alpha::Real,
                   L1::Bool=false,
-                  prune=true) 
+                  prune_outliers=true,
+                  prune_fast=true) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     prune ? println("Pruning .geo dates and igrams by pixel") : println("Not pruning igrams.")
@@ -161,7 +168,8 @@ function run_sbas(unw_stack_file::String,
     @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
     # @time @sync @distributed for (row, col) in collect(Iterators.product(1000:2000, 1000:2000))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, geolist, intlist, alpha, L1, prune,
+                   outdset, geolist, intlist, alpha, L1;
+                   prune_outliers=prune_outliers, prune_fast=prune_fast, 
                    row=row, col=col)
     end
     println("Merging files into $outfile")
@@ -365,56 +373,44 @@ function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, tim
 end
 
 
-# TODO: I should also save the intlist... as well as the max baseline/config stuff
-
 ### Outlier functions ######
+# 3 Reasons for removing igrams:
+# 1. remove all from .geo dates with huge averages (whole day is garbage)
+# 2. remove very low correlation
+# 3. remove longer igrams w/ longer baseline than is possible
+#   e.g. if we have 2.5 cm/year velocity, anything longer than ~1 year
+#   will be all noise- we can't reliably sense such quickly moving ground
+#
 # TODO: figure out which should go in separate file for cleanliness
-function prune_igrams(geolist, intlist, unw_pixel;  # B;
-                      cor_pixel=nothing, cor_thresh=0.0,
-                      mean_sigma_cutoff=3, 
-                      fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
-    # 3 Reasons for removing igrams:
-    # 1. remove all from .geo dates with huge averages (whole day is garbage)
-    # 2. remove very low correlation
-    #   NOTE: for now, we are skipping... doesn't seem to make much difference generally
-    # 3. remove longer igrams w/ longer baseline than is possible
-    #   e.g. if we have 2.5 cm/year velocity, anything longer than ~1 year
-    #   will be all noise- we can't reliably sense such quickly moving ground
+function prune_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=3)
     # TODO: verify this third criteria?
 
     # @show std(unw_pixel)
     # @show "start", size(intlist)
     # 1. find outliers in this pixels' values and remove them
     geo_clean, intlist_clean, unw_clean = peel_nsigma(geolist, intlist, unw_pixel, nsigma=mean_sigma_cutoff)
-    # geo_clean, intlist_clean, unw_clean, B_clean = peel_nsigma(geolist, intlist, unw_pixel, B, nsigma=mean_sigma_cutoff)
-
     # @show "outlier: ", size(intlist_clean)
-
-    # 2. low correlation cleaning
-    if cor_thresh > 0 && !isnothing(cor_pixel)
-        low_cor_igrams = intlist[cor_pixel .< cor_thresh]
-        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, low_cor_igrams)
-    end
-    # @show "cor: ", size(intlist_clean)
-
-    # 3. with rought velocity estimate, find igrams with too long of baseline
-    # Here we assume beyond some wavelength fraction is too long to sense in one igram
-    if fast_cm_cutoff < 5
-        Blin = prepB(geo_clean, intlist_clean, true)
-        velo_cm = PHASE_TO_CM * (Blin \ unw_clean)[1]  # cm / day
-        # rho, alpha, abstol = 1.0, 1.6, 1e-3
-        # velo_cm = PHASE_TO_CM * invert_pixel_l1(unw_clean, B_clean, rho=rho, alpha=alpha, abstol=abstol)[1]
-        day_cutoff = fast_cm_cutoff / abs(velo_cm)
-        # @show (365*velo_cm), fast_cm_cutoff, day_cutoff
-        too_long_igrams = [ig for ig in intlist_clean 
-                           if temporal_baseline(ig) > day_cutoff]
-
-        intlist_clean, unw_clean = remove_igrams(intlist_clean, unw_clean, too_long_igrams)
-        # intlist_clean, unw_clean, B_clean  = remove_igrams(intlist_clean, unw_clean, B_clean, too_long_igrams)
-    end
-    # @show "fast: ", size(intlist_clean)
-    # @show std(unw_clean)
     return geo_clean, intlist_clean, unw_clean
+end
+
+# 2. low correlation cleaning
+function prune_cor(intlist, unw_pixel, cor_pixel, cor_thresh=0.0)
+    low_cor_igrams = intlist[cor_pixel .< cor_thresh]
+    intlist_clean, unw_clean = remove_igrams(intlist, unw_pixel, low_cor_igrams)
+    return intlist_clean, unw_clean
+end
+
+# 3. with rought velocity estimate, find igrams with too long of baseline
+# Here we assume that the faster the ground moves, the shortwer basline we need to keep
+function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=SENTINEL_WAVELENGTH/4)
+    Blin = prepB(geolist, intlist, true)
+    velo_cm = PHASE_TO_CM * (Blin \ unw_pixel)[1]  # cm / day
+    day_cutoff = fast_cm_cutoff / abs(velo_cm)
+    too_long_igrams = [ig for ig in intlist
+                       if temporal_baseline(ig) > day_cutoff]
+
+    intlist_clean, unw_clean = remove_igrams(intlist, unw_clean, too_long_igrams)
+    return intlist_clean, unw_clean
 end
 
 function remove_igrams(intlist, unw_vals,

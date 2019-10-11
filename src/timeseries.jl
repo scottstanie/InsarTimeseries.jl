@@ -32,7 +32,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        constant_velocity::Bool=true, 
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
-                       prune=true,
+                       prune_outliers=true,
+                       prune_fast=true,
                        split_dates=[],
                        gap=1,
                        split_count=0,
@@ -110,7 +111,8 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
         velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                  geolist, intlist, valid_igram_indices, 
-                                 constant_velocity, alpha, L1, prune)
+                                 constant_velocity, alpha, L1, prune_outliers,
+                                 prune_fast)
         # if use_distributed
         # else
         #     # If we want to read the whole stack in at once:
