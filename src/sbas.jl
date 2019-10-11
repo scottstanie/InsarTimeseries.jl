@@ -16,7 +16,9 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 # _stddev_dset(dset) = _match_dset_path(dset, "stddev")
 # _stddev_raw_dset(dset) = _match_dset_path(dset, "stddev_raw")
 
-is_excluded(total, subset) = isnothing.(indexin(total, subset))
+# I'll be passing the included, clean geos, and want to record the bad missing ones
+# is_excluded(total, included) = isnothing.(indexin(total, included))  # Too much space :(
+
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
@@ -40,7 +42,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col] = P2MM * soln_phase
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col, :] = is_excluded(geolist, geo_clean)
+        f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
@@ -65,7 +67,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
     h5open(dist_outfile, "r+") do f
         f[outdset][row, col, :] = phi_arr
         f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col, :] = is_excluded(geolist, geo_clean)
+        f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
@@ -150,8 +152,7 @@ function run_sbas(unw_stack_file::String,
         h5open(string(id)*outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(outsize)) #, "chunk", chunksize)
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
-            d_create(fout, _excl_dset(outdset), datatype(Bool), dataspace(nrows, ncols, length(geolist)),
-                     "chunk", (10, 10, length(geolist)))
+            d_create(fout, _excl_dset(outdset), datatype(Int64), dataspace(nrows, ncols))
             # d_create(fout, _stddev_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
             # d_create(fout, _stddev_raw_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
         end
@@ -324,8 +325,9 @@ end
 partial_files(outfile) = Glob.glob("[0-9]*" * outfile)
 
 function merge_partial_files(outfile, dsets...)
+    f1 = partial_files(outfile)[1]
     for dset in dsets
-        tmp = zeros(size(partial_files(outfile)[1], dset))
+        tmp = zeros(eltype(f1, dset), size(f1, dset))
 
         for f in partial_files(outfile)
             cur = h5read(f, dset)
@@ -508,4 +510,29 @@ function nsigma_days(geo, int, val, nsigma=3)
     # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
     # println("Number removed: $(sum(out_idxs))")
     return geo[out_idxs]
+end
+
+
+# TODO: this is gonna fail for more than 63 dates ( log2(typemax(Int64)) = 63)...
+function encode_missing(total, included)
+    out = Int64(0)
+    for (i, t) in enumerate(total)
+        if !(t in included)
+            out += 2^(i-1)
+        end
+    end
+    return out
+end
+
+function decode_excluded(excl_int::Int64, geos::Array{Date, 1})
+    excl_bitstring = reverse(bitstring(excl_int)[end-length(geos)+1:end])
+    return [geos[i] for (i, g) in enumerate(geos) if excl_bitstring[i] == '1']
+end
+
+function decode_excluded(excl_int_map::AbstractArray{Int64, 2}, geos::Array{Date, 1})
+    out = Array{Array{Date, 1}, 2}(undef, size(excl_int_map))
+    for idx in eachindex(excl_int_map)
+        out[idx] = decode_excluded(excl_int_map[idx], geos)
+    end
+    return out
 end

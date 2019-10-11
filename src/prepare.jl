@@ -54,7 +54,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
         mask_filename = abspath(joinpath(igram_path, MASK_FILENAME))
     end
     if isnothing(geo_path)
-        geo_path = abspath(dirname(igram_path))
+        geo_path = dirname(dirname(abspath(igram_path)))
     end
 
     row_looks, col_looks = find_looks_taken(igram_path, geo_path=geo_path)
@@ -259,6 +259,7 @@ function create_hdf5_stack(filename::String,
                            file_ext::String;
                            dset_name=STACK_DSET,
                            directory=".",
+                           geo_path="../",
                            overwrite=false,
                            do_repack=false)
 
@@ -288,15 +289,21 @@ function create_hdf5_stack(filename::String,
     end
     h5writeattr(filename, dset_name, Dict("filenames" => file_list))
 
-    # Now save dem rsc as well
-    dem_rsc = load(Sario.find_rsc_file(directory=directory))
-    Sario.save_dem_to_h5(filename, dem_rsc, dset_name=DEM_RSC_DSET, overwrite=overwrite)
-    Sario.save_geolist_to_h5(directory, filename, overwrite=overwrite)
-    Sario.save_intlist_to_h5(directory, filename, overwrite=overwrite)
 
     !Sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
     mean_buf ./= length(file_list)
     h5write(filename, STACK_MEAN_DSET, mean_buf)
+
+    # Now save dem rsc as well
+    dem_rsc = load(Sario.find_rsc_file(directory=directory))
+    Sario.save_dem_to_h5(filename, dem_rsc; overwrite=overwrite)
+    if isnothing(geo_path)
+        geo_path = dirname(dirname(abspath(directory)))
+    end
+    geo_date_list = Sario.find_geos(directory=geo_path)
+    Sario.save_geolist_to_h5(filename, geo_date_list, overwrite=overwrite)
+    igram_list = Sario.find_igrams(directory=directory)
+    Sario.save_intlist_to_h5(filename, igram_list, overwrite=overwrite)
 
     if do_repack
         repack(filename, dset_name)
@@ -523,7 +530,7 @@ function find_looks_taken(igram_path;
                           igram_dem_file="dem.rsc",
                           geo_dem_file="elevation.dem.rsc")
     if isempty(geo_path)
-        geo_path = dirname(abspath(igram_path))
+        geo_path = dirname(dirname(abspath(igram_path)))
     end
 
     geo_dem_rsc = load(joinpath(geo_path, geo_dem_file))

@@ -43,6 +43,7 @@ function parse_commandline()
             help = "(SBAS) Strength of Tikhonov regularization"
         "--L1"
             action = :store_true
+            default = false
             help = "Use L1 norm for SBAS cost instead of L2 least squares"
         # TODO: do i care to add this path option? 
         # "path"

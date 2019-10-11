@@ -405,3 +405,21 @@ function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baseline
     axes.set_title(title)
     return fig, axes
 end
+
+
+function calc_exclude_dates(fname, dset)
+    geolist = Sario.load_geolist_from_h5(fname, dset)
+    excls = Sario.load(fname, "excluded/1")
+    excl_map = InsarTimeseries.decode_excluded(excls, geolist);
+    return geolist, get_excl_hist(excl_map, geolist)
+end
+
+# @time excl_map = InsarTimeseries.decode_excluded(excls, geolist)
+function get_excl_hist(excl_map, geolist; as_pct=true)
+    counts = zeros(length(geolist))
+    for idx in eachindex(excl_map)
+        was_excluded = .!isnothing.(indexin(geolist, excl_map[idx]))
+        counts .+= was_excluded
+    end
+    return as_pct ? counts ./ length(excl_map) : counts
+end

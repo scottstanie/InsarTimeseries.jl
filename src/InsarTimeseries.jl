@@ -6,6 +6,7 @@ __precompile__(true)
 module InsarTimeseries
 
 using Sario
+import MapImages
 
 include("./common.jl")
 include("./config.jl")
