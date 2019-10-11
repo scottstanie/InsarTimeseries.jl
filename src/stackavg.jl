@@ -6,7 +6,7 @@ saves a 2D array of velocities: mm per year
 """
 function run_stackavg(unw_stack_file::String, input_dset::String, outfile::String,
                       outdset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1};
-                      stack_all=true, ref_station=nothing, ref_row=nothing, ref_col=nothing)
+                      stack_all=true, reference_station=nothing, ref_row=nothing, ref_col=nothing)
 
     # Figure out which of all the igrams we want to use
     # chosen_igrams = pick_igrams(geolist)
@@ -31,10 +31,10 @@ function run_stackavg(unw_stack_file::String, input_dset::String, outfile::Strin
     println("Reading $(length(picked_igram_indices)) igrams out of '$input_dset' dataset from file ")
     @time unw_stack = load_hdf5_stack(unw_stack_file, input_dset, picked_igram_indices)
 
-    if !isnothing(ref_station)
-        println("Using $ref_station as reference")
+    if !isnothing(reference_station)
+        println("Using $reference_station as reference")
         demrsc = Sario.load_dem_from_h5(unw_stack_file)
-        ref_row, ref_col = MapImages.station_rowcol(ref_station, demrsc)
+        ref_row, ref_col = MapImages.station_rowcol(reference_station, demrsc)
     end
     if !(isnothing(ref_row) && isnothing(ref_col))
         println("Shifting input stack to $ref_row, $ref_col")

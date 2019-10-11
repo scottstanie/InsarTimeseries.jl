@@ -40,7 +40,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        max_date::DateOrNone=nothing,
                        alpha::Real=0.0,
                        L1::Bool=false,  
-                       ref_station=nothing, # Note: these only work for stackavg...
+                       reference_station=nothing, # Note: these only work for stackavg...
                        ref_row=nothing, 
                        ref_col=nothing,
                        use_distributed=true)
@@ -104,7 +104,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         input_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         velo_file_out = run_stackavg(unw_stack_file, input_dset, outfile, cur_outdset, geolist, intlist;
-                                    ref_station=ref_station, ref_row=ref_row, ref_col=ref_col)
+                                    reference_station=reference_station, ref_row=ref_row, ref_col=ref_col)
     else
         println("Performing linear SBAS solution")
 

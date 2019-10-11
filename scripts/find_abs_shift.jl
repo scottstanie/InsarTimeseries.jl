@@ -164,7 +164,7 @@ function solve_gps_ts(station_name, reference_station=nothing)
 end
 
 function fit_line(dts, data)
-    day_nums = _get_day_nums(dts)
+    day_nums = InsarTimeseries._get_day_nums(dts)
     p = Polynomials.polyfit(day_nums, data, 1)
     # p(day_nums[end])
     return p
