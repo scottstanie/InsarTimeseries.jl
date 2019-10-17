@@ -60,7 +60,20 @@ function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
 end
 
 
-function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=1, color=nothing)
+function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=5)
+    means = InsarTimeseries.mean_abs_val(geo, int, vals)
+    fig, ax = plt.subplots()
+    ax.scatter(geo, means, label="means by date")
+    if nsigma > 0
+        low, high = InsarTimeseries.two_way_cutoff(means, nsigma)
+        ax.plot(geo, ones(length(geo)) * median(means), label="median")
+        ax.plot(geo, ones(length(geo)) * high, label="$nsigma sigma MAD cutoff")
+        ax.plot(geo, ones(length(geo)) * (median(means) + min_spread), label="min. spread")
+    end
+    fig.legend()
+end
+
+function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=3, color=nothing)
 
     # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
     # high_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
@@ -72,8 +85,8 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
     v = vals .* scale   
 
-    plt.figure()
-    plt.scatter(B, v, label=label)
+    fig, ax =plt.subplots()
+    ax.scatter(B, v, label=label)
 
     ym = maximum(abs.(v)) * 1.2
     ylims = to_cm ? (-ym, ym) : (0, ym)  # correlation: 0 as bottom
@@ -81,14 +94,15 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     # for ii in 1:3
     for (ii, dd) in enumerate(date_arr)
         # hh = highest_days[ii][2]
-        plt.scatter(InsarTimeseries.Blins_by_date(dd, intlist, B),
+        ax.scatter(InsarTimeseries.Blins_by_date(dd, intlist, B),
                                          InsarTimeseries.vals_by_date(dd, intlist, v),
                                          color=color,
                                          label="date=$dd")
-        plt.ylim(ylims)
+        ax.set_ylim(ylims)
     end
-    plt.legend()
+    fig.legend()
     plt.show(block=false)
+    return fig, ax
 end
 
 
