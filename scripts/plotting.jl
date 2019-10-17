@@ -134,3 +134,55 @@ function plot_all(east, up)
         plot_eu(name, slope_by_station[idx])
     end
 end
+
+
+# TODO: move these somehere
+function count_dates(fname, dset)
+    geolist = Sario.load_geolist_from_h5(fname, dset)
+    excls = Sario.load(fname, dset_name="excluded/1")
+    return geolist, excls
+end 
+
+function get_excl_hist(excl_map, geolist; as_pct=true, nonmasked_pixels=length(excl_map))
+    counts = zeros(length(geolist))
+    for idx in eachindex(excl_map)
+        was_excluded = .!isnothing.(indexin(geolist, excl_map[idx]))
+        counts .+= was_excluded
+    end
+    return as_pct ? counts ./ nonmasked_pixels : counts
+end
+
+function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
+                                   vm=15, bins=70)
+    # geolist, excls = count_dates(fname, dset)
+    # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist);
+    p2c = InsarTimeseries.PHASE_TO_CM
+
+    geolist, intlist500, valid_igram_indices500 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+
+    m, n = 3, 5
+    fig, axes = plt.subplots(m, n)
+    for ii in 1:m
+        for jj in 1:n
+            idx = (ii-1)*n + jj
+            if idx > 14
+                continue
+            end
+            name = station_name_list[idx]
+
+        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices500)
+
+        g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist500, unw_vals)
+
+        ax = axes[ii, jj]
+
+        n1, _, _ = ax.hist(unw_vals .* p2c, range=(-vm, vm), bins=bins, label="Original spread")
+        n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
+        ax.set_title("$name")
+        ax.grid("on")
+    end
+    end
+    plt.legend()
+    plt.show(block=false)
+
+end

@@ -24,10 +24,10 @@ rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size
 maxabs(x) = maximum(abs.(x))
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
-function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false)
+function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false, shift=0.0)
 
     # insar derived solution in a small patch
-    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window)
+    slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window) + shift    
 
     slope_gps_mm_yr = solve_gps_ts(station_name, ref_station)
 
