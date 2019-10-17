@@ -60,8 +60,9 @@ function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
 end
 
 
-function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=5)
+function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
     means = InsarTimeseries.mean_abs_val(geo, int, vals)
+    println("median val: $(median(means))")
     fig, ax = plt.subplots()
     ax.scatter(geo, means, label="means by date")
     if nsigma > 0
@@ -73,11 +74,11 @@ function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=5)
     fig.legend()
 end
 
-function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=3, color=nothing)
+function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=3, min_spread=0, color=nothing)
 
     # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
     # high_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
-    high_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma)
+    high_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma, min_spread)
     return plot_days(geolist, intlist, vals, B, high_days, to_cm=to_cm, label=label, color=color)
 end
 

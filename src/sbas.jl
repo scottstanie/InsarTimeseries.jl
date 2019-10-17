@@ -1,10 +1,13 @@
 using Distributed
-using StatsBase: mad
+using StatsBase: mad, iqr, zscore
 using Printf
 import Glob
 import Dierckx
 import SparseArrays: spdiagm
 
+
+const MIN_PHASE_SPREAD = 5
+MIN_SPREAD = 2
 
 """Helper to make a group path similar to `dset`, with new base"""
 _match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/')
@@ -453,21 +456,28 @@ _good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
 
 """ 3* the sigma valud as calculated using MAD
 Used for robust variance est. (as a cutoff for outliers)
-See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
+See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD
+Normalize makes it equal to stddev for normally dist. data"""
 mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
+
+modzscore(arr) = (arr .- median(arr)) ./ mad(arr, normalize=true)
 
 
 # min_spread added in case `mad` produces a very low number,
 # so if you want to avoid removing lots, set based on your data
 function two_way_cutoff(arr, nsigma, min_spread=0)
+    # min_spread = abs(2 * median(arr))
+    # spread = 1.5 * iqr(arr)
     spread = max(min_spread, mednsigma(arr, nsigma))
 
-    low = min(0, median(arr) - spread)  # Make sure it's negative
+    # Make we dont cut off very low var points
+    low = min(0, median(arr) - spread)
     high = median(arr) + spread
     return (low, high)
 end
 
 function two_way_outliers(arr, nsigma, min_spread=0)
+    # return abs.(modzscore(arr)) .> nsigma
     low, high = two_way_cutoff(arr, nsigma, min_spread)
     return (arr .< low) .| (arr .> high)
 end
@@ -477,6 +487,7 @@ mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, u
                                             for d in geolist];
 median_abs_val(geolist, intlist, unw_vals) = [median(abs.(vals_by_date(d, intlist, unw_vals)))
                                               for d in geolist];
+ # valsq(geolist, intlist, unw_vals) = [mean(vals_by_date(d, intlist, unw_vals) .^ 2) for d in geolist];
 
 """Get the values (unw, cc, etc.) of one date"""
 vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
@@ -495,21 +506,11 @@ function peel_nsigma(geo, int, val; nsigma=3)
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
-function nsigma_days(geo, int, val, nsigma=3, min_spread=5)
+function nsigma_days(geo, int, val, nsigma=3, min_spread=MIN_SPREAD)
     means = mean_abs_val(geo, int, val)
-    # means = median_abs_val(geo, int, val)  #; println("median abs")
-    # @show mednsigma(means, nsigma)
-    # TODO: change "means" if its not means
-    # means = abs.(oneway_val(geo, int, val, mean))
-    # means = abs.(oneway_val(geo, int, val, median))
-    # means = oneway_val(geo, int, val, mean)
-    
-    # means = oneway_val(geo, int, val, median); # println("median oneway")
-    # @show mednsigma(means, nsigma)
-    # TODO: change "means" if its not means
     out_idxs = two_way_outliers(means, nsigma, min_spread)
 
-    # # FOR PRINTING ONLY
+    # FOR PRINTING ONLY
     # low, high = two_way_cutoff(means, nsigma, min_spread)
     # println("Using cutoff around $(median(means)), spread $(max(min_spread, mednsigma(means, nsigma))) : ($low, $high) ")
     # println("Number removed: $(sum(out_idxs))")

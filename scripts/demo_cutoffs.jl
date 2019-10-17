@@ -100,9 +100,13 @@ cc500_asc = get_stack_vals("cc_stack.h5", rowcol_asc..., 1, "stack", valid_igram
 unw_vals600_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices600, reference_station=nothing);
 # unw_vals500_desc = get_stack_vals("unw_stack.h5", rowcol_desc..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 
-g35, i35, v35 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_35pct_extra.txt", 500)
+g35, i35, v35 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_35pct.txt", 500)
+Blin35 = sum(InsarTimeseries.build_B_matrix(g35, i35), dims=2)
+g50, i50, v50 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_50pct.txt", 500)
+Blin50 = sum(InsarTimeseries.build_B_matrix(g50, i50), dims=2)
 unw_vals_up1 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", valid_igram_indices500);
 unw_vals_up35 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v35);
+unw_vals_up50 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v50);
 
 
 
