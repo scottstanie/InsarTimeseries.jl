@@ -385,11 +385,11 @@ end
 function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=3)
     # TODO: verify this third criteria?
 
-    # @show std(unw_pixel)
-    # @show "start", size(intlist)
+    # @show mean_sigma_cutoff
+    # @show size(intlist), size(geolist), std(unw_pixel)
     # 1. find outliers in this pixels' values and remove them
     geo_clean, intlist_clean, unw_clean = peel_nsigma(geolist, intlist, unw_pixel, nsigma=mean_sigma_cutoff)
-    # @show "outlier: ", size(intlist_clean)
+    # @show size(intlist_clean), size(geo_clean), std(unw_clean)
     return geo_clean, intlist_clean, unw_clean
 end
 
@@ -456,9 +456,21 @@ Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD"""
 mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
 
-two_way_cutoff(arr, nsigma) = (min(0, median(arr) - mednsigma(arr, nsigma)),  # Make sure it's negative
-                               median(arr) + mednsigma(arr, nsigma))
 
+# min_spread added in case `mad` produces a very low number,
+# so if you want to avoid removing lots, set based on your data
+function two_way_cutoff(arr, nsigma, min_spread=0)
+    spread = max(min_spread, mednsigma(arr, nsigma))
+
+    low = min(0, median(arr) - spread)  # Make sure it's negative
+    high = median(arr) + spread
+    return (low, high)
+end
+
+function two_way_outliers(arr, nsigma, min_spread=0)
+    low, high = two_way_cutoff(arr, nsigma, min_spread)
+    return (arr .< low) .| (arr .> high)
+end
 
 """Simpler means by day: just abs. value of phases, either mean or median"""
 mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
@@ -472,10 +484,6 @@ vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
 """Get the values (unw, cc, etc.) grouped by each date"""
 vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d in date_arr]
 
-function two_way_outliers(arr, nsigma)
-    low, high = two_way_cutoff(arr, nsigma)
-    return (arr .< low) .| (arr .> high)
-end
 
 
 """Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
@@ -487,7 +495,7 @@ function peel_nsigma(geo, int, val; nsigma=3)
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
-function nsigma_days(geo, int, val, nsigma=3)
+function nsigma_days(geo, int, val, nsigma=3, min_spread=5)
     means = mean_abs_val(geo, int, val)
     # means = median_abs_val(geo, int, val)  #; println("median abs")
     # @show mednsigma(means, nsigma)
@@ -499,12 +507,13 @@ function nsigma_days(geo, int, val, nsigma=3)
     # means = oneway_val(geo, int, val, median); # println("median oneway")
     # @show mednsigma(means, nsigma)
     # TODO: change "means" if its not means
-    out_idxs = two_way_outliers(means, nsigma)
+    out_idxs = two_way_outliers(means, nsigma, min_spread)
 
     # # FOR PRINTING ONLY
-    # low, high = two_way_cutoff(means, nsigma)
-    # println("Using cutoff around $(median(means)), spread $(mednsigma(means, nsigma)) : ($low, $high) ")
+    # low, high = two_way_cutoff(means, nsigma, min_spread)
+    # println("Using cutoff around $(median(means)), spread $(max(min_spread, mednsigma(means, nsigma))) : ($low, $high) ")
     # println("Number removed: $(sum(out_idxs))")
+    # @show std(means), mad(means, normalize=true)
     return geo[out_idxs]
 end
 
