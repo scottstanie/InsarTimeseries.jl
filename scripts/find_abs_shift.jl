@@ -1,6 +1,7 @@
 push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
 # import InsarTimeseries
 # using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET, CC_FILENAME, UNW_FILENAME
+import Glob
 using HDF5
 using PyCall
 using Printf: @printf
@@ -168,5 +169,25 @@ function fit_line(dts, data)
     p = Polynomials.polyfit(day_nums, data, 1)
     # p(day_nums[end])
     return p
+end
+
+function shift_from(src::HDF5Dataset, shift::Real)
+    tmp = src .+ shift
+    tmp[src .== 0] .= 0;
+    return tmp
+end
+
+function shift_dset(shift, fname, src::String="velos/1", dest="velos_shifted/1")
+    h5open(fname, "r+") do f
+        out = shift_from(f[src], shift)
+        f[dest] = out
+    end
+end
+
+function save_as_unw(fname, dset="velos/1")
+    amp = abs.(Sario.load(Glob.glob("*.int")[1]))
+    img = Sario.load(fname, dset_name=dset)
+    outname = replace(fname, ".h5" => ".unw")
+    Sario.save(outname, cat(amp, Float32.(img ./ 10), dims=3))
 end
 
