@@ -30,6 +30,8 @@ rowcol2 = [245, 189]  # small/looked uplift
 # rowcol2 = [1224, 944]  # full uplift
 rowcol3 = [368, 131]  # Small/looked subs
 # rowcol3 = [2229, 2236]  # TESTING for diffs
+rowcol3 = [312, 135]  # Subs line that disappears with long baseline
+rowcol4 = [32, 352]  # Subs around the decorrelated top
 
 # rowcol = [1632, 687]  # Test near pecos, disappears with too much filtering
 # rowcol2 = [1478, 743]  # bowl of strong subsidence that appears in 400-day soln, not in 600+
@@ -39,26 +41,40 @@ rowcol3 = [368, 131]  # Small/looked subs
 geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 400)
 _, intlist500, valid_igram_indices500 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
 _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
+_, intlistall, valid_igram_indicesall = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 1500)
 # geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", nothing, 400)
+
+println("point 0")
+
 B400 = InsarTimeseries.build_B_matrix(geolist, intlist400);
 Blin400 = sum(B400, dims=2);
 B500 = InsarTimeseries.build_B_matrix(geolist, intlist500);
 Blin500 = sum(B500, dims=2);
 Blin600 = sum(InsarTimeseries.build_B_matrix(geolist, intlist600), dims=2);
+Blinall = sum(InsarTimeseries.build_B_matrix(geolist, intlistall), dims=2);
+
+println("point 1")
 
 unw_vals500_uplift = get_stack_vals("unw_stack.h5", rowcol2..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
-cc500_uplift = get_stack_vals("cc_stack.h5", rowcol2..., 1, "stack", valid_igram_indices500, reference_station=nothing);
-unw_vals500_subs = get_stack_vals("unw_stack.h5", rowcol3..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
-cc500_subs = get_stack_vals("cc_stack.h5", rowcol3..., 1, "stack", valid_igram_indices500, reference_station=nothing);
+unw_valsall_uplift = get_stack_vals("unw_stack.h5", rowcol2..., 1, "stack_flat_shifted", valid_igram_indicesall);
+cc500_uplift = get_stack_vals("cc_stack.h5", rowcol2..., 1, "stack", valid_igram_indices500);
+
+unw_vals500_subs = get_stack_vals("unw_stack.h5", rowcol3..., 1, "stack_flat_shifted", valid_igram_indices500)
+cc500_subs = get_stack_vals("cc_stack.h5", rowcol3..., 1, "stack", valid_igram_indices500);
+unw_valsall_subs = get_stack_vals("unw_stack.h5", rowcol3..., 1, "stack_flat_shifted", valid_igram_indicesall);
+ccall_subs = get_stack_vals("cc_stack.h5", rowcol3..., 1, "stack", valid_igram_indicesall);
+
+unw_valsall_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indicesall);
 unw_vals500_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
-cc500_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices500, reference_station=nothing);
+cc500_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices500);
 unw_vals500_nmhb = get_stack_vals("unw_stack.h5", "NMHB", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
-cc500_nmhb = get_stack_vals("cc_stack.h5", "NMHB", 1, "stack", valid_igram_indices500, reference_station=nothing);
+cc500_nmhb = get_stack_vals("cc_stack.h5", "NMHB", 1, "stack", valid_igram_indices500);
 
 unw_vals500_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
-cc500_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices500, reference_station=nothing);
+cc500_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices500);
 # 
-#
+println("point 2")
+
 _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
 B600 = InsarTimeseries.build_B_matrix(geolist, intlist600);
 Blin600 = sum(B600, dims=2);
@@ -99,6 +115,8 @@ unw_vals500_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_s
 cc500_asc = get_stack_vals("cc_stack.h5", rowcol_asc..., 1, "stack", valid_igram_indices500, reference_station=nothing);
 unw_vals600_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices600, reference_station=nothing);
 # unw_vals500_desc = get_stack_vals("unw_stack.h5", rowcol_desc..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
+
+println("point 3")
 
 g35, i35, v35 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_35pct.txt", 500)
 Blin35 = sum(InsarTimeseries.build_B_matrix(g35, i35), dims=2)

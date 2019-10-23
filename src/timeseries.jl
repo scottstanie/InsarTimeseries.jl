@@ -107,7 +107,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         velo_file_out = run_stackavg(unw_stack_file, input_dset, outfile, cur_outdset, geolist, intlist;
                                     reference_station=reference_station, ref_row=ref_row, ref_col=ref_col)
     else
-        println("Performing linear SBAS solution")
+        println("Running SBAS for solution")
 
         velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                  geolist, intlist, valid_igram_indices, 

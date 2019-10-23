@@ -92,7 +92,7 @@ end
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
                    prune_outliers=true, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
-    sigma = 3
+    sigma = 5
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
         geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
@@ -406,14 +406,60 @@ end
 # 3. with rought velocity estimate, find igrams with too long of baseline
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
 function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=1.0)
-    Blin = prepB(geolist, intlist, true)
-    velo_cm = PHASE_TO_CM * (Blin \ unw_pixel)[1]  # cm / day
-    day_cutoff = fast_cm_cutoff / abs(velo_cm)
-    too_long_igrams = [ig for ig in intlist
-                       if temporal_baseline(ig) > day_cutoff]
+    return test_short(geolist, intlist, unw_pixel)
+    intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
+    Blin = prepB(geolist, intlist_short, true)
+    velo_orig = PHASE_TO_CM * (Blin \ unw_short)[1]  # cm / day
+    day_cutoff = fast_cm_cutoff / abs(velo_orig)
+    # @show day_cutoff
+    too_long_igrams = [ig for ig in intlist_short if temporal_baseline(ig) > day_cutoff]
+    intlist_clean, unw_clean = remove_igrams(intlist_short, unw_short, too_long_igrams)
 
-    intlist_clean, unw_clean = remove_igrams(intlist, unw_pixel, too_long_igrams)
+    # Don't want to prune down to nothing, and also don't bother if it's really flat
+    # if iters == 1 || day_cutoff < 200 || day_cutoff > maximum(temporal_baseline(intlist))
     return intlist_clean, unw_clean
+end
+
+function test_short(geolist, intlist, unw_pixel)
+    # Test what the velo is with only short baseline
+    # Fast moving pixels will often show a large difference
+    # velos = [solve_temp_cutoff(geolist, intlist, unw_pixel, d) for d in [700, 600, 500, 400, 300]]
+    ds = 600:-50:400
+    velos = [solve_temp_cutoff(geolist, intlist, unw_pixel, d) for d in ds]
+    velo_diffs = diff(velos)
+    velo_ratios = @views velos[2:end] ./   velos[1:end-1]
+    # @show velos
+    # @show velo_diffs
+    # @show velo_ratios
+    # cm_yr_diff = abs(velo_short) - abs(velo_orig)
+    max_velo = 1.5  # cm / year
+    # @show velo_short
+    # println("here")
+    # @show prod(velo_ratios[1, end]) , mean(velo_diffs), mean(abs.(velos)) 
+    if abs(mean(velos)) > max_velo ## && prod(velos[[1, end]]) > 0 ## && abs(mean(velo_diffs)) > .2 # && maximum(abs.(velos)) > max_velo  # abs(sum(velo_diffs)) > max_velo
+        # println("Shrinking baseline")
+        day_cutoff = 500
+        short_idxs = temporal_baseline(intlist) .< day_cutoff
+        return intlist[short_idxs], unw_pixel[short_idxs]
+    else
+        return intlist, unw_pixel
+    end
+end
+
+function solve_temp_cutoff(geolist, intlist, unw_pixel, day_cutoff=400)
+    Blin = prepB(geolist, intlist, true)
+    short_idxs = temporal_baseline(intlist) .< day_cutoff
+    velo_new = 365 * PHASE_TO_CM * (Blin[short_idxs, :] \ unw_pixel[short_idxs])[1]  # cm / yr
+    return velo_new
+end
+
+function short_vs_long(geolist, intlist, unw_pixel, day_cutoff=400)
+    Blin = prepB(geolist, intlist, true)
+    short_idxs = temporal_baseline(intlist) .< day_cutoff
+    velo_short = 365 * PHASE_TO_CM * (Blin[short_idxs, :] \ unw_pixel[short_idxs])[1]  # cm / yr
+    long_idxs = temporal_baseline(intlist) .> day_cutoff
+    velo_long = 365 * PHASE_TO_CM * (Blin[long_idxs, :] \ unw_pixel[long_idxs])[1]  # cm / yr
+    return velo_short, velo_long
 end
 
 function remove_igrams(intlist, unw_vals,

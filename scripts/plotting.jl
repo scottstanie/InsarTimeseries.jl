@@ -96,9 +96,9 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     for (ii, dd) in enumerate(date_arr)
         # hh = highest_days[ii][2]
         ax.scatter(InsarTimeseries.Blins_by_date(dd, intlist, B),
-                                         InsarTimeseries.vals_by_date(dd, intlist, v),
-                                         color=color,
-                                         label="date=$dd")
+                   InsarTimeseries.vals_by_date(dd, intlist, v),
+                   color=color,
+                   label="date=$dd")
         ax.set_ylim(ylims)
     end
     fig.legend()
