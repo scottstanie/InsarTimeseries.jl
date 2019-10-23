@@ -9,9 +9,16 @@ water_prod = CSV.read("water_production.csv")
 oil_prod = CSV.read("oil_production.csv")
 water_inj = CSV.read("water_injection.csv")
 
-waterprodbins = MapImages.bin_vals(demrsc, water_prod)
 waterinjbins = MapImages.bin_vals(demrsc, water_inj)
-oilprodbins = MapImages.bin_vals(demrsc, oil_prod)
+
+waterprodbins_small = MapImages.coarse_bin_vals(demrsc, water_prod, digits=1)
+waterprodbins = imresize(waterprodbins_small, size(demrsc)...)
+waterprodbins .*= (sum(MapImages.bin_vals(demrsc, water_prod)) / sum(waterprodbins))
+
+oilprodbins_small = MapImages.coarse_bin_vals(demrsc, oil_prod, digits=1)
+oilprodbins = imresize(oilprodbins_small, size(demrsc)...)
+oilprodbins .*= (sum(MapImages.bin_vals(demrsc, oil_prod)) / sum(oilprodbins))
+
 netbins = waterinjbins .- waterprodbins .- oilprodbins
 
 eqs = CSV.read("texnet_events.csv")
