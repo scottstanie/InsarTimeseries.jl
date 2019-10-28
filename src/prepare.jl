@@ -370,6 +370,8 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
             # "chunk", (10, 10, size(stack_in, 3)),  # Seems better to repack?
             # Chunking here and writing by images is like 100x slower
         )
+    end
+    h5open(unw_stack_file, "r+") do f
         stack_out = f[stack_flat_shifted_dset]
 
         # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)

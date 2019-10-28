@@ -75,6 +75,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
+    return
 end
 
 function _unreg_to_cm(soln_velos, geolist_short, geolist_full)
