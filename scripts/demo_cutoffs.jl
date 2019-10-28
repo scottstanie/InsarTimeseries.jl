@@ -44,7 +44,6 @@ _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "ge
 _, intlistall, valid_igram_indicesall = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 1500)
 # geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", nothing, 400)
 
-println("point 0")
 
 B400 = InsarTimeseries.build_B_matrix(geolist, intlist400);
 Blin400 = sum(B400, dims=2);
@@ -53,27 +52,32 @@ Blin500 = sum(B500, dims=2);
 Blin600 = sum(InsarTimeseries.build_B_matrix(geolist, intlist600), dims=2);
 Blinall = sum(InsarTimeseries.build_B_matrix(geolist, intlistall), dims=2);
 
-println("point 1")
+println("point 0")
 
 unw_vals500_uplift = get_stack_vals("unw_stack.h5", rowcol2..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 unw_valsall_uplift = get_stack_vals("unw_stack.h5", rowcol2..., 1, "stack_flat_shifted", valid_igram_indicesall);
 cc500_uplift = get_stack_vals("cc_stack.h5", rowcol2..., 1, "stack", valid_igram_indices500);
+
+println("point 1")
 
 unw_vals500_subs = get_stack_vals("unw_stack.h5", rowcol3..., 1, "stack_flat_shifted", valid_igram_indices500)
 cc500_subs = get_stack_vals("cc_stack.h5", rowcol3..., 1, "stack", valid_igram_indices500);
 unw_valsall_subs = get_stack_vals("unw_stack.h5", rowcol3..., 1, "stack_flat_shifted", valid_igram_indicesall);
 ccall_subs = get_stack_vals("cc_stack.h5", rowcol3..., 1, "stack", valid_igram_indicesall);
 
+println("point 2")
 unw_valsall_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indicesall);
 unw_vals500_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 cc500_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices500);
 unw_vals500_nmhb = get_stack_vals("unw_stack.h5", "NMHB", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 cc500_nmhb = get_stack_vals("cc_stack.h5", "NMHB", 1, "stack", valid_igram_indices500);
 
+println("point 3")
 unw_vals500_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 cc500_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices500);
+cc500_txkm = get_stack_vals("cc_stack.h5", "TXKM", 1, "stack", valid_igram_indices500);
 # 
-println("point 2")
+println("done ")
 
 _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
 B600 = InsarTimeseries.build_B_matrix(geolist, intlist600);
@@ -108,52 +112,53 @@ rowcol_asc = [259, 82]  # Uplift looks stronger in stack than not
 # rowcol_desc = [106, 400]
 #
 #
-# rowcol = [25, 47]  # Uplift bowl in top left
-rowcol = [14, 66]  # Uplift Edge of top left (random point)
+# rowcol_top = [25, 47]  # Uplift bowl in top left
+rowcol_top = [14, 66]  # Uplift Edge of top left (random point)
 
 unw_vals500_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 cc500_asc = get_stack_vals("cc_stack.h5", rowcol_asc..., 1, "stack", valid_igram_indices500, reference_station=nothing);
 unw_vals600_asc = get_stack_vals("unw_stack.h5", rowcol_asc..., 1, "stack_flat_shifted", valid_igram_indices600, reference_station=nothing);
 # unw_vals500_desc = get_stack_vals("unw_stack.h5", rowcol_desc..., 1, "stack_flat_shifted", valid_igram_indices500, reference_station=nothing);
 
-println("point 3")
+unw_vals500_top = get_stack_vals("unw_stack.h5", rowcol_top..., 1, "stack_flat_shifted", valid_igram_indices500);
+cc500_top = get_stack_vals("cc_stack.h5", rowcol_top..., 1, "stack", valid_igram_indices500);
 
-g35, i35, v35 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_35pct.txt", 500)
-Blin35 = sum(InsarTimeseries.build_B_matrix(g35, i35), dims=2)
-g50, i50, v50 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_50pct.txt", 500)
-Blin50 = sum(InsarTimeseries.build_B_matrix(g50, i50), dims=2)
-unw_vals_up1 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", valid_igram_indices500);
-unw_vals_up35 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v35);
-unw_vals_up50 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v50);
+# g35, i35, v35 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_35pct.txt", 500)
+# Blin35 = sum(InsarTimeseries.build_B_matrix(g35, i35), dims=2)
+# g50, i50, v50 = load_geolist_intlist("unw_stack.h5", "geolist_ignore_50pct.txt", 500)
+# Blin50 = sum(InsarTimeseries.build_B_matrix(g50, i50), dims=2)
+# unw_vals_up1 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", valid_igram_indices500);
+# unw_vals_up35 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v35);
+# unw_vals_up50 = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", v50);
 
 
 
 #### 
-# Splitting by 2017 stuff
-geolist1, intlist1, valid_igram_indices1 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500, max_date=Date(2017,1,1))
-geolist2, intlist2, valid_igram_indices2 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500, min_date=Date(2017,1,1))
-
-B1 = InsarTimeseries.build_B_matrix(geolist1, intlist1)
-Blin1 = sum(B1, dims=2);
-B2 = InsarTimeseries.build_B_matrix(geolist2, intlist2)
-Blin2 = sum(B2, dims=2);
-
-unw_vals1_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
-cc1_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices1, reference_station=nothing);
-
-unw_vals2_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
-cc2_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices2, reference_station=nothing);
-
-# Good area: txmh
-unw_vals1_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
-cc1_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices1, reference_station=nothing);
-
-unw_vals2_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
-cc2_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices2, reference_station=nothing);
-
-# TXS3: worst for 2017 only
-unw_vals1_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
-cc1_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices1, reference_station=nothing);
-
-unw_vals2_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
-cc2_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices2, reference_station=nothing);
+# # Splitting by 2017 stuff
+# geolist1, intlist1, valid_igram_indices1 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500, max_date=Date(2017,1,1))
+# geolist2, intlist2, valid_igram_indices2 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500, min_date=Date(2017,1,1))
+# 
+# B1 = InsarTimeseries.build_B_matrix(geolist1, intlist1)
+# Blin1 = sum(B1, dims=2);
+# B2 = InsarTimeseries.build_B_matrix(geolist2, intlist2)
+# Blin2 = sum(B2, dims=2);
+# 
+# unw_vals1_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
+# cc1_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices1, reference_station=nothing);
+# 
+# unw_vals2_txoz = get_stack_vals("unw_stack.h5", "TXOZ", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
+# cc2_txoz = get_stack_vals("cc_stack.h5", "TXOZ", 1, "stack", valid_igram_indices2, reference_station=nothing);
+# 
+# # Good area: txmh
+# unw_vals1_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
+# cc1_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices1, reference_station=nothing);
+# 
+# unw_vals2_txmh = get_stack_vals("unw_stack.h5", "TXMH", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
+# cc2_txmh = get_stack_vals("cc_stack.h5", "TXMH", 1, "stack", valid_igram_indices2, reference_station=nothing);
+# 
+# # TXS3: worst for 2017 only
+# unw_vals1_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices1, reference_station=nothing);
+# cc1_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices1, reference_station=nothing);
+# 
+# unw_vals2_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
+# cc2_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices2, reference_station=nothing);

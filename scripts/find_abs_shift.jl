@@ -1,6 +1,7 @@
 push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
 # import InsarTimeseries
 # using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET, CC_FILENAME, UNW_FILENAME
+import Polynomials
 import Glob
 using HDF5
 using PyCall
@@ -44,18 +45,16 @@ end
 get_gps_error(fname, station_list::Array{String}; kwargs...) = get_gps_error.(fname, station_list; kwargs...)
 # ! note: dot broadcasting is same as [get_gps_error.(fname, stat; kwargs...) for stat in station_list]
 
-function _get_station_rowcol(station_name)
-    dem_rsc = Sario.load("dem.rsc")
-    lon, lat = gps.station_lonlat(station_name)
-    return map(x-> convert(Int, x), 
-               MapImages.nearest_pixel(dem_rsc, lat, lon))
+function _get_station_rowcol(station_name, directory=".")
+    demrsc = Sario.load(joinpath(directory, "dem.rsc"))
+    return map(x-> convert(Int, x), MapImages.station_rowcol(station_name, demrsc))
 end
 
 
 """Load the insar data in a small patch around the pixel"""
 function _get_val_at_station(insar_fname, station_name; dset="velos", window=5, kwargs...)
     # Note: swapping row and col due to julia/hdf5 transposes
-    row, col = _get_station_rowcol(station_name)
+    row, col = _get_station_rowcol(station_name, dirname(insar_fname))
     halfwin = div(window, 2)
     patch = h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
     return mean(patch)

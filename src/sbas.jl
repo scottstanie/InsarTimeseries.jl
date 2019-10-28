@@ -6,9 +6,6 @@ import Dierckx
 import SparseArrays: spdiagm
 
 
-const MIN_PHASE_SPREAD = 5
-MIN_SPREAD = 2
-
 """Helper to make a group path similar to `dset`, with new base"""
 _match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/')
 
@@ -92,7 +89,7 @@ end
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
                    prune_outliers=true, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
-    sigma = 5
+    sigma = 3
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
         geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
@@ -169,7 +166,7 @@ function run_sbas(unw_stack_file::String,
     end
  
     @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(1000:2000, 1000:2000))
+    # @time @sync @distributed for (row, col) in collect(Iterators.product(300:400, 300:400))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, geolist, intlist, alpha, L1;
                    prune_outliers=prune_outliers, prune_fast=prune_fast, 
@@ -406,7 +403,7 @@ end
 # 3. with rought velocity estimate, find igrams with too long of baseline
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
 function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=1.0)
-    return test_short(geolist, intlist, unw_pixel)
+    # return test_short(geolist, intlist, unw_pixel)
     intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
     Blin = prepB(geolist, intlist_short, true)
     velo_orig = PHASE_TO_CM * (Blin \ unw_short)[1]  # cm / day
@@ -552,7 +549,7 @@ function peel_nsigma(geo, int, val; nsigma=3)
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
-function nsigma_days(geo, int, val, nsigma=3, min_spread=MIN_SPREAD)
+function nsigma_days(geo, int, val, nsigma=3, min_spread=2)
     means = mean_abs_val(geo, int, val)
     out_idxs = two_way_outliers(means, nsigma, min_spread)
 

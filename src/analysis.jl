@@ -4,9 +4,13 @@ Blins_by_date(date, intlist, Blin) = Blin[date in intlist, :]
 
 
 """Solve without a geo date, array of dates, or array of igrams"""
-function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, intlist, unw_vals, B; in_mm_yr=true)
-    intlist_clean, unw_clean, B_clean  = remove_igrams(intlist, unw_vals, B, bad_items)
-    velo_l1 = invert_pixel(unw_clean, B_clean, rho=1.0, alpha=1.5)
+function solve_without(bad_items::Union{Date, Array{Date}, Array{Igram}}, geolist, intlist, unw_vals; in_mm_yr=true)
+    intlist_clean, unw_clean = remove_igrams(intlist, unw_vals, bad_items)
+
+    geolist_clean = [g for g in geolist if !(g in bad_items)]
+
+    B_clean = sum(build_B_matrix(geolist_clean, intlist_clean), dims=2);
+    velo_l1 = invert_pixel_l1(unw_clean, B_clean)
     velo_lstsq = B_clean \ unw_clean
     # Return soluyion in mm/year if specified
     scale = in_mm_yr ? P2MM : 1
@@ -20,11 +24,11 @@ Solves once with no removals, and returns the difference of no removing
 and removing each day. 
 """
 function compare_solutions(geolist, intlist, unw_vals, B)
-    base_l1, base_lstsq = solve_without(Date(2000,1,1), intlist, unw_vals, B)
+    base_l1, base_lstsq = solve_without(Date(2000,1,1), geolist, intlist, unw_vals)
     l1_diffs = Array{Float32, 1}(undef, length(geolist))
     lstsq_diffs = similar(l1_diffs)
     for (idx, d) in enumerate(geolist)
-        l1, lstsq = solve_without(d, intlist, unw_vals, B)
+        l1, lstsq = solve_without(d, geolist, intlist, unw_vals)
         l1_diffs[idx] =  l1 - base_l1
         lstsq_diffs[idx] = lstsq - base_lstsq
     end
@@ -57,7 +61,7 @@ end
 # OLDER WAY: (redundant code? TODO: cleanup)
 """Look for outliers in how much the solution shifts by just having a large mean value
 Returns a Bool array the size of `geolist` with `true` marking the outliers"""
-function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
+function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3)
     # means = mean_abs_val(geolist, intlist, unw_vals)
     # means = abs.(oneway_val(geolist, intlist, unw_vals, mean))
     # means = mean_oneway_val(geolist, intlist, unw_vals)
@@ -68,22 +72,23 @@ function find_mean_outliers(geolist, intlist, unw_vals, nsigma=3; B=nothing)
     bad_idxs = means .> cutoff_val
     if iters > 1
         g2 = geolist[.!bad_idxs]
-        i2, u2, B2 = remove_igrams(intlist, unw_vals, B, geolist[bad_idxs])
+        i2, u2 = remove_igrams(intlist, unw_vals, geolist[bad_idxs])
         # TODO: fix this
-        return find_mean_outliers(g2, i2, u2, B=B2, iters=iters-1)
+        return find_mean_outliers(g2, i2, u2, iters=iters-1)
     end
     return bad_idxs
 end
 
 """Remove all igrams corresponding to the date with the highest mean"""
-function peel_largest_n(geo, int, val, B; n=1)
+function peel_largest_n(geo, int, val; n=1)
     dates_to_remove = largest_n_dates(geo, int, val, n)
-    int2, val2, B2 = remove_igrams(int, val, B, dates_to_remove)
+    int2, val2 = remove_igrams(int, val, dates_to_remove)
     geo2 = [g for g in geo if !(g in dates_to_remove)]
-    return geo2, int2, val2, B2
+    return geo2, int2, val2
 end
 
 function largest_n_dates(geo, int, val, n=length(geo))
+    n < 1 && return Array{Date, 1}()
     # means = mean_abs_val(geo, int, val)
     means = abs.(oneway_val(geo, int, val, median)); println("largest abs(oneway)")
 
@@ -98,13 +103,19 @@ function top_n(values, keys, n, rev=true)
     return collect(zip(sorted_top...))
 end
 
+function solve_without_largest(geolist, intlist, unw_vals, B, n=1; in_mm_yr=true)  #, direction=:high, method=:mean)
+    bad_days = largest_n_dates(geolist, intlist, unw_vals, n)
+    println("Removing $(length(bad_days)) days out of $(length(geolist)): $bad_days")
+    return solve_without(bad_days, geolist, intlist, unw_vals, in_mm_yr=in_mm_yr)
+end
+
 function solve_after_cutoff(geolist, intlist, unw_vals, B, nsigma=3; in_mm_yr=true)  #, direction=:high, method=:mean)
     bad_days = find_mean_outliers(geolist, intlist, unw_vals, nsigma)
 
 
     bad_days = geolist[bad_idxs]
     println("Removing $(length(bad_days)) days out of $(length(geolist)): $bad_days")
-    return solve_without(bad_days, intlist, unw_vals, B, in_mm_yr=in_mm_yr)
+    return solve_without(bad_days, geolist, intlist, unw_vals, in_mm_yr=in_mm_yr)
 end
 
 """Look for outliers in how much the solution shifts by removing the single date"""
