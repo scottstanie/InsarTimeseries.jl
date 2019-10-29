@@ -1,6 +1,7 @@
 using HDF5
 import PyPlot
 import Polynomials
+import Dierckx: Spline2D
 plt = PyPlot
 
 function read_last(fname, dset, do_permute=true)
@@ -199,5 +200,74 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
     end
     plt.legend()
     plt.show(block=false)
+end
 
+function image_solution_grouped(unw_stack)
+    baseline = InsarTimeseries.temporal_baseline
+    geolist, intlist, valid_igram_indices= load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 2000)
+    unw_valid = unw_stack[:, :, valid_igram_indices]
+    # Ball = InsarTimeseries.build_B_matrix(geolist, intlist);
+    # Blinall = sum(Ball, dims=2);
+ 
+    baselines = 100:100:600
+
+    med_layers = []
+    for (b1, b2) in zip(baselines[1:end-1], baselines[2:end])
+        @show b1, b2
+        idxs = (baseline(intlist) .> b1) .& (baseline(intlist) .< b2)
+        cur_ints = intlist[idxs]
+        cur_B = sum(InsarTimeseries.build_B_matrix(geolist, cur_ints), dims=2)
+        @show  size(unw_valid), size(idxs)
+        layers = @view unw_valid[:, :, idxs]
+        push!(med_layers, @view median(layers, dims=3)[:, :, 1])
+    end
+    return med_layers
+end
+
+function image_line(img, rowcol1, rowcol2)
+    n = Int(round(sqrt(sum((rowcol2 .- rowcol1).^2 ))))
+    # Note on Dierckx: "it is required that size(z) == (length(x), length(y))"
+    XX = 1:size(img, 1)
+    YY = 1:size(img, 2)
+    intp = Spline2D(XX, YY, img)
+
+    r1, c1 = rowcol1
+    r2, c2 = rowcol2
+    xs = range(r1, stop=r2, length=n)
+    ys = range(c1, stop=c2, length=n)
+    return intp(xs, ys)
+end
+
+function plot_image_line(img, rowcol1, rowcol2; plotkwargs...)
+    line = image_line(img, rowcol1, rowcol2)
+    fig, axes = plt.subplots(1, 2)
+    axes[1].imshow(img; plotkwargs...)
+    r1, c1 = rowcol1
+    r2, c2 = rowcol2
+    axes[1].plot(c1, r1, "gx", ms=10)
+    axes[1].plot(c2, r2, "rx", ms=10)
+    axes[1].plot([c1, c2], [r1, r2], "k")
+
+    axes[2].plot(line)
+end
+
+# TODO: extract if not MapImage
+function plot_image_line(img::MapImages.MapImage, rowcol1, rowcol2; plotkwargs...)
+    line = image_line(img, rowcol1, rowcol2)
+    km_line_dist = MapImages.rowcol_to_dist(img, rowcol1, rowcol2)
+
+    fig, axes = plt.subplots(1, 2)
+    axes[1].imshow(img; plotkwargs...)
+    r1, c1 = rowcol1
+    r2, c2 = rowcol2
+
+    axes[1].plot(c1, r1, "gx", ms=10)
+    axes[1].plot(c2, r2, "rx", ms=10)
+    axes[1].plot([c1, c2], [r1, r2], "k")
+
+    axes[2].plot(0, line[1], "gx", ms=10)
+    axes[2].plot(km_line_dist, line[end], "rx", ms=10)
+    axes[2].plot(range(0, stop=km_line_dist, length=length(line)), line, "b.--")
+    axes[2].set_ylabel("cm")
+    axes[2].set_xlabel("km")
 end
