@@ -181,6 +181,8 @@ function shift_dset(shift, fname, src::String="velos/1", dest="velos_shifted/1")
         out = shift_from(f[src], shift)
         f[dest] = out
     end
+    h5writeattr(fname, dest, h5readattr(fname, src))
+    return
 end
 
 function save_as_unw(fname, dset="velos/1")

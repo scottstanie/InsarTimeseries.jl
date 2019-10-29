@@ -11,16 +11,16 @@ shrink_baseline = InsarTimeseries.shrink_baseline
 invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel_l1(u, B)
 invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
 
-function prune_igrams(g, i, u, ns=3, ct=nothing, cp=nothing)
+function prune_igrams(g, i, u, ns=3, ct=nothing, cp=nothing, shrink=true)
     g, i, u = remove_outliers(g, i, u, mean_sigma_cutoff=ns)
     # i, u = prune_cor(i, u, cor_pixel=cp, cor_thresh=ct)
-    i, u = shrink_baseline(g, i, u)
+    i, u = shrink ? shrink_baseline(g, i, u) : (i, u)
     return g, i, u
 end
 
-function prunesolve(g, i, u, B, nsigma=3, cor_thresh=nothing, cor_pixel=nothing)
+function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing, shrink=true)
     constant = true
-    geo, ints, unws = prune_igrams(g, i, u, nsigma, cor_thresh, cor_pixel)
+    geo, ints, unws = prune_igrams(g, i, u, nsigma, cor_thresh, cor_pixel, shrink)
     B = InsarTimeseries.prepB(geo, ints, constant)
     invt(B, unws)
 end
@@ -28,9 +28,10 @@ end
 
 rowcol2 = [245, 189]  # small/looked uplift
 # rowcol2 = [1224, 944]  # full uplift
-rowcol3 = [368, 131]  # Small/looked subs
+# rowcol3 = [368, 131]  # Small/looked subs
 # rowcol3 = [2229, 2236]  # TESTING for diffs
-rowcol3 = [312, 135]  # Subs line that disappears with long baseline
+# rowcol3 = [312, 135]  # Subs line that disappears with long baseline
+rowcol3 = [920, 329]  # Subs line that disappears with long baseline
 rowcol4 = [32, 352]  # Subs around the decorrelated top
 
 # rowcol = [1632, 687]  # Test near pecos, disappears with too much filtering
