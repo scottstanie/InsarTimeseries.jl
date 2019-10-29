@@ -409,7 +409,6 @@ function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=1.0)
     Blin = prepB(geolist, intlist_short, true)
     velo_orig = PHASE_TO_CM * (Blin \ unw_short)[1]  # cm / day
     day_cutoff = fast_cm_cutoff / abs(velo_orig)
-    # @show day_cutoff
     too_long_igrams = [ig for ig in intlist_short if temporal_baseline(ig) > day_cutoff]
     intlist_clean, unw_clean = remove_igrams(intlist_short, unw_short, too_long_igrams)
 

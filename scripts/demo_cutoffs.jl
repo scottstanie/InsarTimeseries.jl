@@ -2,28 +2,7 @@ import PyPlot
 plt = PyPlot
 import InsarTimeseries
 include("./testl1.jl")
-
-load_geolist_intlist = InsarTimeseries.load_geolist_intlist
-prune_cor = InsarTimeseries.prune_cor
-remove_outliers = InsarTimeseries.remove_outliers
-shrink_baseline = InsarTimeseries.shrink_baseline
-
-invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel_l1(u, B)
-invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
-
-function prune_igrams(g, i, u, ns=3, ct=nothing, cp=nothing, shrink=true)
-    g, i, u = remove_outliers(g, i, u, mean_sigma_cutoff=ns)
-    # i, u = prune_cor(i, u, cor_pixel=cp, cor_thresh=ct)
-    i, u = shrink ? shrink_baseline(g, i, u) : (i, u)
-    return g, i, u
-end
-
-function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing, shrink=true)
-    constant = true
-    geo, ints, unws = prune_igrams(g, i, u, nsigma, cor_thresh, cor_pixel, shrink)
-    B = InsarTimeseries.prepB(geo, ints, constant)
-    invt(B, unws)
-end
+include("./point_analysis.jl")
 
 
 rowcol2 = [245, 189]  # small/looked uplift
