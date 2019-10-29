@@ -19,6 +19,7 @@ nm = NaNMath
 # import ECOS
 # import SCS
 
+p2c = InsarTimeseries.PHASE_TO_CM 
 p2mm = InsarTimeseries.PHASE_TO_CM * 365 * 10
 
 # TODO: find the shift to match insar to gps best
