@@ -22,7 +22,7 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
-                           L1=false; prune_outliers=true, prune_fast=true, 
+                           L1=false; prune_outliers=true, sigma=3, prune_fast=true, 
                            row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -37,7 +37,7 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     
     linear = true
     soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune_outliers=prune_outliers,
+                                                              L1=L1, prune_outliers=prune_outliers, sigma=sigma,
                                                               prune_fast=prune_fast)
 
     dist_outfile = string(Distributed.myid()) * outfile
@@ -53,7 +53,7 @@ end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
-                          L1=false; prune_outliers=true, prune_fast=true, 
+                          L1=false; prune_outliers=true, sigma=3, prune_fast=true, 
                           row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -62,7 +62,7 @@ function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
 
     linear = false
     soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune_outliers=prune_outliers,
+                                                              L1=L1, prune_outliers=prune_outliers, sigma=sigma,
                                                               prune_fast=prune_fast)
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
@@ -89,8 +89,7 @@ end
 
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune_outliers=true, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
-    sigma = 3
+                   prune_outliers=true, sigma=3, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
         geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
@@ -130,6 +129,7 @@ function run_sbas(unw_stack_file::String,
                   alpha::Real,
                   L1::Bool=false,
                   prune_outliers=true,
+                  sigma=3,
                   prune_fast=true) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
@@ -170,7 +170,7 @@ function run_sbas(unw_stack_file::String,
     # @time @sync @distributed for (row, col) in collect(Iterators.product(300:400, 300:400))
         proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
                    outdset, geolist, intlist, alpha, L1;
-                   prune_outliers=prune_outliers, prune_fast=prune_fast, 
+                   prune_outliers=prune_outliers, sigma=sigma, prune_fast=prune_fast, 
                    row=row, col=col)
     end
     println("Merging files into $outfile")
@@ -403,12 +403,14 @@ end
 
 # 3. with rought velocity estimate, find igrams with too long of baseline
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
-function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=1.0)
+function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=2.0)
     # return test_short(geolist, intlist, unw_pixel)
     intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
     Blin = prepB(geolist, intlist_short, true)
     velo_orig = PHASE_TO_CM * (Blin \ unw_short)[1]  # cm / day
     day_cutoff = fast_cm_cutoff / abs(velo_orig)
+    # @show day_cutoff
+
     too_long_igrams = [ig for ig in intlist_short if temporal_baseline(ig) > day_cutoff]
     intlist_clean, unw_clean = remove_igrams(intlist_short, unw_short, too_long_igrams)
 

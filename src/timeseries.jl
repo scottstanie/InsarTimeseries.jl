@@ -33,6 +33,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
                        ignore_geo_file::String="", 
                        max_temporal_baseline::Int=500,
                        prune_outliers=true,
+                       sigma=3,
                        prune_fast=true,
                        split_dates=[],
                        gap=1,
@@ -111,7 +112,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
         velo_file_out = run_sbas(unw_stack_file, input_dset, outfile, cur_outdset,
                                  geolist, intlist, valid_igram_indices, 
-                                 constant_velocity, alpha, L1, prune_outliers,
+                                 constant_velocity, alpha, L1, prune_outliers, sigma,
                                  prune_fast)
         # if use_distributed
         # else
