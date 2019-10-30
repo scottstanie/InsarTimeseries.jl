@@ -135,8 +135,8 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cuto
     # v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, B, var_unreg)
 
     # Using Huber Loss in ADMM
-    v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
-    v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin, rho=1.0, alpha=1.5)
+    v_linear_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin)
+    v_unreg_l1 = InsarTimeseries.invert_pixel(unw_vals, Blin)
 
     return v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1
 end
@@ -151,17 +151,19 @@ end
 
 function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title="", ylims=YLIMS)
     # TODO: fix plotting to pyplot
-    p = plot(geolist, insar_linear_ts, title=title, label="linear insar", ylabel="cm", 
-             linewidth=3, ylims=ylims, legend=:bottomleft)
-    plot!(p, geolist, insar_unreg_ts, label="unreg insar", marker=:o, linealpha=0.0)
+    plt.figure()
+    p = plt.plot(geolist, insar_linear_ts, label="linear insar", 
+                 linewidth=3, ylims=ylims)
+    plt.ylabel("cm")
+    # plt.plot(geolist, insar_unreg_ts, label="unreg insar", marker=:o, linealpha=0.0)
     return p
 end
 
-function plot_gps!(p, dts, gps_los_data, gps_poly)
+function plot_gps(dts, gps_los_data, gps_poly)
     day_nums = _get_day_nums(dts)
     # TODO: fix plotting to pyplot
-    plt.plot(dts, gps_los_data, marker=:x, color=:green, linealpha=0.0, markeralpha=0.5, markersize=1, label="gps")
-    plt.plot(dts, gps_poly(day_nums), color=:green, linewidth=3, label="gps line fit")
+    plt.plot(dts, gps_los_data, "gx", markersize=1, label="gps")
+    # plt.plot(dts, gps_poly(day_nums),  color=:green, linewidth=3, label="gps line fit")
 end
 
 _get_day_nums(dts) = [( d - dts[1]).value for d in dts]
@@ -203,11 +205,11 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
                                                                          v_linear_l1,
                                                                          v_unreg_l1)
         # Plot the solutions vs gps
-        p1 = plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title="L2 least squares solution")
-        plot_gps!(p1, dts, gps_los_data, gps_poly)
+        plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title="L2 least squares solution")
+        plot_gps(dts, gps_los_data, gps_poly)
 
-        p2 = plot_insar(GEOLIST, linear_l1, unreg_l1, title="L1 norm minimization")
-        plot_gps!(p2, dts, gps_los_data, gps_poly)
+        plot_insar(GEOLIST, linear_l1, unreg_l1, title="L1 norm minimization")
+        plot_gps(dts, gps_los_data, gps_poly)
 
         plot(p1, p2)
         println("Saving $station_name.png")

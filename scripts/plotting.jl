@@ -3,6 +3,14 @@ import PyPlot
 import Polynomials
 import Dierckx: Spline2D
 plt = PyPlot
+ 
+function save_paper_figure(fig, fname, axis_off=false)
+    fig.tight_layout()
+    axis_off && plt.axis("off")
+    println("Saving $fname")
+    fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=300)
+end
+
 
 function read_last(fname, dset, do_permute=true)
     sz = size(fname, dset)
@@ -271,3 +279,32 @@ function plot_image_line(img::MapImages.MapImage, rowcol1, rowcol2; plotkwargs..
     axes[2].set_ylabel("cm")
     axes[2].set_xlabel("km")
 end
+
+function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
+    fig, ax = plt.subplots()
+    dts, los = get_gps_los(name, reference_station=ref)
+    day_nums = _get_day_nums(dts)
+
+    ax.plot(dts, los, "b.", markersize=3, label="gps")
+
+    insar_cm_day = insar_mm / 365 / 10
+
+    full_defo = insar_cm_day * (dts[end] - dts[1]).value
+    ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3)
+
+    # Or if you want different settings for the grids:
+    ax.grid(which="major", alpha=0.5)
+    ax.set_xticks(dts2[1]:Dates.Day(365):dts2[end])
+    ax.set_yticks([-2, 0, 2])
+
+    ax.set_ylim(ylim)
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+    rcParams["font.size"] = 20
+    rcParams["font.weight"] = "bold"
+#     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+#              ax.get_xticklabels() + ax.get_yticklabels()):
+#     item.set_fontsize(20)
+    return fig
+end
+
+
