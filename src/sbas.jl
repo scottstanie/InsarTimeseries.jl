@@ -22,7 +22,7 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
-                           L1=false; prune_outliers=true, sigma=3, prune_fast=true, 
+                           L1=false; prune_outliers=true, sigma=3, prune_fast=false, 
                            row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -53,7 +53,7 @@ end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
-                          L1=false; prune_outliers=true, sigma=3, prune_fast=true, 
+                          L1=false; prune_outliers=true, sigma=3, prune_fast=false, 
                           row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -89,7 +89,7 @@ end
 
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune_outliers=true, sigma=3, prune_fast=true)::Tuple{Array{Float32, 1}, Int64, Array, Array}
+                   prune_outliers=true, sigma=3, prune_fast=false)::Tuple{Array{Float32, 1}, Int64, Array, Array}
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
         geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
@@ -130,7 +130,7 @@ function run_sbas(unw_stack_file::String,
                   L1::Bool=false,
                   prune_outliers=true,
                   sigma=3,
-                  prune_fast=true) 
+                  prune_fast=false) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     prune_outliers ? println("Pruning .geo dates for outliers") : println("Not pruning outliers.")
@@ -405,14 +405,30 @@ end
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
 function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=2.0)
     # return test_short(geolist, intlist, unw_pixel)
-    intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
-    Blin = prepB(geolist, intlist_short, true)
-    velo_orig = PHASE_TO_CM * (Blin \ unw_short)[1]  # cm / day
-    day_cutoff = fast_cm_cutoff / abs(velo_orig)
-    # @show day_cutoff
+    # intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
 
-    too_long_igrams = [ig for ig in intlist_short if temporal_baseline(ig) > day_cutoff]
-    intlist_clean, unw_clean = remove_igrams(intlist_short, unw_short, too_long_igrams)
+    Blin = prepB(geolist, intlist, true)
+    # velo_orig = PHASE_TO_CM * (Blin \ unw_pixel)[1]  # cm / day
+    # day_cutoff = fast_cm_cutoff / v_orig
+
+    v_orig = abs(365 .* PHASE_TO_CM * (Blin \ unw_pixel)[1])  # cm / year
+    if v_orig > 2
+        day_cutoff = 450
+    elseif v_orig > 1.5
+        day_cutoff = 500
+    elseif v_orig > 1.2
+        day_cutoff = 550
+    elseif v_orig > 0.9
+        day_cutoff = 600
+    elseif v_orig > 0.6
+        day_cutoff = 650
+    else
+        day_cutoff = 700
+    end
+    # @show velo_orig, day_cutoff
+
+    too_long_igrams = [ig for ig in intlist if temporal_baseline(ig) > day_cutoff]
+    intlist_clean, unw_clean = remove_igrams(intlist, unw_pixel, too_long_igrams)
 
     # Don't want to prune down to nothing, and also don't bother if it's really flat
     # if iters == 1 || day_cutoff < 200 || day_cutoff > maximum(temporal_baseline(intlist))
