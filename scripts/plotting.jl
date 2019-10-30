@@ -3,7 +3,11 @@ import PyPlot
 import Polynomials
 import Dierckx: Spline2D
 plt = PyPlot
+include("./colors.jl")
  
+load_geolist_intlist = InsarTimeseries.load_geolist_intlist
+baseline = InsarTimeseries.temporal_baseline
+
 function save_paper_figure(fig, fname, axis_off=false)
     fig.tight_layout()
     axis_off && plt.axis("off")
@@ -210,26 +214,48 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
     plt.show(block=false)
 end
 
-function image_solution_grouped(unw_stack)
-    baseline = InsarTimeseries.temporal_baseline
+function plot_solution_grouped(unw_stack; vm=30, cmap="seismic_wide", baselines=200:100:600)
+    solns = image_solution_grouped(unw_stack)
+    n = length(solns) 
+    fig, axes = plt.subplots(1, n)
+    axim = nothing
+    for i = 1:n
+        axim = axes[i].imshow(solns[i], vmin=-vm, vmax=vm, cmap=cmap)
+        axes[i].set_title("Max days = $(baselines[i])")
+    end
+    # plt.matplotlib.colorbar.make_axes([ax for ax in axes.flat])
+    fig.colorbar(axim, ax=axes, shrink=0.75)
+    return fig, axes
+end
+
+
+function image_solution_grouped(unw_stack; baselines=200:100:600)
     geolist, intlist, valid_igram_indices= load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 2000)
     unw_valid = unw_stack[:, :, valid_igram_indices]
     # Ball = InsarTimeseries.build_B_matrix(geolist, intlist);
     # Blinall = sum(Ball, dims=2);
  
-    baselines = 100:100:600
-
-    med_layers = []
-    for (b1, b2) in zip(baselines[1:end-1], baselines[2:end])
-        @show b1, b2
-        idxs = (baseline(intlist) .> b1) .& (baseline(intlist) .< b2)
+    solns = []
+    for b2 in baselines
+    # for (b1, b2) in zip(baselines[1:end-1], baselines[2:end])
+        @show b2
+        # idxs = (baseline(intlist) .> b1) .& (baseline(intlist) .< b2)
+        idxs = (baseline(intlist) .< b2)
         cur_ints = intlist[idxs]
         cur_B = sum(InsarTimeseries.build_B_matrix(geolist, cur_ints), dims=2)
-        @show  size(unw_valid), size(idxs)
         layers = @view unw_valid[:, :, idxs]
-        push!(med_layers, @view median(layers, dims=3)[:, :, 1])
+        # push!(solns, @view median(layers, dims=3)[:, :, 1])
+        push!(solns, _calcstack(layers, intlist[idxs]))
     end
-    return med_layers
+    return solns
+end
+
+function _calcstack(unw_stack, igrams)
+    timediffs = baseline(igrams)
+    phase_sum = sum(unw_stack, dims=3)[:, :, 1]
+    avg_velo = phase_sum ./ sum(timediffs)
+    # Finally, save as a mm/year velocity
+    return InsarTimeseries.P2MM * avg_velo
 end
 
 function image_line(img, rowcol1, rowcol2)

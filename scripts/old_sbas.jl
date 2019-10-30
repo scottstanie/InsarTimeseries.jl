@@ -197,3 +197,41 @@ function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{<:AbstractFl
     return phi_arr
 end
 
+
+"""2nd Threaded version: If we can load all stack file into memory, might be much quicker"""
+function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
+                  outfile::String,
+                  outdset::String,
+                  geolist,
+                  intlist, 
+                  constant_velocity::Bool, 
+                  alpha::Float32,
+                  L1::Bool=false,
+                  prune::Bool=true) 
+
+    B = prepB(geolist, intlist, constant_velocity, alpha)
+    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
+    # TODO: do I ever really care about the abstol to change as variable?
+    rho, alpha, abstol = 1.0, 1.6, 1e-3
+    nrows, ncols, _ = size(unw_stack)
+ 
+    outstack = Array{Float32, 2}(undef, (nrows, ncols))
+    countstack = similar(outstack)
+    println("Out size: ($nrows, $ncols)")
+    pix_count, total_pixels = 0, nrows * ncols
+
+    @time Threads.@threads for col in 1:ncols
+        for row in 1:nrows
+            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
+            outstack[row, col] = soln_p2mm
+            countstack[row, col] = igram_count
+        end
+    end
+
+    println("Writing solution into $outfile : $outdset")
+    h5open(outfile, "cw") do f
+        f[outdset] = outstack
+        f[_count_dset(outdset)] = countstack
+    end
+    return outfile, outdset
+end
