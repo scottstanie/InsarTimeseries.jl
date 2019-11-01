@@ -107,10 +107,9 @@ function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
     # Last, pad with zeros if doing Tikh. regularization
     unw_final = alpha > 0 ? augment_zeros(B, unw_clean) : unw_clean
 
-    # if igram_count < 50  # TODO: justify this minimum data
-    #     soln_phase = [Float32(0)]
-    # else
-    soln = L1 ? invert_pixel_l1(unw_final, B) : B \ unw_final
+    # TODO: Do i ever want the backslash, which weights dt like 1/dt^2
+    # soln = L1 ? invert_pixel_l1(unw_final, B) : B \ unw_final
+    soln = L1 ? invert_pixel_l1(unw_final, B) : [sum(unw_final) / sum(B)]
     soln_phase = Float32.(soln)
     # end
     return soln_phase, igram_count, geo_clean, unw_clean
