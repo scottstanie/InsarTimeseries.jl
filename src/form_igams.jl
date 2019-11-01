@@ -24,3 +24,26 @@ function igram_correlation(igram::AbstractArray, rowlooks::Int, collooks::Int)
     # tosave[:,nrg:] = np.imag(c)
 end
 
+# julia> lines = readlines("sbas_list");
+# 
+# julia> lines[1:2]
+# 4-element Array{String,1}:
+#  "../S1A_20141104.geo ../S1A_20141128.geo 24.0    29.539676548307892     "
+#  "../S1A_20141104.geo ../S1A_20141222.geo 48.0    11.520530983588465     "
+function create_igrams()
+    current_ints = Glob.glob("*.int")
+
+    sbas_lines = readlines("sbas_list")
+    # TODO: use the parsers to get the dates...
+    for line in sbas_lines[1:3]
+        early, late, temp, spatial = split(line)
+        # "../S1A_20141104.geo"
+        igram_name = join(map(_get_date, early, late), '_') *".int"
+    end
+    return
+end
+
+# julia> "../S1A_20141128.geo" |> x-> split(x, '_')[2] |> x -> split(x, '.')[1]
+#     "20141128"
+_get_date(geo_name) = geo_name |> x-> split(x, '_')[2] |> x -> split(x, '.')[1]
+
