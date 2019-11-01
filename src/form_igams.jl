@@ -1,3 +1,6 @@
+import Sario
+import Glob: glob
+
 take_looks = Sario.take_looks
 
 # TODO: check if preallocating and doing ! version is worth speed
@@ -6,21 +9,20 @@ function make_igam(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, coll
 end
 
 function powlooks(image::AbstractArray, rowlooks::Int, collooks::Int)
-    return sqrt.(take_looks(abs2.(image), rowlooks, collooks))
+    return take_looks(abs2.(image), rowlooks, collooks)
 end
 
 function make_int_cor(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
     igram = make_igam(slc1, slc2, rowlooks, collooks)
-    ampslc1 = powlooks(slc1, rowlooks, collooks)
-    ampslc2 = powlooks(slc2, rowlooks, collooks)
+    return _make_cor(igram, slc1, slc2, rowlooks, collooks)
+end
+
+function _make_cor(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
+    ampslc1 = sqrt.(powlooks(slc1, rowlooks, collooks))
+    ampslc2 = sqrt.(powlooks(slc2, rowlooks, collooks))
     amp = @. real(abs(igram))
-    @show typeof(ampslc1), typeof(amp)
-    cor = real.(amp ./ (eps(eltype(ampslc1)) .+ ampslc1 .* ampslc2))
+    cor = real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
     return cor, amp, igram
-    # c = amp/(np.finfo(float).eps+slclooks1*slclooks2)
-    # cc = amp+1j*c
-    # tosave[:,0:nrg] = np.real(c)
-    # tosave[:,nrg:] = np.imag(c)
 end
 
 # julia> lines = readlines("sbas_list");
@@ -42,11 +44,28 @@ function form_igram_names()
     # Note: Sorting so that ALL igrams with `early_file` are formed in a for
     return sort(out)
 end
+
 function create_igrams(rowlooks=1, collooks=1)
-    current_ints = Glob.glob("*.int")
-    current_cors = Glob.glob("*.cc")
+    current_ints = glob("*.int")
+    current_cors = glob("*.cc")
+
+    fulldemrsc = Sario.load("../elevation.dem.rsc")
+    demrsc = Sario.load("dem.rsc")
+
+    # Pre-allocate arrays for speed
+    fullrows, fullcols = size(fulldemrsc)
+    early = zeros(ComplexF32, fullcols, fullrows)
+    late = zeros(ComplexF32, fullcols, fullrows)
+    rows, cols = size(demrsc)
+    igram = zeros(ComplexF32, cols, rows)
+
+    ampslc1 = zeros(Float32, cols, rows)
+    ampslc2 = similar(ampslc1)
+    amp = similar(ampslc1)
+    cor = similar(ampslc1)
+    outcor = zeros(Float32, (cols, rows, 2))
+
     cur_early_file = ""
-    early = zeros(ComplexF32, 10, 10)
     for (igram_name, early_file, late_file) in form_igram_names()
         cor_name = replace(igram_name, ".int" => ".cc")
         if (igram_name in current_ints) && (cor_name in current_cors)
@@ -59,22 +78,33 @@ function create_igrams(rowlooks=1, collooks=1)
         # Keep early in memory for all pairs: only load for new set
         if cur_early_file != early_file
             println("Loading $early_file")
-            @time early = Sario.load(early_file, do_permute=false)
+            @time read!(early_file, early)
             cur_early_file = early_file
         end
         # But we load late every time
         println("Loading $late_file")
-        @time late = Sario.load(late_file, do_permute=false)
+        @time read!(late_file, late)
 
         # transposed, so flip row/col
-        println("Forming int, cor")
-        @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
+        # println("Forming int, cor")
+        # @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
+
+        # TODO: figure preallocating for the igrams/ taking looks
+        println("Forming igram")
+        @time igram .= make_igam(early, late, rowlooks, collooks)
+        println("Forming cor")
+        ampslc1 .= sqrt.(powlooks(early, rowlooks, collooks))
+        ampslc2 .= sqrt.(powlooks(late, rowlooks, collooks))
+        amp .= real.(abs.(igram))
+        cor .= real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
 
         println("Saving $cor_name, $igram_name")
-        outcor = cat(cor, amp, dims=3)
+        outcor[:, :, 1] .= amp;
+        outcor[:, :, 2] .= cor;
         Sario.save(cor_name, outcor, do_permute=false)
         Sario.save(igram_name, igram, do_permute=false)
     end
+    GC.gc()
 end
 
 # julia> "../S1A_20141128.geo" |> x-> split(x, '_')[2] |> x -> split(x, '.')[1]
