@@ -9,8 +9,8 @@ rowcol2 = [245, 189]  # small/looked uplift
 # rowcol2 = [1224, 944]  # full uplift
 # rowcol3 = [368, 131]  # Small/looked subs
 # rowcol3 = [2229, 2236]  # TESTING for diffs
-# rowcol3 = [312, 135]  # Subs line that disappears with long baseline
-rowcol3 = [920, 329]  # Subs line that disappears with long baseline
+rowcol3 = [312, 135]  # Subs line that disappears with long baseline
+# rowcol3 = [920, 329]  # Subs line that disappears with long baseline (big map)
 rowcol4 = [32, 352]  # Subs around the decorrelated top
 
 # rowcol = [1632, 687]  # Test near pecos, disappears with too much filtering
@@ -142,3 +142,34 @@ cc500_top = get_stack_vals("cc_stack.h5", rowcol_top..., 1, "stack", valid_igram
 # 
 # unw_vals2_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
 # cc2_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices2, reference_station=nothing);
+
+function plot_unregs(;sigma=3, max_temp=700, shrink=false)
+    constant = false
+    g, i, igram_idxs = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp)
+    rowcols = [
+               [(414, 678),  "noise? -8/yr for sigma=4+, 0 on sigma 3",],
+               [(410, 667),  "No signal, lots of stuff removed",],
+               [(363, 594),  "Bot right (real) bowl",],
+               [(301, 301),  "middle of map, vague red",],
+               [(257, 81),   "Bowl with eastward near pecos",],
+               [(365, 128),   "Deepest part of pecos wing",],
+    ]
+    plt.figure()
+    for (rowcol, label) in rowcols
+        row, col = rowcol
+        unw_vals = get_stack_vals("unw_stack.h5", row, col, 1, "stack_flat_shifted", igram_idxs)
+
+        geo, ints, unws = prune_igrams(g, i, unw_vals, sigma, nothing, nothing, false)
+        ints, unws = shrink ? shrink_baseline(geo, ints, unws) : (ints, unws)
+        B = InsarTimeseries.prepB(geo, ints, constant)
+        soln = p2c .* InsarTimeseries.integrate_velocities(B \ unws, InsarTimeseries.day_diffs(geo))
+
+        Blin = sum(B, dims=2)
+        soln_lin = (Blin \ unws)[1] * p2mm
+        println("$label: $soln_lin cm/yr")
+    
+        plt.plot(geo, soln, ".-", label="($row, $col): $label, Linear: $(round(soln_lin)) mm/yr")
+    end
+    plt.legend()
+    plt.title("Sigma = $sigma, max baseline = $max_temp, shrink = $shrink")
+end

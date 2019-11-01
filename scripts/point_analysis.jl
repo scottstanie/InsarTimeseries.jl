@@ -28,7 +28,7 @@ function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing,
 end
 
 
-function demo_point(rowcol; sigma=3, max_temp=600, show=true)
+function demo_point(rowcol; sigma=3, max_temp=700, show=true)
     geolist, intlist, igram_idxs = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp)
     B = InsarTimeseries.build_B_matrix(geolist, intlist);
     Blin = sum(B, dims=2);

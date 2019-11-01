@@ -186,7 +186,7 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
     # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist);
     p2c = InsarTimeseries.PHASE_TO_CM
 
-    geolist, intlist500, valid_igram_indices500 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
+    geolist, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
 
     m, n = 3, 5
     fig, axes = plt.subplots(m, n)
@@ -198,9 +198,9 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
             end
             name = station_name_list[idx]
 
-        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices500)
+        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices600)
 
-        g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist500, unw_vals)
+        g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist600, unw_vals)
 
         ax = axes[ii, jj]
 
@@ -320,7 +320,7 @@ function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
 
     # Or if you want different settings for the grids:
     ax.grid(which="major", alpha=0.5)
-    ax.set_xticks(dts2[1]:Dates.Day(365):dts2[end])
+    ax.set_xticks(dts[1]:Dates.Day(365):dts[end])
     ax.set_yticks([-2, 0, 2])
 
     ax.set_ylim(ylim)

@@ -26,7 +26,7 @@ rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size
 maxabs(x) = maximum(abs.(x))
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
-function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_station=nothing, verbose=false, shift=0.0)
+function get_gps_error(insar_fname::String, station_name::String; dset="velos", window=5, ref_station=nothing, verbose=false, shift=0.0)
 
     # insar derived solution in a small patch
     slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window) + shift    
@@ -42,7 +42,7 @@ function get_gps_error(insar_fname, station_name; dset="velos", window=5, ref_st
 
     return slope_insar_mm_yr - slope_gps_mm_yr 
 end
-get_gps_error(fname, station_list::Array{String}; kwargs...) = get_gps_error.(fname, station_list; kwargs...)
+get_gps_error(fname::String, station_list::Array{String}; kwargs...) = get_gps_error.(fname, station_list; kwargs...)
 # ! note: dot broadcasting is same as [get_gps_error.(fname, stat; kwargs...) for stat in station_list]
 
 function _get_station_rowcol(station_name, directory=".")
