@@ -1,15 +1,25 @@
 import Sario
+import Sario: take_looks, take_looks!
 import Glob: glob
 
-take_looks = Sario.take_looks
-
-# TODO: check if preallocating and doing ! version is worth speed
 function make_igam(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
     return take_looks(slc1 .* conj.(slc2), rowlooks, collooks)
 end
 
+function make_igam!(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
+    # We are assuming it's okay to overwrite slc2
+    slc2 .*= conj.(slc1)
+    slc2 .= conj.(slc2)
+    return take_looks!(igram, slc2, rowlooks, collooks)
+end
+
+
 function powlooks(image::AbstractArray, rowlooks::Int, collooks::Int)
     return take_looks(abs2.(image), rowlooks, collooks)
+end
+
+function powlooks!(out::AbstractArray, image::AbstractArray, rowlooks::Int, collooks::Int)
+    return take_looks!(out, abs2.(image), rowlooks, collooks)
 end
 
 function make_int_cor(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
@@ -25,12 +35,9 @@ function _make_cor(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArra
     return cor, amp, igram
 end
 
-# julia> lines = readlines("sbas_list");
-# 
-# julia> lines[1:2]
+# julia> lines = readlines("sbas_list")
 # 4-element Array{String,1}:
-#  "../S1A_20141104.geo ../S1A_20141128.geo 24.0    29.539676548307892     "
-#  "../S1A_20141104.geo ../S1A_20141222.geo 48.0    11.520530983588465     "
+#  "../S1A_20141104.geo ../S1A_20141128.geo 24.0    29.539676548307892     " ...
 function form_igram_names()
     sbas_lines = readlines("sbas_list")
     # TODO: use the parsers to get the dates...
@@ -50,8 +57,11 @@ function create_igrams(rowlooks=1, collooks=1)
     current_cors = glob("*.cc")
 
     fulldemrsc = Sario.load("../elevation.dem.rsc")
-    demrsc = Sario.load("dem.rsc")
+    # New version
+    demrsc = take_looks(fulldemrsc, rowlooks, collooks)
+    Sario.save("dem.rsc", demrsc)
 
+    println("Preallocating arrays")
     # Pre-allocate arrays for speed
     fullrows, fullcols = size(fulldemrsc)
     early = zeros(ComplexF32, fullcols, fullrows)
@@ -89,12 +99,15 @@ function create_igrams(rowlooks=1, collooks=1)
         # println("Forming int, cor")
         # @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
 
-        # TODO: figure preallocating for the igrams/ taking looks
+        # TODO: see if this takes care of all pre-allocating arrays
         println("Forming igram")
-        @time igram .= make_igam(early, late, rowlooks, collooks)
+        @time igram .= make_igam!(igram, early, late, rowlooks, collooks)
         println("Forming cor")
-        ampslc1 .= sqrt.(powlooks(early, rowlooks, collooks))
-        ampslc2 .= sqrt.(powlooks(late, rowlooks, collooks))
+        powlooks!(ampslc1, early, rowlooks, collooks)
+        ampslc1 .= sqrt.(ampslc1)
+        powlooks!(ampslc2, early, rowlooks, collooks)
+        ampslc2 .= sqrt.(ampslc2)
+
         amp .= real.(abs.(igram))
         cor .= real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
 
