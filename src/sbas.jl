@@ -113,7 +113,7 @@ function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
         # TODO: Do i ever want the backslash for this, which weights dt like 1/dt^2 ?
         soln = [sum(unw_final) / sum(B)]
     else
-        B \ unw_final
+        soln = B \ unw_final
     end
     soln_phase = Float32.(soln)
     # end
