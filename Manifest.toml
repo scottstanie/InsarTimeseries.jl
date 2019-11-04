@@ -16,10 +16,10 @@ uuid = "9e28174c-4ba2-5203-b857-d8d62c4213ee"
 version = "0.8.10"
 
 [[BinaryProvider]]
-deps = ["Libdl", "Logging", "SHA"]
-git-tree-sha1 = "c7361ce8a2129f20b0e05a89f7070820cfed6648"
+deps = ["Libdl", "SHA"]
+git-tree-sha1 = "29995a7b317bbd06be147e1974a3541ce2502dca"
 uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
-version = "0.5.6"
+version = "0.5.7"
 
 [[Blosc]]
 deps = ["BinaryProvider", "CMakeWrapper", "Compat", "Libdl"]
@@ -41,9 +41,9 @@ version = "0.2.3"
 
 [[CSTParser]]
 deps = ["Tokenize"]
-git-tree-sha1 = "c69698c3d4a7255bc1b4bc2afc09f59db910243b"
+git-tree-sha1 = "99dda94f5af21a4565dc2b97edf6a95485f116c3"
 uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
-version = "0.6.2"
+version = "1.0.0"
 
 [[CSV]]
 deps = ["CategoricalArrays", "DataFrames", "Dates", "Mmap", "Parsers", "PooledArrays", "Profile", "Tables", "Unicode", "WeakRefStrings"]
@@ -100,9 +100,9 @@ version = "0.19.4"
 
 [[DataStructures]]
 deps = ["InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "f94423c68f2e47db0d6f626a26d4872266e0ec3d"
+git-tree-sha1 = "1fe8fad5fc84686dcbc674aa255bc867a64f8132"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.17.2"
+version = "0.17.5"
 
 [[DataValueInterfaces]]
 git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
@@ -144,9 +144,21 @@ uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[GR]]
 deps = ["Base64", "DelimitedFiles", "LinearAlgebra", "Pkg", "Printf", "Random", "Serialization", "Sockets", "Test"]
-git-tree-sha1 = "b4c31b6377b6d51b6c69a3a9737d10c34d43974e"
+git-tree-sha1 = "2b29ed254586324366e43f4283880978e6956d1f"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.41.0"
+version = "0.42.0"
+
+[[GeoInterface]]
+deps = ["RecipesBase", "Test"]
+git-tree-sha1 = "0c0c0bf9c79b10e48aa089e78ac504ebc43db3a0"
+uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
+version = "0.4.1"
+
+[[GeoJSON]]
+deps = ["GeoInterface", "JSON", "Test"]
+git-tree-sha1 = "1a09ab107eeb872d4f6266e0e0c8ac495e7c7457"
+uuid = "61d90e0f-e114-555e-ac52-39dfb47a3ef9"
+version = "0.4.0"
 
 [[GeometryTypes]]
 deps = ["ColorTypes", "FixedPointNumbers", "IterTools", "LinearAlgebra", "StaticArrays"]
@@ -221,7 +233,7 @@ version = "0.5.1"
 
 [[MapImages]]
 deps = ["CSV", "Parameters", "Sario"]
-git-tree-sha1 = "23ac06ec93cdd00881c7e8a312258c3fd8295f37"
+git-tree-sha1 = "ff5a7030f04446e9fb5084c8f82d7b445c66d2c2"
 repo-rev = "master"
 repo-url = "https://github.com/scottstanie/MapImages.jl"
 uuid = "b89d2c5a-86c2-4db3-a52c-0318110165ea"
@@ -245,6 +257,12 @@ version = "0.4.3"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[[NPZ]]
+deps = ["Compat", "ZipFile"]
+git-tree-sha1 = "a9837d6dc62c8a159f8e788d51c81ccee248db0e"
+uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+version = "0.4.0"
 
 [[NaNMath]]
 deps = ["Compat"]
@@ -352,8 +370,8 @@ uuid = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
 version = "0.8.1"
 
 [[Sario]]
-deps = ["Dates", "Glob", "HDF5", "PyCall"]
-git-tree-sha1 = "985ba9c9cb1952db84b1af049487a6c8233741ea"
+deps = ["Dates", "GeoJSON", "Glob", "HDF5", "IterTools", "JSON", "NPZ", "OrderedCollections", "Parameters", "Printf", "PyCall"]
+git-tree-sha1 = "730114bd5e8250c2ff14c2bfd1e63787e9bf3f58"
 repo-rev = "master"
 repo-url = "https://github.com/scottstanie/Sario.jl"
 uuid = "dbf0e0cf-d002-4d20-9fd3-93cd71fe1271"
@@ -387,9 +405,9 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "db23bbf50064c582b6f2b9b043c8e7e98ea8c0c6"
+git-tree-sha1 = "1e9c5d89cba8047d518f1ffef432906ef1a3e8bd"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "0.11.0"
+version = "0.12.0"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -460,3 +478,9 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "9a0bb82eede528debe631b642eeb48a631a69bc2"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "0.6.1"
+
+[[ZipFile]]
+deps = ["BinaryProvider", "Libdl", "Printf"]
+git-tree-sha1 = "580ce62b6c14244916cc28ad54f8a2e2886f843d"
+uuid = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+version = "0.8.3"
