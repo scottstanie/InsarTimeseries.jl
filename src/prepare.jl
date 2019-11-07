@@ -372,6 +372,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
         )
     end
     h5open(unw_stack_file, "r+") do f
+        stack_in = f[stack_flat_dset]
         stack_out = f[stack_flat_shifted_dset]
 
         # shift_stack(stack_in, stack_out, ref_row, ref_col, window=window)
