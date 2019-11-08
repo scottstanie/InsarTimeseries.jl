@@ -38,7 +38,7 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1,
     end
     vmin, vmax = twoway ? (-vm, vm) : (0, vm)
 
-    fig, axes = plt.subplots(1, n, squeeze=false)
+    fig, axes = plt.subplots(1, n, squeeze=false, sharex=true, sharey=true)
     axim = nothing
     for ii = 1:n
         vi = vs[ii]
@@ -122,7 +122,8 @@ end
 
 # Plot gps east up data
 function plot_eu(station_name, insar_slopes=nothing, marker=".")
-    dts, east, north, up = InsarTimeseries.get_gps_enu(station_name)
+    # Defined in find_abs_shift TODO fix this
+    dts, east, north, up = get_gps_enu(station_name)
 
     insar_east, insar_up = !isnothing(insar_slopes) ? insar_slopes : (nothing, nothing)
 

@@ -50,6 +50,10 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
         outfile = _default_outfile()
     end
 
+    # averaging or linear means output will is 3D array (not just map of velocities)
+    is_3d = !(stack_average || constant_velocity)
+    outgroup = is_3d ? "stack" : "velos"
+
     # Now for each split date, run this function on a section
     if !isempty(split_dates)
         for (d1, d2) in _get_pairs(split_dates, gap)
@@ -68,10 +72,6 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
             split_count += 1
         end
     end
-
-    # averaging or linear means output will is 3D array (not just map of velocities)
-    is_3d = !(stack_average || constant_velocity)
-    outgroup = is_3d ? "stack" : "velos"
 
     # Check if this file/dset already exists
     isfile(outfile) && outgroup in names(outfile) &&

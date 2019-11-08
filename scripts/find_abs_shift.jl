@@ -22,7 +22,7 @@ station_name_list85 = ["TXKM", "TXMH", "TXFS", "TXAL", "NMHB", "TXAD"]
 
 # Functions for error evaluation
 rms(arr::AbstractArray{T, 1}) where {T <: Any} = sqrt(mean(arr.^2))
-rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
+# rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
 maxabs(x) = maximum(abs.(x))
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
@@ -130,7 +130,7 @@ end
 function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing)
     dts, gps_los_data = gps.load_gps_los_data(geo_path=geo_path, los_map_file=los_map_file,
                                               station_name=station_name, 
-                                              start_year=2015, end_year=2018,
+                                              start_year=2015, end_year=2019,
                                               zero_mean=true, 
                                               reference_station=reference_station)
 
@@ -138,7 +138,7 @@ function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; re
 end
 
 function get_gps_enu(station_name)
-    dts, enu_df = gps.load_station_enu(station_name, start_year=2015, end_year=2018, zero_mean=true)
+    dts, enu_df = gps.load_station_enu(station_name, start_year=2015, end_year=2019, zero_mean=true)
 
     # Convert from PyObjects to Arrays
     dts = [convert(Date, d) for d in dts]
