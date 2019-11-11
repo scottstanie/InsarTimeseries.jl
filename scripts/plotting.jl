@@ -2,8 +2,13 @@ using HDF5
 import PyPlot
 import Polynomials
 import Dierckx: Spline2D
+using PyCall
+anim = pyimport("matplotlib.animation")
+using Printf
+using Glob
+
 plt = PyPlot
-include("./colors.jl")
+include("./colors.jl")  # Custom cmaps
  
 load_geolist_intlist = InsarTimeseries.load_geolist_intlist
 baseline = InsarTimeseries.temporal_baseline
@@ -335,3 +340,49 @@ function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
 end
 
 
+function plot_15_vs_17(f1="velocities_2016_linear_max700.h5", f2="velocities_current.h5"; vm=6, cmap="seismic_wide_y")
+    @time include("/home/scott/repos/MapImages/src/plotting.jl")
+    m15 = MapImages.MapImage(f1, "velos/1");
+    m17 = MapImages.MapImage(f2, "velos/1");
+    g15 = Sario.load_geolist_from_h5(f1, "velos/1");
+    g17 = Sario.load_geolist_from_h5(f2, "velos/1");
+    days15 = (g15[end] - g15[1]).value
+    days17 = (g17[end] - g17[1]).value
+    fig, axes = plt.subplots(1, 2, sharex=true, sharey=true)
+    imshow(axes[1], m15 ./ 3650 * days15, cmap=cmap, vmin=-vm, vmax=vm)
+    imshow(axes[2], m17 ./ 3650 * days17, cmap=cmap, vmin=-vm, vmax=vm)
+end
+
+
+# E.g.
+# m = rand(5, 5);
+# stack = cat([m .+ .2i for i in 1:10]..., dims=3)
+function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200)
+
+    fig = plt.figure()
+
+    # function make_frame(i)
+    #     plt.imshow(stack[:,:,i+1], vmax=vm, vmin=-vm)
+    # end
+    # myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
+    # myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+
+
+    plotim(i) = plt.imshow(stack[:,:,i], vmax=ms)
+
+    for i = 1:size(stack, 3)
+        clf()
+        title("i = $i")
+        plotim(i)
+        PyPlot.savefig(@sprintf("testgif_%04d",i), bbox_inches="tight")
+    end
+
+    # Idk why, but you need to divide by 10 for it to really be ms for magick
+    #run(`convert -delay $(interval/10) -loop 0 tmp0\*.png tmp.gif`)
+    run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
+
+    rm.(glob("testgif_*.png"))
+
+    return outname
+end
+    ~
