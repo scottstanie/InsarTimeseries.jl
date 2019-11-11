@@ -385,4 +385,9 @@ function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200)
 
     return outname
 end
-    ~
+
+function animate_imgs_vs_pts(stack::MapImages.MapImage, lons, lats, sizes; alpha=.4, vm=12, c="r")
+    plt.scatter( c=c, alpha=alpha   )
+    imshow(img78, vmax=vm, vmin=-vm, cmap="seismic_wide_y")
+end
+# animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
