@@ -181,7 +181,8 @@ end
 
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
-function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", overwrite=true, do_permute=false)
+function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", 
+                     overwrite=true, do_permute=false, highpass=false)
     println("Writing deramped unws to $output_ext files")
     in_files = find_files(input_ext, directory)
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
@@ -198,14 +199,20 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", ove
 
 
     wp = _get_workerpool(8)
-    println("Starting stack deramp ")
-    pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx, do_permute=do_permute),
+    # TODO: high pass failing due to edge effects for now
+    if highpass
+        println("Starting stack deramp: High pass filter")
+        pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_lowpass, name_in, name_out, mask_idx, do_permute=do_permute),
         wp, in_todo, out_todo, idxs_todo)
+    else
+        println("Starting stack deramp ")
+        pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx, do_permute=do_permute),
+            wp, in_todo, out_todo, idxs_todo)
+    end
     println("Deramping stack complete")
 end
 
 sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
-
 
 function remove_ramp(z, mask::AbstractArray{<:Number})
     # z_masked = copy(z)  # Do I really want a copy??
@@ -216,6 +223,24 @@ end
 function remove_ramp(z, mask_idx::Int; do_permute=false)
     mask = _read_mask(mask_idx, do_permute)
     return remove_ramp(z, mask)
+end
+
+function remove_lowpass(z, mask::AbstractArray{<:Number})
+    # z_masked = copy(z)  # Do I really want a copy??
+    z[mask] .= 0
+    return z - lowpass(z)
+end
+
+function remove_lowpass(z, mask_idx::Int; do_permute=false)
+    mask = _read_mask(mask_idx, do_permute)
+    return remove_lowpass(z, mask)
+end
+
+import ImageFiltering: imfilter, Kernel
+function lowpass(z::AbstractArray{<:AbstractFloat, 2})
+    # TODO: fix this for finding size
+    g100 = Kernel.gaussian(100);
+    return imfilter(z, g100)
 end
 
 
