@@ -15,7 +15,7 @@ function bin_vals(demrsc, df; valcol=:sum15_17, loncol=:LongNAD27, latcol=:LatNA
     for (lon, lat, val) in eachrow(df[:, [loncol, latcol, valcol]])
         row, col = nearest_pixel(demrsc, lat, lon)
         oob(row, col, out) && continue
-        out[row, col] += val
+        out[row, col] += coalesce(val, 0)
     end
     
     return (!isnothing(smoothing) && smoothing > 0) ? imfilter(out, Kernel.gaussian(smoothing)) : out
@@ -23,7 +23,7 @@ end
 
 function coarse_bin_vals(demrsc, df; step_km=nothing, digits=nothing, 
                          valcol=:sum15_17, loncol=:LongNAD27, latcol=:LatNAD27,
-                         samesize=true)
+                         samesize=true, sum_vals=true)
     if !isnothing(step_km)
         lons, lats = coarse_grid_km(demrsc, step_km)
     elseif !isnothing(digits)
@@ -36,7 +36,7 @@ function coarse_bin_vals(demrsc, df; step_km=nothing, digits=nothing,
         row = nearest(lats, lat)
         col = nearest(lons, lon)
         oob(row, col, out) && continue
-        out[row, col] += val
+        out[row, col] += (sum_vals ? val : 1)
     end
     return samesize ? resize_nearest(out, size(demrsc)...) : out
 end
@@ -64,6 +64,6 @@ function coarse_grid_deg(demrsc, digits::Union{Int, Nothing}=2)
     return lon1:step:lon2, lat2:(-step):lat1
 end
 
-function plot_loc_per_mile(df)
-    grid78_water_inj_fine = coarse_bin_vals(dem78, water_inj);
+function plot_loc_per_mile(df, demrsc)
+    grid_occurs = coarse_bin_vals(demrsc, df, sum_vals=false, step_km=1/0.62);
 end
