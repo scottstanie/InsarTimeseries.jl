@@ -357,9 +357,10 @@ end
 # E.g.
 # m = rand(5, 5);
 # stack = cat([m .+ .2i for i in 1:10]..., dims=3)
-function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200)
+function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200, cmap="seismic_wide_y",
+                      geolist=nothing)
 
-    fig = plt.figure()
+    fig, ax = plt.subplots()
 
     # function make_frame(i)
     #     plt.imshow(stack[:,:,i+1], vmax=vm, vmin=-vm)
@@ -367,27 +368,55 @@ function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200)
     # myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
     # myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 
-
-    plotim(i) = plt.imshow(stack[:,:,i], vmax=ms)
-
+    titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
     for i = 1:size(stack, 3)
-        clf()
-        title("i = $i")
-        plotim(i)
-        PyPlot.savefig(@sprintf("testgif_%04d",i), bbox_inches="tight")
+        ax.clear()
+        ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap)
+        ax.set_title(titles[i])
+        fname = @sprintf("testgif_%04d",i)
+        println("Saving $(titles[i]) as $fname")
+        fig.savefig(fname, bbox_inches="tight")
     end
 
     # Idk why, but you need to divide by 10 for it to really be ms for magick
     #run(`convert -delay $(interval/10) -loop 0 tmp0\*.png tmp.gif`)
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
-
     rm.(glob("testgif_*.png"))
 
     return outname
 end
 
-function animate_imgs_vs_pts(stack::MapImages.MapImage, lons, lats, sizes; alpha=.4, vm=12, c="r")
-    plt.scatter( c=c, alpha=alpha   )
-    imshow(img78, vmax=vm, vmin=-vm, cmap="seismic_wide_y")
+function animate_imgs_vs_pts(stack::MapImages.MapImage, df, geolist;
+                             loncol=:lon, latcol=:lat, sizecol=:mag, datecol=:datetime,
+                             size_scale=4, outname="test.gif", alpha=.4, vm=6, c="r", 
+                             delay=200, cmap="seismic_wide_y")
+    fig, ax = plt.subplots()
+    # titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
+    titles = string(geolist)
+
+    # (-104.0, -103.001666673056, 30.901666673336, 31.90000000028)
+    extent = MapImages.grid_extent(stack)
+    xmin, xmax, ymin, ymax = extent
+
+    for i=1:size(stack, 3)
+    # for i=1:4
+        curdate = geolist[i]
+        df_sub = df[df[:, datecol] .< curdate, :]
+        (lons, lats, sizes) = (df_sub[:, loncol], df_sub[:, latcol], df_sub[:, sizecol])
+        sizes .*= size_scale
+
+        ax.clear()
+        ax.scatter(lons, lats, sizes, c=c, alpha=alpha, edgecolor="none")
+        ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap, extent=extent)
+        ax.set_xlim((xmin, xmax))
+        ax.set_ylim((ymin, ymax))
+        ax.set_title(titles[i])
+        fname = @sprintf("testgif_%04d",i)
+        println("Saving $(titles[i]) as $fname")
+        fig.savefig(fname, bbox_inches="tight")
+    end
+    run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
+    rm.(glob("testgif_*.png"))
+    return fig, ax
 end
 # animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
