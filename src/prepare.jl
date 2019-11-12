@@ -182,7 +182,7 @@ end
 
 """Remove a linear ramp from .unw files, save as .unwflat"""
 function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat", 
-                     overwrite=true, do_permute=false, highpass=false)
+                     overwrite=true, do_permute=false)  #, highpass=false)
     println("Writing deramped unws to $output_ext files")
     in_files = find_files(input_ext, directory)
     out_files = [replace(fname, input_ext => output_ext) for fname in in_files]
@@ -197,18 +197,17 @@ function deramp_unws(directory="."; input_ext=".unw", output_ext=".unwflat",
         return nothing
     end
 
-
     wp = _get_workerpool(8)
     # TODO: high pass failing due to edge effects for now
-    if highpass
-        println("Starting stack deramp: High pass filter")
-        pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_lowpass, name_in, name_out, mask_idx, do_permute=do_permute),
+    # if highpass
+    #     println("Starting stack deramp: High pass filter")
+    #     pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_lowpass, name_in, name_out, mask_idx, do_permute=do_permute),
+    #     wp, in_todo, out_todo, idxs_todo)
+    # else
+    println("Starting stack deramp ")
+    pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx, do_permute=do_permute),
         wp, in_todo, out_todo, idxs_todo)
-    else
-        println("Starting stack deramp ")
-        pmap((name_in, name_out, mask_idx) -> _load_and_run(remove_ramp, name_in, name_out, mask_idx, do_permute=do_permute),
-            wp, in_todo, out_todo, idxs_todo)
-    end
+    # end
     println("Deramping stack complete")
 end
 
