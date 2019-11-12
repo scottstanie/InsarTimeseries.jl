@@ -32,7 +32,9 @@ function get_gps_error(insar_fname::String, station_name::String; dset="velos", 
     slope_insar_mm_yr = _get_val_at_station(insar_fname, station_name, dset=dset, window=window) + shift    
     slope_insar_mm_yr -= isnothing(ref_station) ? 0 : (_get_val_at_station(insar_fname, ref_station, dset=dset, window=window) + shift)
 
-    slope_gps_mm_yr = solve_gps_ts(station_name, ref_station)
+    start_date, end_date = _get_date_range(insar_fname, dset)
+    @show start_date, end_date
+    slope_gps_mm_yr = solve_gps_ts(station_name, ref_station, start_date=start_date, end_date=end_date)
 
     if verbose
         @show station_name
@@ -45,6 +47,9 @@ function get_gps_error(insar_fname::String, station_name::String; dset="velos", 
 end
 get_gps_error(fname::String, station_list::Array{String}; kwargs...) = get_gps_error.(fname, station_list; kwargs...)
 # ! note: dot broadcasting is same as [get_gps_error.(fname, stat; kwargs...) for stat in station_list]
+
+_get_date_range(fname::AbstractString) = extrema(Sario.load_geolist_from_h5(fname))
+_get_date_range(fname::AbstractString, dset::AbstractString) = extrema(Sario.load_geolist_from_h5(fname, dset))
 
 function _get_station_rowcol(station_name, directory=".")
     demrsc = Sario.load(joinpath(directory, "dem.rsc"))
@@ -128,10 +133,11 @@ end
 ############################
 # GPS FUNCTIONS
 ############################
-function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing)
+function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing,
+                     start_date=Date(2014,11,1), end_date=Date(2019,1,1))
     dts, gps_los_data = gps.load_gps_los_data(geo_path=geo_path, los_map_file=los_map_file,
                                               station_name=station_name, 
-                                              start_year=2015, end_year=2019,
+                                              start_date=start_date, end_date=end_date,
                                               zero_mean=true, 
                                               reference_station=reference_station)
 
@@ -139,7 +145,8 @@ function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; re
 end
 
 function get_gps_enu(station_name)
-    dts, enu_df = gps.load_station_enu(station_name, start_year=2015, end_year=2019, zero_mean=true)
+    dts, enu_df = gps.load_station_enu(station_name, start_date=Date(2014,11,1), 
+                                       end_date=Date(2019,1,1), zero_mean=true)
 
     # Convert from PyObjects to Arrays
     dts = [convert(Date, d) for d in dts]
@@ -152,8 +159,8 @@ end
 
 
 """Find the linear fit of MM per year of the gps station"""
-function solve_gps_ts(station_name, reference_station=nothing)
-    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
+function solve_gps_ts(station_name, reference_station=nothing; start_date=Date(2014,11,1), end_date=Date(2019,1,1))
+    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station, start_date=start_date, end_date=end_date)
     # If we wanna compare with GPS subtracted too, do this:
     # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
 
