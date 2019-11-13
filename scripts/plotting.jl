@@ -340,7 +340,7 @@ function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
 end
 
 
-function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_current.h5", "velocities_2018_linear_max800.h5"];
+function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_current.h5", "velocities_2018_linear_max700.h5"];
                        dset="velos_shifted/1", vm=6, cmap="seismic_wide_y", outnames=[])
     @time include("/home/scott/repos/MapImages/src/plotting.jl")
     fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
@@ -425,3 +425,19 @@ function animate_imgs_vs_pts(stack::MapImages.MapImage, df, geolist;
     return fig, ax
 end
 # animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
+
+
+function plot_stack_ts(stack, geolistm, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
+    fig, axes = plt.subplots(1, 2)
+    axim = axes[1].imshow(stack[:, :, end]; cmap=cmap, vmax=vm, vmin=-vm, plotkwargs...)
+    fig.colorbar(axim, ax=axes[1])
+    axes[1].plot(col, row, "kx", ms=10)
+    return plot_stack_ts(fig, axes[2], stack, geolist, row, col)
+end
+function plot_stack_ts(fig, ax, stack, geolist, row, col; label=nothing, title="")
+    label = isnothing(label) ? "$row, $col" : label
+    ax.plot(geolist, stack[row, col, :], "kx-", label=label)
+    ax.set_ylabel("cm")
+    ax.set_title(title)
+end
+

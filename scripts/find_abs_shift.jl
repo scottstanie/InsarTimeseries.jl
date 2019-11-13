@@ -33,7 +33,6 @@ function get_gps_error(insar_fname::String, station_name::String; dset="velos", 
     slope_insar_mm_yr -= isnothing(ref_station) ? 0 : (_get_val_at_station(insar_fname, ref_station, dset=dset, window=window) + shift)
 
     start_date, end_date = _get_date_range(insar_fname, dset)
-    @show start_date, end_date
     slope_gps_mm_yr = solve_gps_ts(station_name, ref_station, start_date=start_date, end_date=end_date)
 
     if verbose
