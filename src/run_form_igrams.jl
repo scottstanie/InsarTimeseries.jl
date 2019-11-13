@@ -21,5 +21,6 @@ function main()
     looks = parsed_args["looks"]
     @show looks
     @time create_igrams(looks, looks)
+end
 
 main()

@@ -427,17 +427,21 @@ end
 # animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
 
 
-function plot_stack_ts(stack, geolistm, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
+function plot_stack_ts(stack, geolist, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
     fig, axes = plt.subplots(1, 2)
     axim = axes[1].imshow(stack[:, :, end]; cmap=cmap, vmax=vm, vmin=-vm, plotkwargs...)
     fig.colorbar(axim, ax=axes[1])
-    axes[1].plot(col, row, "kx", ms=10)
-    return plot_stack_ts(fig, axes[2], stack, geolist, row, col)
+    # axes[1].plot(col, row, "kx", ms=10)
+    axes[1].plot(row, col, "kx", ms=10)
+    plot_stack_ts(fig, axes[2], stack, geolist, row, col)
+    return fig, ax
 end
+
 function plot_stack_ts(fig, ax, stack, geolist, row, col; label=nothing, title="")
     label = isnothing(label) ? "$row, $col" : label
     ax.plot(geolist, stack[row, col, :], "kx-", label=label)
     ax.set_ylabel("cm")
     ax.set_title(title)
+    return fig, ax
 end
 
