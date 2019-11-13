@@ -145,8 +145,8 @@ function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; re
 end
 
 function get_gps_enu(station_name)
-    dts, enu_df = gps.load_station_enu(station_name, start_date=Date(2014,11,1), 
-                                       end_date=Date(2019,1,1), zero_mean=true)
+    dts, enu_df = gps.load_station_enu(station_name, start_date=Date(2014,11,1), end_date=Date(2019,1,1), 
+                                       zero_mean=true)
 
     # Convert from PyObjects to Arrays
     dts = [convert(Date, d) for d in dts]

@@ -419,4 +419,18 @@ function animate_imgs_vs_pts(stack::MapImages.MapImage, df, geolist;
     rm.(glob("testgif_*.png"))
     return fig, ax
 end
+# E.G.
 # animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
+
+
+# plt.figure(); plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max"); plt.colorbar()
+
+function save_img_figure(filename, array, levels, colors)
+    ext = Sario.get_file_ext(filename)
+    @show filename
+    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+    plt.imsave(filename, norm_(array), cmap=cmap_, format=strip(ext, '.'))
+    # plt.imsave(filename, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
+end
+
+
