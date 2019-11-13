@@ -340,17 +340,22 @@ function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
 end
 
 
-function plot_15_vs_17(f1="velocities_2016_linear_max700.h5", f2="velocities_current.h5"; vm=6, cmap="seismic_wide_y")
+function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_current.h5", "velocities_2018_linear_max800.h5"];
+                       dset="velos_shifted/1", vm=6, cmap="seismic_wide_y", outnames=[])
     @time include("/home/scott/repos/MapImages/src/plotting.jl")
-    m15 = MapImages.MapImage(f1, "velos/1");
-    m17 = MapImages.MapImage(f2, "velos/1");
-    g15 = Sario.load_geolist_from_h5(f1, "velos/1");
-    g17 = Sario.load_geolist_from_h5(f2, "velos/1");
-    days15 = (g15[end] - g15[1]).value
-    days17 = (g17[end] - g17[1]).value
-    fig, axes = plt.subplots(1, 2, sharex=true, sharey=true)
-    imshow(axes[1], m15 ./ 3650 * days15, cmap=cmap, vmin=-vm, vmax=vm)
-    imshow(axes[2], m17 ./ 3650 * days17, cmap=cmap, vmin=-vm, vmax=vm)
+    fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
+    for (idx, f) in enumerate(fnames)
+        m = MapImages.MapImage(f, dset)
+        g = Sario.load_geolist_from_h5(f, dset)
+        days = (g[end] - g[1]).value
+        cum_map = m ./ 3650 * days
+        axes[idx].imshow(cum_map, cmap=cmap, vmin=-vm, vmax=vm, extent=MapImages.grid_extent(m))
+        if !isempty(outnames)
+            fo = outnames[idx]
+            plt.imsave(fo, cum_map, cmap=cmap, vmin=-vm, vmax=vm, format=strip(Sario.get_file_ext(fo), '.'), dpi=400)
+        end
+    end
+    return fig, axes
 end
 
 
