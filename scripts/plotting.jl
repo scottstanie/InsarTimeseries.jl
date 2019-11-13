@@ -13,11 +13,11 @@ include("./colors.jl")  # Custom cmaps
 load_geolist_intlist = InsarTimeseries.load_geolist_intlist
 baseline = InsarTimeseries.temporal_baseline
 
-function save_paper_figure(fig, fname, axis_off=false)
+function save_paper_figure(fig, fname, axis_off=false, dpi=350)
     fig.tight_layout()
     axis_off && plt.axis("off")
     println("Saving $fname")
-    fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=300)
+    fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=dpi)
 end
 
 

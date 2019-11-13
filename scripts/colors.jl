@@ -51,3 +51,23 @@ SEISMIC_WIDE_Y = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
     N=450,
 )
 plt.register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
+
+
+DSY5 = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
+    "discrete_seismic_y5",
+    broadcast(t -> t./256, [
+        (5, 113, 176, 256),
+        (146, 197, 222, 256),
+        # (247, 247, 247, 245),  # To make red-white-blue
+        (247, 247, 191, 245),  # To make red-yellow-blue
+        (244, 165, 130, 256),
+        (202, 0, 32, 256),
+       ]),
+    N=5)
+plt.register_cmap("discrete_seismic_y5", DSY5)
+
+DSY7 = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
+    "discrete_seismic_y7",
+    broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ]),
+       N=7)
+plt.register_cmap("discrete_seismic_y7", DSY7)
