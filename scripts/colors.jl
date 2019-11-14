@@ -1,10 +1,13 @@
+cb = pyimport("palettable.colorbrewer.diverging")
+cmgood = cb.RdYlBu_11_r.mpl_colormap
+rdylbl = cb.RdYlBu_11_r.mpl_colormap
+
 SEISMIC_WIDE = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
     "seismic_wide",
     [(0, 0, .3, 1), (0, 0, 1, 1), (.6, .6, 1, 1), 
      (.9, .9, 1, 1), (1, 1, 1, 1), (1, .9, .9, 1),
      (1, 0.6, 0.6, 1), (1, 0, 0, 1), (.5, 0, 0, 1)],  # Extra white in middle from seismic
-    N=250,
-)
+    N=250,)
 plt.register_cmap("seismic_wide", SEISMIC_WIDE)
 SEISMIC_WIDE2 = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
     "seismic_wider",
@@ -71,3 +74,32 @@ DSY7 = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
     broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ]),
        N=7)
 plt.register_cmap("discrete_seismic_y7", DSY7)
+
+
+DSY7 = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
+    "discrete_seismic_y7",
+    broadcast(t -> t./256, [
+                (69, 117, 199, 256),
+                (145, 191, 219, 256),
+                (224, 243, 248, 256),
+                (255, 255, 191, 255),
+                (254, 224, 144, 256),
+                (252, 141, 89, 256),
+                (215, 48, 39, 256),
+       ]),
+    N=7)
+plt.register_cmap("discrete_seismic_y7", DSY7)
+
+NSY = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
+    "seismic_narrow_y",
+    broadcast(t -> t./256, [
+        (9, 37, 99, 256),
+        (39, 97, 199, 256),
+        (105, 121, 219, 256),
+        (255, 255, 191, 255),
+        (252, 111, 69, 256),
+        (215, 38, 19, 256),
+        (105, 18, 9, 256),
+       ]),
+    N=256)
+plt.register_cmap("seismic_narrow_y", NSY)

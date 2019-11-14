@@ -59,26 +59,26 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1,
     return fig, axes, vs
 end
 
-function plot_insar(fname, dset="velos/1"; cmap="seismic_wide", vm=nothing, title="", shift=0)
-    m = MapImages.MapImage(fname, dset)
+function _get_vminmax(img, vm=nothing, vmin=nothing, vmax=nothing)
+    vm = isnothing(vm) ? maximum(abs.(img)) : vm
+    vmax = isnothing(vmax) ? vm : vmax
+    vmin = isnothing(vmin) ? -vm : vmin
+    return vmin, vmax
+end
 
-    if isnothing(vm)
-        vm = maximum(abs.(m))
-        println("Using $vm as max colorbar")
-    end
-    vmin, vmax = (-vm, vm)
+function plot_img(m::MapImages.MapImage; cmap="seismic_wide", vm=nothing, title="", shift=0,
+                 vmax=nothing, vmin=nothing)
+    vmin, vmax = _get_vminmax(m, vm, vmin, vmax)
 
     fig, ax = plt.subplots()
     axim = ax.imshow(m .+ shift, vmin=vmin, vmax=vmax, cmap=cmap, extent=MapImages.grid_extent(m))
     fig.colorbar(axim, ax=ax)
 
-    if isempty(title)
-        title = "$fname: $dset"
-    end
     fig.suptitle(title)
     plt.show(block=false)
     return fig, axes, m
 end
+plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs...) = plot_img(MapImages.MapImage(fname, dset); kwargs...)
 
 function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
     plt.figure()
@@ -450,13 +450,29 @@ end
 
 # plt.figure(); plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max"); plt.colorbar()
 
-function save_img_figure(filename, array, levels, colors)
-    ext = Sario.get_file_ext(filename)
-    @show filename
+function save_img_figure(outfile, array, levels, colors)
+    ext = Sario.get_file_ext(outfile)
+    @show outfile
     cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
-    plt.imsave(filename, norm_(array), cmap=cmap_, format=strip(ext, '.'))
-    # plt.imsave(filename, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
+    plt.imsave(outfile, norm_(array), cmap=cmap_, format=strip(ext, '.'))
+    # plt.imsave(outfile, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
 end
+
+kml = pyimport("apertools.kml")
+
+function save_img_geotiff(outfile::AbstractString, img, demrsc; cmap="seismic_wide_y", vm=nothing)
+    ext = Sario.get_file_ext(outfile)
+    vmin, vmax = _get_vminmax(img, vm)
+    @show outfile
+    img[img .==0] .= NaN
+    plt.imsave("tmp.png", img, cmap=cmap, vmin=vmin, vmax=vmax, dpi=400, format="png")
+    kml.create_geotiff(rsc_data=Dict(demrsc), img_filename="tmp.png", outfile=outfile)
+    # rm("tmp.png")
+end
+
+save_img_geotiff(f, m::MapImages.MapImage; kwargs...) = save_img_geotiff(f, m.image, m.demrsc; kwargs...)
+save_img_geotiff(f, m::MapImages.MapImage, lats::Tuple{AbstractFloat, AbstractFloat},
+                 lons::Tuple{AbstractFloat, AbstractFloat}; kwargs...) = save_img_geotiff(f, m[lats, lons].image, m[lats, lons].demrsc; kwargs...)
 
 function plot_stack_ts(stack, geolist, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
     fig, axes = plt.subplots(1, 2)
@@ -475,4 +491,30 @@ function plot_stack_ts(fig, ax, stack, geolist, row, col; label=nothing, title="
     ax.set_title(title)
     return fig, ax
 end
+
+_num_days(g) = (g[end] - g[1]).value
+function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max700.h5" for year in years],
+                          lats=(31.6, 30.9), lons=(-103.9, -103.), dset="velos_shifted/1", cmap1="seismic_wide_y",
+                          cmap2=rdylbl, vm1=12, vm2=9)
+    @show fnames
+
+    maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
+    @show maxdays
+    for f in fnames
+        days = _num_days(Sario.load_geolist_from_h5(f, dset))
+        @show days
+
+        m1 = MapImages.MapImage(f, dset)
+        @show extrema(m1)
+        m1 .*= (days / 3650)  # Cumulative, in cm
+        @show extrema(m1)
+        m2 = m1[lats, lons]
+        out1 = replace(f, ".h5"  => ".tif")
+        out2 = replace(f, ".h5"  => "_inset.tif")
+        save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1 ./ 3650 * maxdays)
+        save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2 ./ 3650 * maxdays)
+    end
+
+end
+
 
