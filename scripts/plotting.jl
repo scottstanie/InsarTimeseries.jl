@@ -59,6 +59,27 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1,
     return fig, axes, vs
 end
 
+function plot_insar(fname, dset="velos/1"; cmap="seismic_wide", vm=nothing, title="", shift=0)
+    m = MapImages.MapImage(fname, dset)
+
+    if isnothing(vm)
+        vm = maximum(abs.(m))
+        println("Using $vm as max colorbar")
+    end
+    vmin, vmax = (-vm, vm)
+
+    fig, ax = plt.subplots()
+    axim = ax.imshow(m .+ shift, vmin=vmin, vmax=vmax, cmap=cmap, extent=MapImages.grid_extent(m))
+    fig.colorbar(axim, ax=ax)
+
+    if isempty(title)
+        title = "$fname: $dset"
+    end
+    fig.suptitle(title)
+    plt.show(block=false)
+    return fig, axes, m
+end
+
 function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
     plt.figure()
     colors = ["b", "g", "c", "r"]
@@ -138,21 +159,21 @@ function plot_eu(station_name, insar_slopes=nothing, marker=".")
     axes[1].set_ylabel("cm")
     axes[1].set_ylim((-2.5, 2.5))
     if !isnothing(insar_east)
-        plot_insar(axes[1], dts, insar_east)
+        _plot_insar_line(axes[1], dts, insar_east)
     end
 
     axes[2].plot(dts, up, marker, label="gps")
     axes[2].set_title("up")
     axes[2].set_ylim((-2.5, 2.5))
     if !isnothing(insar_up)
-        plot_insar(axes[2], dts, insar_up)
+        _plot_insar_line(axes[2], dts, insar_up)
     end
 
     fig.suptitle(station_name)
     return fig, axes
 end
 
-function plot_insar(ax, dts, insar_slope; label="insar")
+function _plot_insar_line(ax, dts, insar_slope; label="insar")
     # Offset to be zero centered for 3 years, slope to be per day
     p = Polynomials.Poly([-3(insar_slope / 2), insar_slope / 365])
     dd = InsarTimeseries._get_day_nums(dts)
@@ -454,3 +475,4 @@ function plot_stack_ts(fig, ax, stack, geolist, row, col; label=nothing, title="
     ax.set_title(title)
     return fig, ax
 end
+
