@@ -15,7 +15,7 @@ baseline = InsarTimeseries.temporal_baseline
 
 function save_paper_figure(fig, fname, axis_off=false, dpi=350)
     fig.tight_layout()
-    axis_off && plt.axis("off")
+    axis_off && [a.set_axis_off() for a in fig.axes]
     println("Saving $fname")
     fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=dpi)
 end
@@ -496,11 +496,11 @@ _num_days(g) = (g[end] - g[1]).value
 function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max700.h5" for year in years],
                           lats=(31.6, 30.9), lons=(-103.9, -103.), dset="velos_shifted/1", cmap1="seismic_wide_y",
                           cmap2=rdylbl, vm1=12, vm2=9)
-    @show fnames
-
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
     @show maxdays
+    m1, m2 = nothing, nothing
     for f in fnames
+        @show f
         days = _num_days(Sario.load_geolist_from_h5(f, dset))
         @show days
 
@@ -514,7 +514,17 @@ function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)
         save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1 ./ 3650 * maxdays)
         save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2 ./ 3650 * maxdays)
     end
+    # Now save one with a colorbar
+    fig, axes = plt.subplots(1, 2)
+    axim = axes[1].imshow(m1, cmap=cmap1, vmax=vm1 ./ 3650 * maxdays, vmin=-vm1 ./ 3650 * maxdays)
+    fig.colorbar(axim, ax=axes[1])
+    axim = axes[2].imshow(m2, cmap=cmap2, vmax=vm2 ./ 3650 * maxdays, vmin=-vm2 ./ 3650 * maxdays)
+    fig.colorbar(axim, ax=axes[2])
 
+    cbar_name = "colorbars.png"
+    println("Saving colorbars to $cbar_name")
+    save_paper_figure(fig, cbar_name, false, 400)
 end
+
 
 
