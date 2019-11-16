@@ -12,7 +12,8 @@ remove_outliers = InsarTimeseries.remove_outliers
 shrink_baseline = InsarTimeseries.shrink_baseline
 
 invert(B::AbstractArray{T, 2}, u::AbstractArray{T, 1}) where {T<: Number} = InsarTimeseries.invert_pixel_l1(u, B)
-invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
+# invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
+invt(B, v) = [p2mm * (sum(v) / sum(B)) ; p2mm * (B \ v) ; p2mm * invert(B, v) ]
 
 function prune_igrams(g, i, u, ns=3, ct=nothing, cp=nothing, shrink=true)
     g, i, u = remove_outliers(g, i, u, mean_sigma_cutoff=ns)
@@ -28,7 +29,7 @@ function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing,
 end
 
 
-function demo_point(rowcol; sigma=3, max_temp=700, show=true)
+function demo_point(rowcol; sigma=3, max_temp=700, show=true, refpoint=nothing)
     geolist, intlist, igram_idxs = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp)
     B = InsarTimeseries.build_B_matrix(geolist, intlist);
     Blin = sum(B, dims=2);
@@ -37,13 +38,24 @@ function demo_point(rowcol; sigma=3, max_temp=700, show=true)
     Blinall = sum(Ball, dims=2);
 
     unw_vals = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", igram_idxs)
-    cc_vals600 = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs);
+    cc_vals = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs);
 
     unw_valsall = get_stack_vals("unw_stack.h5", rowcol..., 1, "stack_flat_shifted", igram_idxs_all)
     cc_valsall = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs_all);
 
-    println("Solving: Shrink=true, max temp = $max_temp")
-    @show prunesolve(geolist, intlist, unw_vals, Blin, sigma, shrink=true)
+    if !isnothing(refpoint)
+        println("re shifting to use $refpoint as reference")
+        refunw = get_stack_vals("unw_stack.h5", refpoint..., 1, "stack_flat_shifted", igram_idxs)
+        refunwall = get_stack_vals("unw_stack.h5", refpoint..., 1, "stack_flat_shifted", igram_idxs_all)
+        unw_vals .-= refunw 
+        unw_valsall .-= refunwall
+    end
+
+    # println("Solving: Shrink=true, max temp = $max_temp")
+    # @show prunesolve(geolist, intlist, unw_vals, Blin, sigma, shrink=true)
+    println("Solving: no outlier remove, max temp = $max_temp")
+    @show prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink=false)
+
     println("Solving: Shrink=false, max temp = $max_temp")
     @show prunesolve(geolist, intlist, unw_vals, Blin, sigma, shrink=false)
 
@@ -61,7 +73,7 @@ function demo_point(rowcol; sigma=3, max_temp=700, show=true)
 
      plt.figure()
      plt.scatter(Blinall, cc_valsall, label="all")
-     plt.scatter(Blin, cc_vals600, label="600 days or less")
+     plt.scatter(Blin, cc_vals, label="$max_temp days or less")
      plt.xlabel("Baseline (days")
      plt.ylabel("CM")
      plt.title("correlation vs baseline")

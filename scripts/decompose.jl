@@ -37,7 +37,7 @@ function solve_east_up(asc_path::AbstractString, desc_path::AbstractString,
     return solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
 end
 
-function plot_eu(east, up; cmap="seismic_wide_y", vm=20, east_scale=1.0, title="", show_cbar=false)
+function plot_east_up(east, up; cmap="seismic_wide_y", vm=20, east_scale=1.0, title="", show_cbar=false)
     fig, axes = plt.subplots(1, 2, sharex=true, sharey=true)
     axim1 = axes[1].imshow(up, cmap=cmap, vmin=-vm, vmax=vm)
     # fig.colorbar(axim1, ax=axes[1])
@@ -70,7 +70,7 @@ function demo_east_up(fn="velocities_prune_l1.h5"; dset="velos/1", full=false, v
         east, up = solve_east_up(asc_path, desc_path, fn, fn, dset)
     end
     if show
-        fig, axes = plot_eu(east, up; cmap=cmap, vm=vm, title="$fn: $dset", east_scale=east_scale)
+        fig, axes = plot_east_up(east, up; cmap=cmap, vm=vm, title="$fn: $dset", east_scale=east_scale)
     end
     # return east, up, fig, axes
     return east, up

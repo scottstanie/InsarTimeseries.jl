@@ -21,6 +21,8 @@ rowcol4 = [32, 352]  # Subs around the decorrelated top
 geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 400)
 _, intlist500, valid_igram_indices500 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 500)
 _, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
+_, intlist700, valid_igram_indices700 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 700)
+_, intlist800, valid_igram_indices800 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 800)
 _, intlistall, valid_igram_indicesall = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 1500)
 # geolist, intlist400, valid_igram_indices400 = load_geolist_intlist("unw_stack.h5", nothing, 400)
 
@@ -30,6 +32,8 @@ Blin400 = sum(B400, dims=2);
 B500 = InsarTimeseries.build_B_matrix(geolist, intlist500);
 Blin500 = sum(B500, dims=2);
 Blin600 = sum(InsarTimeseries.build_B_matrix(geolist, intlist600), dims=2);
+Blin700 = sum(InsarTimeseries.build_B_matrix(geolist, intlist700), dims=2);
+Blin800 = sum(InsarTimeseries.build_B_matrix(geolist, intlist800), dims=2);
 Blinall = sum(InsarTimeseries.build_B_matrix(geolist, intlistall), dims=2);
 
 println("point 0")

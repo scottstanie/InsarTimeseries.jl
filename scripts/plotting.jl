@@ -66,19 +66,31 @@ function _get_vminmax(img, vm=nothing, vmin=nothing, vmax=nothing)
     return vmin, vmax
 end
 
-function plot_img(m::MapImages.MapImage; cmap="seismic_wide", vm=nothing, title="", shift=0,
-                 vmax=nothing, vmin=nothing)
+function plot_img(m::MapImages.MapImage, fig, ax; cmap="seismic_wide_y", vm=nothing, title="", shift=0,
+                 vmax=nothing, vmin=nothing, use_lat=true)
     vmin, vmax = _get_vminmax(m, vm, vmin, vmax)
 
-    fig, ax = plt.subplots()
-    axim = ax.imshow(m .+ shift, vmin=vmin, vmax=vmax, cmap=cmap, extent=MapImages.grid_extent(m))
+    extent = use_lat ? MapImages.grid_extent(m) : nothing
+    axim = ax.imshow(m .+ shift, vmin=vmin, vmax=vmax, cmap=cmap, extent=extent)
     fig.colorbar(axim, ax=ax)
 
-    fig.suptitle(title)
+    ax.set_title(title)
     plt.show(block=false)
-    return fig, axes, m
+    return fig, ax, m
 end
-plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs...) = plot_img(MapImages.MapImage(fname, dset); kwargs...)
+function plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs...) 
+    fig, ax = plt.subplots()
+    return plot_img(MapImages.MapImage(fname, dset), fig, ax; kwargs...)
+end
+
+function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; vm1=nothing, vmd=4, kwargs...)
+    fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
+    m1, m2 =  MapImages.MapImage(f1, d1), MapImages.MapImage(f2, d2)
+    plot_img(m1, fig, axes[1]; vm=vm1, title=f1, kwargs...)
+    plot_img(m2, fig, axes[2]; vm=vm1, title=f2, kwargs...)
+    plot_img(m1 - m2, fig, axes[3]; vm=vmd, title="diff", kwargs...)
+    return fig, axes, m1, m2
+end
 
 function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
     plt.figure()
@@ -172,6 +184,7 @@ function plot_eu(station_name, insar_slopes=nothing, marker=".")
     fig.suptitle(station_name)
     return fig, axes
 end
+plot_gps_eu = plot_eu
 
 function _plot_insar_line(ax, dts, insar_slope; label="insar")
     # Offset to be zero centered for 3 years, slope to be per day
@@ -333,17 +346,18 @@ function plot_image_line(img::MapImages.MapImage, rowcol1, rowcol2; plotkwargs..
     axes[2].set_xlabel("km")
 end
 
-function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
+function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title="", bigfont=false)
     fig, ax = plt.subplots()
     dts, los = get_gps_los(name, reference_station=ref)
     day_nums = _get_day_nums(dts)
 
     ax.plot(dts, los, "b.", markersize=3, label="gps")
 
-    insar_cm_day = insar_mm / 365 / 10
-
-    full_defo = insar_cm_day * (dts[end] - dts[1]).value
-    ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3)
+    if !isnothing(insar_mm)
+        insar_cm_day = insar_mm / 365 / 10
+        full_defo = insar_cm_day * (dts[end] - dts[1]).value
+        ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3)
+    end
 
     # Or if you want different settings for the grids:
     ax.grid(which="major", alpha=0.5)
@@ -351,9 +365,11 @@ function plot_gps_station(name, insar_mm; ref="TXKM", ylim=(-3, 3), title="")
     ax.set_yticks([-2, 0, 2])
 
     ax.set_ylim(ylim)
-    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-    rcParams["font.size"] = 20
-    rcParams["font.weight"] = "bold"
+    if bigfont
+        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+        rcParams["font.size"] = 20
+        rcParams["font.weight"] = "bold"
+    end
 #     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
 #              ax.get_xticklabels() + ax.get_yticklabels()):
 #     item.set_fontsize(20)
