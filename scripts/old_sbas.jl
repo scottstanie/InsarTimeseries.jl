@@ -14,7 +14,11 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
                   reference_station=nothing,
                   ref_row=nothing,
                   ref_col=nothing,
+                  window=5,
                 ) 
+
+    # Check if this file/dset already exists
+    isfile(outfile) && outdset in names(outfile) && error("$outdset already exists in $outfile")
 
     # TODO : extract from stackavg
     if !isnothing(reference_station)
@@ -24,7 +28,7 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
     if !(isnothing(ref_row) && isnothing(ref_col))
         println("Shifting input stack to $ref_row, $ref_col")
         # Using col, row since we 
-        @time unw_stack .= InsarTimeseries.shift_stack(unw_stack, ref_row, ref_col)  # , window=window
+        @time unw_stack .= InsarTimeseries.shift_stack(unw_stack, ref_row, ref_col, window=window)
     end
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
     nrows, ncols, _ = size(unw_stack)
@@ -45,6 +49,10 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
 
     println("Writing solution into $outfile : $outdset")
     h5write(outfile, outdset, permutedims(outstack))
+
+    !isnothing(demrsc) && Sario.save_dem_to_h5(outfile, demrsc, overwrite=true)
+    Sario.save_geolist_to_h5(outfile, outdset, geolist, overwrite=true)
+
     return outfile, outdset
 end
 
