@@ -59,36 +59,52 @@ function plotsplit(fname; cmap="seismic_wide", vm=nothing, n=1,
     return fig, axes, vs
 end
 
-function _get_vminmax(img, vm=nothing, vmin=nothing, vmax=nothing)
-    vm = isnothing(vm) ? maximum(abs.(img)) : vm
-    vmax = isnothing(vmax) ? vm : vmax
-    vmin = isnothing(vmin) ? -vm : vmin
+function _get_vminmax(img, vm=nothing, vmin=nothing, vmax=nothing; twoway=true)
+    img_nonan = filter(!isnan, img);
+    vm = isnothing(vm) ? maximum(abs.(img_nonan)) : vm
+    if twoway
+        vmax = isnothing(vmax) ? vm : vmax
+        vmin = isnothing(vmin) ? -vm : vmin
+    else
+        vmax = isnothing(vmax) ? vm : vmax
+        vmin = isnothing(vmin) ? 0 : vmin
+    end
     return vmin, vmax
 end
 
-function plot_img(m::MapImages.MapImage, fig, ax; cmap="seismic_wide_y", vm=nothing, title="", shift=0,
-                 vmax=nothing, vmin=nothing, use_lat=true)
-    vmin, vmax = _get_vminmax(m, vm, vmin, vmax)
+function plot_img(m::MapImages.MapImage, fig, ax; cmap="seismic_wide_y", vm=nothing, 
+                  vmax=nothing, vmin=nothing, title="", shift=0,
+                  twoway=true, use_lat=false, point_list::AbstractArray=[], label_list=[])
+    vmin, vmax = _get_vminmax(m, vm, vmin, vmax, twoway=twoway)
 
     extent = use_lat ? MapImages.grid_extent(m) : nothing
     axim = ax.imshow(m .+ shift, vmin=vmin, vmax=vmax, cmap=cmap, extent=extent)
     fig.colorbar(axim, ax=ax)
+    for (idx, point) in enumerate(point_list)
+        label = length(label_list) >= idx ? label_list[idx] : nothing
+        ax.plot(point..., "x", label=label, ms=10)
+    end
+
+    length(label_list) > 0 && fig.legend()
 
     ax.set_title(title)
     plt.show(block=false)
     return fig, ax, m
 end
+
 function plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs...) 
     fig, ax = plt.subplots()
-    return plot_img(MapImages.MapImage(fname, dset), fig, ax; kwargs...)
+    return plot_img(MapImages.MapImage(fname, dset), fig, ax; title="$fname: $dset", kwargs...)
 end
 
 function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; vm1=nothing, vmd=4, kwargs...)
     fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
     m1, m2 =  MapImages.MapImage(f1, d1), MapImages.MapImage(f2, d2)
-    plot_img(m1, fig, axes[1]; vm=vm1, title=f1, kwargs...)
-    plot_img(m2, fig, axes[2]; vm=vm1, title=f2, kwargs...)
-    plot_img(m1 - m2, fig, axes[3]; vm=vmd, title="diff", kwargs...)
+    plot_img(m1, fig, axes[1]; vm=vm1, title="$f1: $d1", kwargs...)
+    plot_img(m2, fig, axes[2]; vm=vm1, title="$f2: $d2", kwargs...)
+    # Always do twoway for diff
+    vmin, vmax = _get_vminmax(m1 -m2, vmd, twoway=true)
+    plot_img(m1 - m2, fig, axes[3]; title="diff (1 - 2)", vmin=vmin, vmax=vmax, kwargs...)
     return fig, axes, m1, m2
 end
 
@@ -508,10 +524,14 @@ function plot_stack_ts(fig, ax, stack, geolist, row, col; label=nothing, title="
     return fig, ax
 end
 
+extremanan(x) = extrema(replace(x, NaN => 0))
+
 _num_days(g) = (g[end] - g[1]).value
-function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max700.h5" for year in years],
-                          lats=(31.6, 30.9), lons=(-103.9, -103.), dset="velos_shifted/1", cmap1="seismic_wide_y",
-                          cmap2=rdylbl, vm1=12, vm2=9)
+function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max800.h5" for year in years],
+                          # lats=(31.6, 30.9), lons=(-103.9, -103.),  # Zoomed just to stripes
+                          lats=(31.9, 30.9), lons=(-103.9, -102.85),  # Covers txkm/txmh
+                          dset="velos_shifted/1", cmap1="seismic_wide_y",
+                          cmap2=rdylbl, vm1=9, vm2=9)
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
     @show maxdays
     m1, m2 = nothing, nothing
@@ -521,12 +541,12 @@ function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)
         @show days
 
         m1 = MapImages.MapImage(f, dset)
-        @show extrema(m1)
+        @show extremanan(m1)
         m1 .*= (days / 3650)  # Cumulative, in cm
-        @show extrema(m1)
+        @show extremanan(m1)
         m2 = m1[lats, lons]
         out1 = replace(f, ".h5"  => ".tif")
-        out2 = replace(f, ".h5"  => "_inset.tif")
+        out2 = replace(f, ".h5"  => "_inset_gps.tif")
         save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1 ./ 3650 * maxdays)
         save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2 ./ 3650 * maxdays)
     end
