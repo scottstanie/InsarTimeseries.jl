@@ -192,6 +192,12 @@ function shift_dset(shift, fname, src::String="velos/1", dest="velos_shifted/1")
     return
 end
 
+function get_shift(fname, src::String="velos/1", dest="velos_shifted/1")
+    h5open(fname, "r+") do f
+        return f[dest][div(end, 2) ,div(end,2)] - f[src][div(end, 2) ,div(end,2)] 
+    end
+end
+
 function save_as_unw(fname, dset="velos/1")
     amp = abs.(Sario.load(Glob.glob("*.int")[1]))
     img = Sario.load(fname, dset_name=dset)

@@ -147,9 +147,9 @@ cc500_top = get_stack_vals("cc_stack.h5", rowcol_top..., 1, "stack", valid_igram
 # unw_vals2_txs3 = get_stack_vals("unw_stack.h5", "TXS3", 1, "stack_flat_shifted", valid_igram_indices2, reference_station=nothing);
 # cc2_txs3 = get_stack_vals("cc_stack.h5", "TXS3", 1, "stack", valid_igram_indices2, reference_station=nothing);
 
-function plot_unregs(;sigma=3, max_temp=700, shrink=false)
+function plot_unregs(;sigma=3, max_temp=700, shrink=false, max_date=nothing)
     constant = false
-    g, i, igram_idxs = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp)
+    g, i, igram_idxs = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp, max_date=max_date)
     rowcols = [
                [(414, 678),  "noise? -8/yr for sigma=4+, 0 on sigma 3",],
                [(410, 667),  "No signal, lots of stuff removed",],
