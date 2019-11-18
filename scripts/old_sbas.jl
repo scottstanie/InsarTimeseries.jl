@@ -5,34 +5,46 @@ function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
                   geolist,
                   intlist, 
                   constant_velocity::Bool, 
-                  alpha::Float32,
+                  alpha::Real,
                   L1::Bool=false,
-                  prune::Bool=true) 
+                  prune_outliers=true,
+                  sigma=3,
+                  prune_fast=false;
+                  demrsc=nothing,
+                  reference_station=nothing,
+                  ref_row=nothing,
+                  ref_col=nothing,
+                ) 
 
-    B = prepB(geolist, intlist, constant_velocity, alpha)
+    # TODO : extract from stackavg
+    if !isnothing(reference_station)
+        println("Using $reference_station as reference")
+        ref_row, ref_col = MapImages.station_rowcol(reference_station, demrsc)
+    end
+    if !(isnothing(ref_row) && isnothing(ref_col))
+        println("Shifting input stack to $ref_row, $ref_col")
+        # Using col, row since we 
+        @time unw_stack .= InsarTimeseries.shift_stack(unw_stack, ref_row, ref_col)  # , window=window
+    end
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    # TODO: do I ever really care about the abstol to change as variable?
-    rho, alpha, abstol = 1.0, 1.6, 1e-3
     nrows, ncols, _ = size(unw_stack)
  
     outstack = Array{Float32, 2}(undef, (nrows, ncols))
-    countstack = similar(outstack)
     println("Out size: ($nrows, $ncols)")
-    pix_count, total_pixels = 0, nrows * ncols
 
     @time Threads.@threads for col in 1:ncols
         for row in 1:nrows
-            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
-            outstack[row, col] = soln_p2mm
-            countstack[row, col] = igram_count
+            # soln_phase, igram_count, geo_clean, unw_clean
+            unw_pixel_raw = unw_stack[row, col, :]
+            soln_phase, _, _, _ = InsarTimeseries.calc_soln(unw_pixel_raw, geolist, intlist, alpha, constant_velocity;
+                                            L1=L1, prune_outliers=prune_outliers, sigma=sigma,
+                                            prune_fast=prune_fast)
+            outstack[row, col] = InsarTimeseries.P2MM * soln_phase[1]
         end
     end
 
     println("Writing solution into $outfile : $outdset")
-    h5open(outfile, "cw") do f
-        f[outdset] = outstack
-        f[_count_dset(outdset)] = countstack
-    end
+    h5write(outfile, outdset, permutedims(outstack))
     return outfile, outdset
 end
 
@@ -198,40 +210,40 @@ function integrate1D!(phi_diffs, phi_arr, velocities::AbstractArray{<:AbstractFl
 end
 
 
-"""2nd Threaded version: If we can load all stack file into memory, might be much quicker"""
-function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
-                  outfile::String,
-                  outdset::String,
-                  geolist,
-                  intlist, 
-                  constant_velocity::Bool, 
-                  alpha::Float32,
-                  L1::Bool=false,
-                  prune::Bool=true) 
-
-    B = prepB(geolist, intlist, constant_velocity, alpha)
-    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    # TODO: do I ever really care about the abstol to change as variable?
-    rho, alpha, abstol = 1.0, 1.6, 1e-3
-    nrows, ncols, _ = size(unw_stack)
- 
-    outstack = Array{Float32, 2}(undef, (nrows, ncols))
-    countstack = similar(outstack)
-    println("Out size: ($nrows, $ncols)")
-    pix_count, total_pixels = 0, nrows * ncols
-
-    @time Threads.@threads for col in 1:ncols
-        for row in 1:nrows
-            soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
-            outstack[row, col] = soln_p2mm
-            countstack[row, col] = igram_count
-        end
-    end
-
-    println("Writing solution into $outfile : $outdset")
-    h5open(outfile, "cw") do f
-        f[outdset] = outstack
-        f[_count_dset(outdset)] = countstack
-    end
-    return outfile, outdset
-end
+# """2nd Threaded version: If we can load all stack file into memory, might be much quicker"""
+# function run_sbas(unw_stack::AbstractArray{<:AbstractFloat},
+#                   outfile::String,
+#                   outdset::String,
+#                   geolist,
+#                   intlist, 
+#                   constant_velocity::Bool, 
+#                   alpha::Float32,
+#                   L1::Bool=false,
+#                   prune::Bool=true) 
+# 
+#     B = prepB(geolist, intlist, constant_velocity, alpha)
+#     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
+#     # TODO: do I ever really care about the abstol to change as variable?
+#     rho, alpha, abstol = 1.0, 1.6, 1e-3
+#     nrows, ncols, _ = size(unw_stack)
+#  
+#     outstack = Array{Float32, 2}(undef, (nrows, ncols))
+#     countstack = similar(outstack)
+#     println("Out size: ($nrows, $ncols)")
+#     pix_count, total_pixels = 0, nrows * ncols
+# 
+#     @time Threads.@threads for col in 1:ncols
+#         for row in 1:nrows
+#             soln_p2mm, igram_count = calc_soln(view(unw_stack, row, col, :), B, geolist, intlist, rho, alpha, L1, prune)
+#             outstack[row, col] = soln_p2mm
+#             countstack[row, col] = igram_count
+#         end
+#     end
+# 
+#     println("Writing solution into $outfile : $outdset")
+#     h5open(outfile, "cw") do f
+#         f[outdset] = outstack
+#         f[_count_dset(outdset)] = countstack
+#     end
+#     return outfile, outdset
+# end
