@@ -126,6 +126,13 @@ function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
     plt.show(block=false)
 end
 
+function _get_pixel_data(rowcol::Tuple{Int, Int}, unwfile="unw_stack.h5", max_temp=800, max_date=nothing)
+    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", max_temp, max_date=max_date)
+    B = InsarTimeseries.build_B_matrix(geolist, intlist);
+    Blin = sum(B, dims=2);
+    unw_vals = get_stack_vals(unwfile, rowcol..., 1, "stack_flat_shifted", igram_idxs)
+    return geolist, intlist, igram_idxs, Blin, unw_vals
+end
 
 function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
     means = InsarTimeseries.mean_abs_val(geo, int, vals)
@@ -137,9 +144,17 @@ function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
         ax.plot(geo, ones(length(geo)) * median(means), label="median")
         ax.plot(geo, ones(length(geo)) * high, label="$nsigma sigma MAD cutoff")
         ax.plot(geo, ones(length(geo)) * (median(means) + min_spread), label="min. spread")
+        ax.plot(geo, ones(length(geo)) * nsigma*std(means), label="$nsigma sigma stddev cutoff")
     end
     fig.legend()
 end
+
+function plot_grouped_by_day(rowcol::Tuple{Int, Int}, unwfile="unw_stack.h5"; 
+                             max_temp=800, max_date=nothing, nsigma=3, min_spread=0)
+    geolist, intlist, igram_idxs, _, unw_vals = _get_pixel_data(rowcol, unwfile, max_temp, max_date)
+    plot_grouped_by_day(geolist, intlist, unw_vals, nsigma, min_spread)
+end
+
 
 function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=3, min_spread=0, color=nothing)
 
@@ -147,6 +162,14 @@ function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsi
     # high_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
     high_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma, min_spread)
     return plot_days(geolist, intlist, vals, B, high_days, to_cm=to_cm, label=label, color=color)
+end
+
+function plot_big_days(rowcol::Tuple{Int, Int}, unwfile="unw_stack.h5"; max_temp=800, max_date=nothing,
+                       to_cm=true, label=nothing, nsigma=3, min_spread=0, color=nothing)
+    
+    geolist, intlist, igram_idxs, Blin, unw_vals = _get_pixel_data(rowcol, unwfile, max_temp, max_date)
+    plot_big_days(geolist, intlist, unw_vals, Blin; to_cm=to_cm, 
+                  label=label, nsigma=nsigma, min_spread=min_spread, color=color)
 end
 
 function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothing, color=nothing)
@@ -527,11 +550,11 @@ end
 extremanan(x) = extrema(replace(x, NaN => 0))
 
 _num_days(g) = (g[end] - g[1]).value
-function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max800.h5" for year in years],
+function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max800_sigma4.h5" for year in years],
                           # lats=(31.6, 30.9), lons=(-103.9, -103.),  # Zoomed just to stripes
                           lats=(31.9, 30.9), lons=(-103.9, -102.85),  # Covers txkm/txmh
                           dset="velos_shifted/1", cmap1="seismic_wide_y",
-                          cmap2=rdylbl, vm1=9, vm2=9)
+                          cmap2=rdylbl, vm1=10, vm2=10)
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
     @show maxdays
     m1, m2 = nothing, nothing
@@ -546,6 +569,7 @@ function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)
         @show extremanan(m1)
         m2 = m1[lats, lons]
         out1 = replace(f, ".h5"  => ".tif")
+        # out2 = replace(f, ".h5"  => "_inset.tif")
         out2 = replace(f, ".h5"  => "_inset_gps.tif")
         save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1 ./ 3650 * maxdays)
         save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2 ./ 3650 * maxdays)

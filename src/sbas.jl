@@ -22,7 +22,7 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 
 function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
                            outfile, outdset, geolist, intlist, alpha,
-                           L1=false; prune_outliers=true, sigma=3, prune_fast=false, 
+                           L1=false; prune_outliers=true, sigma=4, prune_fast=false, 
                            row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -53,7 +53,7 @@ end
 
 function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
                           outfile, outdset, geolist, intlist, alpha,
-                          L1=false; prune_outliers=true, sigma=3, prune_fast=false, 
+                          L1=false; prune_outliers=true, sigma=4, prune_fast=false, 
                           row=nothing, col=nothing)
     unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
@@ -89,7 +89,7 @@ end
 
 function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
                    L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune_outliers=true, sigma=3, prune_fast=false)::Tuple{Array{Float32, 1}, Int64, Array, Array}
+                   prune_outliers=true, sigma=4, prune_fast=false)::Tuple{Array{Float32, 1}, Int64, Array, Array}
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
         geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
@@ -133,7 +133,7 @@ function run_sbas(unw_stack_file::String,
                   alpha::Real,
                   L1::Bool=false,
                   prune_outliers=true,
-                  sigma=3,
+                  sigma=4,
                   prune_fast=false) 
 
     L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
@@ -387,7 +387,7 @@ end
 #   will be all noise- we can't reliably sense such quickly moving ground
 #
 # TODO: figure out which should go in separate file for cleanliness
-function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=3)
+function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=4)
     # TODO: verify this third criteria?
 
     # @show mean_sigma_cutoff
@@ -519,11 +519,11 @@ _good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
 
 
 
-""" 3* the sigma valud as calculated using MAD
+""" 4* the sigma valud as calculated using MAD
 Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD
 Normalize makes it equal to stddev for normally dist. data"""
-mednsigma(arr, n=3) = n * mad(arr, normalize=true)  
+mednsigma(arr, n=4) = n * mad(arr, normalize=true)  
 
 modzscore(arr) = (arr .- median(arr)) ./ mad(arr, normalize=true)
 
@@ -563,7 +563,7 @@ vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d i
 
 
 """Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
-function peel_nsigma(geo, int, val; nsigma=3)
+function peel_nsigma(geo, int, val; nsigma=4)
     dates_to_remove = nsigma_days(geo, int, val, nsigma)
     int2, val2 = remove_igrams(int, val, dates_to_remove)
     geo2 = [g for g in geo if !(g in dates_to_remove)]
@@ -571,7 +571,7 @@ function peel_nsigma(geo, int, val; nsigma=3)
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
-function nsigma_days(geo, int, val, nsigma=3, min_spread=2)
+function nsigma_days(geo, int, val, nsigma=4, min_spread=2)
     means = mean_abs_val(geo, int, val)
     out_idxs = two_way_outliers(means, nsigma, min_spread)
 

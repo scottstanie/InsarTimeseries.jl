@@ -24,13 +24,15 @@ end
 function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing, shrink=true)
     constant = true
     geo, ints, unws = prune_igrams(g, i, u, nsigma, cor_thresh, cor_pixel, shrink)
+    println("Num geos removed: $(length(g) - length(geo))")
     B = InsarTimeseries.prepB(geo, ints, constant)
     invt(B, unws)
 end
 
 
-function demo_point(rowcol; sigma=3, max_temp=700, show=true, refpoint=nothing, max_date=nothing)
-    unwfile = "unw_stack_txkm.h5"
+function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, max_date=nothing)
+    # unwfile = "unw_stack_txkm.h5"
+    unwfile = "unw_stack.h5"
     geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", max_temp, max_date=max_date)
     B = InsarTimeseries.build_B_matrix(geolist, intlist);
     Blin = sum(B, dims=2);
@@ -85,6 +87,6 @@ function demo_point(rowcol; sigma=3, max_temp=700, show=true, refpoint=nothing, 
      plt.title("Unregularized solution")
      plt.ylabel("CM")
 
-     plot_grouped_by_day(geolist, intlist, unw_vals)
-     plot_big_days(geolist, intlist, unw_vals, Blin, nsigma=3)
+     plot_grouped_by_day(geolist, intlist, unw_vals, sigma)
+     plot_big_days(geolist, intlist, unw_vals, Blin, nsigma=sigma)
 end
