@@ -553,10 +553,14 @@ _num_days(g) = (g[end] - g[1]).value
 function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max800_sigma4.h5" for year in years],
                           # lats=(31.6, 30.9), lons=(-103.9, -103.),  # Zoomed just to stripes
                           lats=(31.9, 30.9), lons=(-103.9, -102.85),  # Covers txkm/txmh
-                          dset="velos_shifted/1", cmap1="seismic_wide_y",
-                          cmap2=rdylbl, vm1=10, vm2=10)
+                          dset="velos_shifted/1", cmap1="seismic_wide_y", cmap2="seismic_wide_y", # cmap2=rdylbl, 
+                          vm1=10, vm2=10)
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
     @show maxdays
+    vm1 *= (maxdays / 3650)
+    vm2 *= (maxdays / 3650)
+    @show vm1, vm2 
+
     m1, m2 = nothing, nothing
     for f in fnames
         @show f
@@ -564,6 +568,7 @@ function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)
         @show days
 
         m1 = MapImages.MapImage(f, dset)
+        m1[m1 .== 0] .= NaN    
         @show extremanan(m1)
         m1 .*= (days / 3650)  # Cumulative, in cm
         @show extremanan(m1)
@@ -571,18 +576,21 @@ function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)
         out1 = replace(f, ".h5"  => ".tif")
         # out2 = replace(f, ".h5"  => "_inset.tif")
         out2 = replace(f, ".h5"  => "_inset_gps.tif")
-        save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1 ./ 3650 * maxdays)
-        save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2 ./ 3650 * maxdays)
+
+        # Save as both png and tif
+        save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1)
+        # save_img_geotiff(out2, m2, cmap=cmap2, vm=vm2)
+        plt.imsave(replace(out1, ".tif" => ".png"), m1, cmap=cmap2, vmin=-vm2, vmax=vm2, dpi=150)
+        plt.imsave(replace(out2, ".tif" => ".png"), m2, cmap=cmap2, vmin=-vm2, vmax=vm2, dpi=150)
     end
     # Now save one with a colorbar
     fig, axes = plt.subplots(1, 2)
-    axim = axes[1].imshow(m1, cmap=cmap1, vmax=vm1 ./ 3650 * maxdays, vmin=-vm1 ./ 3650 * maxdays)
+    axim = axes[1].imshow(m1, cmap=cmap1, vmax=vm1, vmin=-vm1)
     fig.colorbar(axim, ax=axes[1])
-    axim = axes[2].imshow(m2, cmap=cmap2, vmax=vm2 ./ 3650 * maxdays, vmin=-vm2 ./ 3650 * maxdays)
+    axim = axes[2].imshow(m2, cmap=cmap2, vmax=vm2, vmin=-vm2)
     fig.colorbar(axim, ax=axes[2])
 
     cbar_name = "colorbars.png"
-    println("Saving colorbars to $cbar_name")
     save_paper_figure(fig, cbar_name, false, 400)
 end
 
