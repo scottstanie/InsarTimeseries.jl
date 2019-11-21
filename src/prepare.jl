@@ -340,7 +340,7 @@ function repack(filename, dset_name)
     # Now repack so that chunks are depth-wise (pixels for quick loading)
     nrows, ncols, nlayers = size(filename, dset_name)
     tmp_name = _make_tmp_name(filename)
-    chunk_size = "$(nlayers)x10x10"
+    chunk_size = "$(nlayers)x1x1"
     println("Repacking $filename into size $chunk_size depth-wise chunks")
     cmd = `h5repack -v -f NONE -l $dset_name:CHUNK=$chunk_size $filename $tmp_name`
     println("Running:")

@@ -89,6 +89,7 @@ function run_inversion(; unw_stack_file::String=UNW_FILENAME,
 
 
     println("$cur_outdset geolist range: : $(extrema(geolist))")
+    println("Using $input_dset as input")
     # Now: can we load the input stack into memory? or do we need distributed?
     stack_file_size = _stack_size_mb(unw_stack_file, input_dset)
     can_fit_mem = (stack_file_size * 8) < getmemavail()  # Rough padding for total memory check
