@@ -519,8 +519,9 @@ function save_img_geotiff(outfile::AbstractString, img, demrsc; cmap="seismic_wi
     ext = Sario.get_file_ext(outfile)
     vmin, vmax = _get_vminmax(img, vm)
     @show outfile
-    img[img .==0] .= NaN
-    plt.imsave("tmp.png", img, cmap=cmap, vmin=vmin, vmax=vmax, dpi=400, format="png")
+    outim = Float64.(img)
+    outim[outim .== 0] .= NaN
+    plt.imsave("tmp.png", outim, cmap=cmap, vmin=vmin, vmax=vmax, dpi=400, format="png")
     kml.create_geotiff(rsc_data=Dict(demrsc), img_filename="tmp.png", outfile=outfile)
     # rm("tmp.png")
 end
@@ -550,9 +551,11 @@ end
 extremanan(x) = extrema(replace(x, NaN => 0))
 
 _num_days(g) = (g[end] - g[1]).value
-function save_pnas_images(;years=[2016, 2017, 2018], fnames=["velocities_$(year)_linear_max800_sigma4.h5" for year in years],
-                          # lats=(31.6, 30.9), lons=(-103.9, -103.),  # Zoomed just to stripes
-                          lats=(31.9, 30.9), lons=(-103.9, -102.85),  # Covers txkm/txmh
+function save_pnas_images(;years=[2016, 2017, 2018], 
+                          fnames=["velocities_$(year)_current.h5" for year in years],
+                          # fnames=["velocities_$(year)_linear_max800_sigma4.h5" for year in years],
+                          # lats=(31.6, 30.9), lons=(-103.8, -103.),  # Zoomed just to stripes
+                          lats=(31.9, 31.0), lons=(-103.8, -102.85),  # Covers txkm/txmh
                           dset="velos_shifted/1", cmap1="seismic_wide_y", cmap2="seismic_wide_y", # cmap2=rdylbl, 
                           vm1=10, vm2=10)
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])

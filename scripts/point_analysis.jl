@@ -30,26 +30,25 @@ function prunesolve(g, i, u, B, nsigma=3; cor_thresh=nothing, cor_pixel=nothing,
 end
 
 
-function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, max_date=nothing)
-    # unwfile = "unw_stack_txkm.h5"
-    unwfile = "unw_stack.h5"
-    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", max_temp, max_date=max_date)
+function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, max_date=nothing,
+                    unwfile="unw_stack.h5", input_dset= "stack_flat_shifted", ignore_file="geolist_ignore.txt")
+    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, ignore_file, max_temp, max_date=max_date)
     B = InsarTimeseries.build_B_matrix(geolist, intlist);
     Blin = sum(B, dims=2);
-    geolist, intlistall, igram_idxs_all = load_geolist_intlist(unwfile, "geolist_ignore.txt", 2000, max_date=max_date)
+    geolist, intlistall, igram_idxs_all = load_geolist_intlist(unwfile, ignore_file, 2000, max_date=max_date)
     Ball = InsarTimeseries.build_B_matrix(geolist, intlistall);
     Blinall = sum(Ball, dims=2);
 
-    unw_vals = get_stack_vals(unwfile, rowcol..., 1, "stack_flat_shifted", igram_idxs)
-    cc_vals = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs);
+    unw_vals = get_stack_vals(unwfile, rowcol..., 1, input_dset, igram_idxs)
+    # cc_vals = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs);
 
-    unw_valsall = get_stack_vals(unwfile, rowcol..., 1, "stack_flat_shifted", igram_idxs_all)
-    cc_valsall = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs_all);
+    unw_valsall = get_stack_vals(unwfile, rowcol..., 1, input_dset, igram_idxs_all)
+    # cc_valsall = get_stack_vals("cc_stack.h5", rowcol..., 1, "stack", igram_idxs_all);
 
     if !isnothing(refpoint)
         println("re shifting to use $refpoint as reference")
-        refunw = get_stack_vals(unwfile, refpoint..., 1, "stack_flat_shifted", igram_idxs)
-        refunwall = get_stack_vals(unwfile, refpoint..., 1, "stack_flat_shifted", igram_idxs_all)
+        refunw = get_stack_vals(unwfile, refpoint..., 1, input_dset, igram_idxs)
+        refunwall = get_stack_vals(unwfile, refpoint..., 1, input_dset, igram_idxs_all)
         unw_vals .-= refunw 
         unw_valsall .-= refunwall
     end
@@ -74,12 +73,12 @@ function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, 
      plt.ylabel("CM")
      plt.title("unw vs baseline")
 
-     plt.figure()
-     plt.scatter(Blinall, cc_valsall, label="all")
-     plt.scatter(Blin, cc_vals, label="$max_temp days or less")
-     plt.xlabel("Baseline (days")
-     plt.ylabel("CM")
-     plt.title("correlation vs baseline")
+     # plt.figure()
+     # plt.scatter(Blinall, cc_valsall, label="all")
+     # plt.scatter(Blin, cc_vals, label="$max_temp days or less")
+     # plt.xlabel("Baseline (days")
+     # plt.ylabel("CM")
+     # plt.title("correlation vs baseline")
 
      # Plot unregularized
      plt.figure()
