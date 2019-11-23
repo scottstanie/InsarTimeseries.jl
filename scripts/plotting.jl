@@ -7,6 +7,10 @@ anim = pyimport("matplotlib.animation")
 using Printf
 using Glob
 
+import MapImages
+import MapImages: MapImage
+import ImageFiltering: Kernel, imfilter
+
 plt = PyPlot
 include("./colors.jl")  # Custom cmaps
  
@@ -72,7 +76,7 @@ function _get_vminmax(img, vm=nothing, vmin=nothing, vmax=nothing; twoway=true)
     return vmin, vmax
 end
 
-function plot_img(m::MapImages.MapImage, fig, ax; cmap="seismic_wide_y", vm=nothing, 
+function plot_img(m::MapImage, fig, ax; cmap="seismic_wide_y", vm=nothing, 
                   vmax=nothing, vmin=nothing, title="", shift=0,
                   twoway=true, use_lat=false, point_list::AbstractArray=[], label_list=[])
     vmin, vmax = _get_vminmax(m, vm, vmin, vmax, twoway=twoway)
@@ -94,12 +98,12 @@ end
 
 function plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs...) 
     fig, ax = plt.subplots()
-    return plot_img(MapImages.MapImage(fname, dset), fig, ax; title="$fname: $dset", kwargs...)
+    return plot_img(MapImage(fname, dset), fig, ax; title="$fname: $dset", kwargs...)
 end
 
 function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; vm1=nothing, vmd=4, kwargs...)
     fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
-    m1, m2 =  MapImages.MapImage(f1, d1), MapImages.MapImage(f2, d2)
+    m1, m2 =  MapImage(f1, d1), MapImage(f2, d2)
     plot_img(m1, fig, axes[1]; vm=vm1, title="$f1: $d1", kwargs...)
     plot_img(m2, fig, axes[2]; vm=vm1, title="$f2: $d2", kwargs...)
     # Always do twoway for diff
@@ -365,7 +369,7 @@ function plot_image_line(img, rowcol1, rowcol2; plotkwargs...)
 end
 
 # TODO: extract if not MapImage
-function plot_image_line(img::MapImages.MapImage, rowcol1, rowcol2; plotkwargs...)
+function plot_image_line(img::MapImage, rowcol1, rowcol2; plotkwargs...)
     line = image_line(img, rowcol1, rowcol2)
     km_line_dist = MapImages.rowcol_to_dist(img, rowcol1, rowcol2)
 
@@ -421,7 +425,7 @@ function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_c
     @time include("/home/scott/repos/MapImages/src/plotting.jl")
     fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
     for (idx, f) in enumerate(fnames)
-        m = MapImages.MapImage(f, dset)
+        m = MapImage(f, dset)
         g = Sario.load_geolist_from_h5(f, dset)
         days = (g[end] - g[1]).value
         cum_map = m ./ 3650 * days
@@ -467,7 +471,7 @@ function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200, 
     return outname
 end
 
-function animate_imgs_vs_pts(stack::MapImages.MapImage, df, geolist;
+function animate_imgs_vs_pts(stack::MapImage, df, geolist;
                              loncol=:lon, latcol=:lat, sizecol=:mag, datecol=:datetime,
                              size_scale=4, outname="test.gif", alpha=.4, vm=6, c="r", 
                              delay=200, cmap="seismic_wide_y")
@@ -526,8 +530,8 @@ function save_img_geotiff(outfile::AbstractString, img, demrsc; cmap="seismic_wi
     # rm("tmp.png")
 end
 
-save_img_geotiff(f, m::MapImages.MapImage; kwargs...) = save_img_geotiff(f, m.image, m.demrsc; kwargs...)
-save_img_geotiff(f, m::MapImages.MapImage, lats::Tuple{AbstractFloat, AbstractFloat},
+save_img_geotiff(f, m::MapImage; kwargs...) = save_img_geotiff(f, m.image, m.demrsc; kwargs...)
+save_img_geotiff(f, m::MapImage, lats::Tuple{AbstractFloat, AbstractFloat},
                  lons::Tuple{AbstractFloat, AbstractFloat}; kwargs...) = save_img_geotiff(f, m[lats, lons].image, m[lats, lons].demrsc; kwargs...)
 
 function plot_stack_ts(stack, geolist, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
@@ -570,7 +574,7 @@ function save_pnas_images(;years=[2016, 2017, 2018],
         days = _num_days(Sario.load_geolist_from_h5(f, dset))
         @show days
 
-        m1 = MapImages.MapImage(f, dset)
+        m1 = MapImage(f, dset)
         m1[m1 .== 0] .= NaN    
         @show extremanan(m1)
         m1 .*= (days / 3650)  # Cumulative, in cm
@@ -598,4 +602,20 @@ function save_pnas_images(;years=[2016, 2017, 2018],
 end
 
 
+function plot_3d(img::MapImage; smooth=true, vm=nothing, colorbar=true)
+    plt.using3D()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
 
+    XX, YY = MapImages.grid(img)
+    img = smooth ?  imfilter(img, Kernel.gaussian(4)) : img
+    vm = isnothing(vm) ? maximum(abs.(filter(!isnan, img))) : vm
+
+    surf = ax.plot_surface(XX, YY, img.image, cmap="coolwarm", linewidth=0, 
+                           antialiased=true, vmin=-vm, vmax=vm)
+
+    ax.set_zlim(-vm, vm)
+
+    colorbar && fig.colorbar(surf, shrink=0.5, aspect=5)
+    return fig, ax
+end
