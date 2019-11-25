@@ -12,6 +12,9 @@ using MapImages
 latlon = pyimport("apertools.latlon")
 gps = pyimport("apertools.gps")
 
+reloadpython(modname) = pyimport("importlib")."reload"(modname)
+reloadpython(gps)
+
 # PATH 78 
 station_name_list78 = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
                        "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
@@ -20,8 +23,10 @@ station_name_list78 = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM",
 station_name_list85 = ["TXKM", "TXMH", "TXFS", "TXAL", "NMHB", "TXAD"]
 # BAD station reasons: MDO1 (nothing 2014-2017), TXVH (started 2018), TXPC (ended 2017)
 
+all_stations = sort(unique([station_name_list78; station_name_list85]))
+
 # Functions for error evaluation
-rms(arr::AbstractArray{T, 1}) where {T <: Any} = sqrt(mean(arr.^2))
+rms(arr::AbstractArray{T, 1}) where {T <: Any} = sqrt(mean(filter(!isnan, arr.^2)))
 # rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
 maxabs(x) = maximum(abs.(x))
 
@@ -33,7 +38,9 @@ function get_gps_error(insar_fname::String, station_name::String; dset="velos", 
     slope_insar_mm_yr -= isnothing(ref_station) ? 0 : (_get_val_at_station(insar_fname, ref_station, dset=dset, window=window) + shift)
 
     start_date, end_date = _get_date_range(insar_fname, dset)
-    slope_gps_mm_yr = solve_gps_ts(station_name, ref_station, start_date=start_date, end_date=end_date)
+    slope_gps_mm_yr = solve_gps_ts(station_name, ref_station, 
+                                   start_date=start_date, end_date=end_date,
+                                   los_map_file=joinpath(dirname(insar_fname), "los_map.h5"))
 
     if verbose
         @show station_name
@@ -41,6 +48,7 @@ function get_gps_error(insar_fname::String, station_name::String; dset="velos", 
         println("InSAR linear velocity (mm / year): $slope_insar_mm_yr")
         println("==="^10)
     end
+
 
     return slope_insar_mm_yr - slope_gps_mm_yr 
 end
@@ -61,8 +69,13 @@ function _get_val_at_station(insar_fname, station_name; dset="velos", window=5, 
     # Note: swapping row and col due to julia/hdf5 transposes
     row, col = _get_station_rowcol(station_name, dirname(insar_fname))
     halfwin = div(window, 2)
-    patch = h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
-    return mean(patch)
+    try
+        patch = h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
+        return mean(patch)
+    catch e
+        println(e)
+        return NaN
+    end
 end
 
 get_station_values(fname, station_list::Array{String}; kwargs...) = [_get_val_at_station(fname, stat; kwargs...)
@@ -90,16 +103,19 @@ function minimize_errors(error_list, search_range=-5:.1:5)
     return c_rms, c_maxabs, best_rms, best_maxabs
 end
 
-function print_errors(errors, station_name_list)
-    println("Name | error ")
-    println("=============")
-    for (err, name) in zip(errors, station_name_list)
+function print_errors(errors78::AbstractArray{<:AbstractFloat},
+                      errors85::AbstractArray{<:AbstractFloat},
+                      station_name_list::AbstractArray{<:AbstractString})
+    println("Name | error 78 | error 85 ")
+    println("============================")
+    for (err78, err85, name) in zip(errors78, errors85, station_name_list)
         # println("$name RESULTS:")
-        @printf("%s |  %.2f \n", name, err)
+        @printf("%s |  %.2f | %.2f \n", name, err78, err85)
     end
     println("==============")
-    println("RMS  | Max-abs")
-    @printf("%.2f |  %.2f \n", rms(errors), maxabs(errors))
+    println("RMS 78 | Max-abs 78 | RMS 85 | Max-abs 85")
+    @printf("%.2f |  %.2f | %.2f |  %.2f  \n", 
+            rms(errors78), maxabs(errors78), rms(errors85), maxabs(errors85))
 end
 
 
@@ -132,7 +148,7 @@ end
 ############################
 # GPS FUNCTIONS
 ############################
-function get_gps_los(station_name, los_map_file="los_map.h5", geo_path="../"; reference_station=nothing,
+function get_gps_los(station_name; los_map_file="los_map.h5", geo_path="../", reference_station=nothing,
                      start_date=Date(2014,11,1), end_date=Date(2019,1,1))
     dts, gps_los_data = gps.load_gps_los_data(geo_path=geo_path, los_map_file=los_map_file,
                                               station_name=station_name, 
@@ -158,8 +174,12 @@ end
 
 
 """Find the linear fit of MM per year of the gps station"""
-function solve_gps_ts(station_name, reference_station=nothing; start_date=Date(2014,11,1), end_date=Date(2019,1,1))
-    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station, start_date=start_date, end_date=end_date)
+function solve_gps_ts(station_name, reference_station=nothing;
+                      start_date=Date(2014,11,1), end_date=Date(2019,1,1),
+                      los_map_file="los_map.h5")
+    dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station,
+                                    start_date=start_date, end_date=end_date,
+                                    los_map_file=los_map_file)
     # If we wanna compare with GPS subtracted too, do this:
     # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
 
@@ -168,6 +188,7 @@ function solve_gps_ts(station_name, reference_station=nothing; start_date=Date(2
     slope = length(gps_poly) == 2 ? Polynomials.coeffs(gps_poly)[2] : Polynomials.coeffs(gps_poly)[1]
     # offset, slope = Polynomials.coeffs(gps_poly)
     slope_gps_mm_yr = 365 * 10 * slope
+    return slope_gps_mm_yr
 end
 
 function fit_line(dts, data)

@@ -97,15 +97,22 @@ function plot_img(fname::AbstractString, dset::AbstractString="velos/1"; kwargs.
     return plot_img(MapImages.MapImage(fname, dset), fig, ax; title="$fname: $dset", kwargs...)
 end
 
-function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; vm1=nothing, vmd=4, kwargs...)
-    fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
+function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; 
+                       title1="$f1: $d1", title2="$f2: $d2",
+                       vm1=nothing, vmd=4, kwargs...)
     m1, m2 =  MapImages.MapImage(f1, d1), MapImages.MapImage(f2, d2)
-    plot_img(m1, fig, axes[1]; vm=vm1, title="$f1: $d1", kwargs...)
-    plot_img(m2, fig, axes[2]; vm=vm1, title="$f2: $d2", kwargs...)
+    return plot_img_diff(m1, m2; title1=title1, title2=title2, vm1=vm1, vmd=vmd, kwargs...), m1, m2
+end
+function plot_img_diff(a1::AbstractArray, a2::AbstractArray;
+                       title1="", title2="",
+                       vm1=nothing, vmd=4, kwargs...)
+    fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
+    plot_img(a1, fig, axes[1]; vm=vm1, title=title1, kwargs...)
+    plot_img(a2, fig, axes[2]; vm=vm1, title=title2, kwargs...)
     # Always do twoway for diff
-    vmin, vmax = _get_vminmax(m1 -m2, vmd, twoway=true)
-    plot_img(m1 - m2, fig, axes[3]; title="diff (1 - 2)", vmin=vmin, vmax=vmax, kwargs...)
-    return fig, axes, m1, m2
+    vmin, vmax = _get_vminmax(a1 - a2, vmd, twoway=true)
+    plot_img(a1 - a2, fig, axes[3]; title="diff (1 - 2)", vmin=vmin, vmax=vmax, kwargs...)
+    return fig, axes
 end
 
 function plot_regs(pixel, geolist, intlist; alpha=100, title="", L1=false)
@@ -260,34 +267,39 @@ function get_excl_hist(excl_map, geolist; as_pct=true, nonmasked_pixels=length(e
 end
 
 function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
-                                   vm=15, bins=70)
+                                   vm=15, bins::Int=70, ref_station="TXKM", maxdays=800)
     # geolist, excls = count_dates(fname, dset)
     # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist);
     p2c = InsarTimeseries.PHASE_TO_CM
 
-    geolist, intlist600, valid_igram_indices600 = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", 600)
+    geolist, intlist, valid_igram_indices = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", maxdays)
 
-    m, n = 3, 5
+    plot_stations = [s for s in station_name_list if s != ref_station]
+    nplots = length(plot_stations)  # Not plotting reference station
+
+    # m, n = 3, 5
+    m, n = 1, nplots    
     fig, axes = plt.subplots(m, n)
-    for ii in 1:m
-        for jj in 1:n
-            idx = (ii-1)*n + jj
-            if idx > 14
-                continue
-            end
-            name = station_name_list[idx]
+    # for ii in 1:m
+        # for jj in 1:n
+            # idx = (ii-1)*n + jj
+            # idx > length(station_name_list) && continue
+    for (ax, name) in zip(axes, plot_stations)
 
-        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices600)
+        #$ name = plot_stations[idx]
+        name == ref_station && continue
 
-        g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist600, unw_vals)
+        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices)
 
-        ax = axes[ii, jj]
+        g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist, unw_vals)
+
+        # ax = axes[ii, jj]
+        # ax = axes[idx]
 
         n1, _, _ = ax.hist(unw_vals .* p2c, range=(-vm, vm), bins=bins, label="Original spread")
         n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
         ax.set_title("$name")
         ax.grid("on")
-    end
     end
     plt.legend()
     plt.show(block=false)
@@ -415,6 +427,20 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title=""
     return fig
 end
 
+function plot_los_maps(los_map_file="los_map.h5"; cmap="jet")
+    stack = MapImages.MapImage(los_map_file, "stack")
+    fig, axes = plt.subplots(1, 3, sharex=true, sharey=true)
+
+    titles=["east", "north", "up"]
+    for i = 1:3
+        s = stack[:,:,i]
+        axim = axes[i].imshow(abs.(s), cmap=cmap, vmin=0, vmax=1)
+        fig.colorbar(axim, ax=axes[i])
+        t = titles[i]
+        axes[i].set_title("$t: extrema: $(round.(extrema(s), digits=2))")
+    end
+    return fig, axes, stack
+end
 
 function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_current.h5", "velocities_2018_linear_max700.h5"];
                        dset="velos_shifted/1", vm=6, cmap="seismic_wide_y", outnames=[])
@@ -551,13 +577,21 @@ end
 extremanan(x) = extrema(replace(x, NaN => 0))
 
 _num_days(g) = (g[end] - g[1]).value
+
+import StatsBase: countmap
+import Images: label_components
+_max_label(labels) = sort([tup for tup in countmap(vec(labels)) if tup[1] != 0], by=x->x[2], rev=true)[1][1]
+
 function save_pnas_images(;years=[2016, 2017, 2018], 
                           fnames=["velocities_$(year)_current.h5" for year in years],
                           # fnames=["velocities_$(year)_linear_max800_sigma4.h5" for year in years],
-                          # lats=(31.6, 30.9), lons=(-103.8, -103.),  # Zoomed just to stripes
-                          lats=(31.9, 31.0), lons=(-103.8, -102.85),  # Covers txkm/txmh
+                          outdir=".",
+                          # zoomlats=(31.6, 30.9), zoomlons=(-103.8, -103.),  # Zoomed just to stripes
+                          zoomlats=(31.9, 31.0), zoomlons=(-103.8, -102.85),  # Covers txkm/txmh
+                          latbounds=(32.8, 30.7041),
                           dset="velos_shifted/1", cmap1="seismic_wide_y", cmap2="seismic_wide_y", # cmap2=rdylbl, 
-                          vm1=10, vm2=10)
+                          vm1=10, vm2=10,
+                          dem_mask_height=nothing)
     maxdays = maximum([_num_days(Sario.load_geolist_from_h5(f, dset)) for f in fnames])
     @show maxdays
     vm1 *= (maxdays / 3650)
@@ -572,13 +606,24 @@ function save_pnas_images(;years=[2016, 2017, 2018],
 
         m1 = MapImages.MapImage(f, dset)
         m1[m1 .== 0] .= NaN    
+
+        if !isnothing(dem_mask_height)
+            dem = Sario.load("elevation_looked.dem")
+            labels = label_components(dem .< 1200)
+            maxl = _max_label(labels)
+            m1[labels .!= maxl] .= NaN
+        end
+
+        m1 = m1[latbounds, (-110., -90.)] # no lon bounds really
+        @show MapImages.grid_extent(m1)
+
         @show extremanan(m1)
         m1 .*= (days / 3650)  # Cumulative, in cm
         @show extremanan(m1)
-        m2 = m1[lats, lons]
-        out1 = replace(f, ".h5"  => ".tif")
+        m2 = m1[zoomlats, zoomlons]
+        out1 = joinpath(outdir, replace(f, ".h5"  => ".tif"))
         # out2 = replace(f, ".h5"  => "_inset.tif")
-        out2 = replace(f, ".h5"  => "_inset_gps.tif")
+        out2 = joinpath(outdir, replace(f, ".h5"  => "_inset_gps.tif"))
 
         # Save as both png and tif
         save_img_geotiff(out1, m1, cmap=cmap1, vm=vm1)
