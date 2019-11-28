@@ -3,7 +3,7 @@ import PyPlot
 import Polynomials
 import Dierckx: Spline2D
 using PyCall
-anim = pyimport("matplotlib.animation")
+kml = pyimport("apertools.kml")
 using Printf
 using Glob
 
@@ -464,77 +464,6 @@ function plot_15_vs_18(fnames=["velocities_2016_linear_max700.h5", "velocities_c
     return fig, axes
 end
 
-
-# E.g.
-# m = rand(5, 5);
-# stack = cat([m .+ .2i for i in 1:10]..., dims=3)
-function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200, cmap="seismic_wide_y",
-                      geolist=nothing)
-
-    fig, ax = plt.subplots()
-
-    # function make_frame(i)
-    #     plt.imshow(stack[:,:,i+1], vmax=vm, vmin=-vm)
-    # end
-    # myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
-    # myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
-
-    titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
-    for i = 1:size(stack, 3)
-        ax.clear()
-        ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap)
-        ax.set_title(titles[i])
-        fname = @sprintf("testgif_%04d",i)
-        println("Saving $(titles[i]) as $fname")
-        fig.savefig(fname, bbox_inches="tight")
-    end
-
-    # Idk why, but you need to divide by 10 for it to really be ms for magick
-    #run(`convert -delay $(interval/10) -loop 0 tmp0\*.png tmp.gif`)
-    run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
-    rm.(glob("testgif_*.png"))
-
-    return outname
-end
-
-function animate_imgs_vs_pts(stack::MapImage, df, geolist;
-                             loncol=:lon, latcol=:lat, sizecol=:mag, datecol=:datetime,
-                             size_scale=4, outname="test.gif", alpha=.4, vm=6, c="r", 
-                             delay=200, cmap="seismic_wide_y")
-    fig, ax = plt.subplots()
-    # titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
-    titles = string(geolist)
-
-    # (-104.0, -103.001666673056, 30.901666673336, 31.90000000028)
-    extent = MapImages.grid_extent(stack)
-    xmin, xmax, ymin, ymax = extent
-
-    for i=1:size(stack, 3)
-    # for i=1:4
-        curdate = geolist[i]
-        df_sub = df[df[:, datecol] .< curdate, :]
-        (lons, lats, sizes) = (df_sub[:, loncol], df_sub[:, latcol], df_sub[:, sizecol])
-        sizes .*= size_scale
-
-        ax.clear()
-        ax.scatter(lons, lats, sizes, c=c, alpha=alpha, edgecolor="none")
-        ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap, extent=extent)
-        ax.set_xlim((xmin, xmax))
-        ax.set_ylim((ymin, ymax))
-        ax.set_title(titles[i])
-        fname = @sprintf("testgif_%04d",i)
-        println("Saving $(titles[i]) as $fname")
-        fig.savefig(fname, bbox_inches="tight")
-    end
-    run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
-    rm.(glob("testgif_*.png"))
-    return fig, ax
-end
-# E.G.
-# animate_imgs_vs_pts(stack78, eqs15[:, :lon], eqs15[:, :lat], eqs15[:, :mag] .* 4; alpha=.4, vm=12, c="r")
-
-# plt.figure(); plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max"); plt.colorbar()
-
 function save_img_figure(outfile, array, levels, colors)
     ext = Sario.get_file_ext(outfile)
     @show outfile
@@ -543,7 +472,6 @@ function save_img_figure(outfile, array, levels, colors)
     # plt.imsave(outfile, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
 end
 
-kml = pyimport("apertools.kml")
 
 function save_img_geotiff(outfile::AbstractString, img, demrsc; cmap="seismic_wide_y", vm=nothing)
     ext = Sario.get_file_ext(outfile)
