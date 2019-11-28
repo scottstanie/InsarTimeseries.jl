@@ -241,3 +241,35 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true)
     return fig, ax
 end
 
+# oil_totals = CSV.read("PermianTotalByYear.csv"); oil_totals = oil_totals[1:end-1, :]
+function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active_color="r", titles=string.(xs),
+                    bigfont=true)
+    # years, values = oil_totals[:, :year], oil_totals[:, :oil_bbl]
+    fig, ax = plt.subplots()
+    if bigfont
+        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+        rcParams["font.size"] = 16
+        rcParams["font.weight"] = "bold"
+    end
+
+    for i=1:length(xs)
+        ax.clear()
+
+        colors = fill(bg_color, length(xs)); colors[i] = active_color
+
+        ax.bar(xs, values, color=colors)
+
+        ax.set_xticks([2000, 2009, 2017])
+        ax.set_yticks([0, 0.5, 1, 1.5, 2])
+        ax.set_ylabel("Million bbl/day")
+
+
+        ax.set_title(titles[i])
+        fname = @sprintf("testgif_%04d",i)
+        println("Saving $(titles[i]) as $fname")
+        fig.savefig(fname, bbox_inches="tight")
+    end
+    run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
+    rm.(glob("testgif_*.png"))
+    return fig, ax
+ end

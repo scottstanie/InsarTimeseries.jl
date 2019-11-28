@@ -276,8 +276,6 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
     # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist);
     p2c = InsarTimeseries.PHASE_TO_CM
 
-    geolist, intlist, valid_igram_indices = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", maxdays)
-
     plot_stations = [s for s in station_name_list if s != ref_station]
     nplots = length(plot_stations)  # Not plotting reference station
 
@@ -293,7 +291,11 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
         #$ name = plot_stations[idx]
         name == ref_station && continue
 
-        unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices)
+        # geolist, intlist, valid_igram_indices = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", maxdays)
+        # unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices)
+        unw_vals = h5read("gps_pixels.h5", name)
+        geolist = Sario.load_geolist_from_h5("gps_pixels.h5")
+        intlist = Sario.load_intlist_from_h5("gps_pixels.h5")
 
         g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist, unw_vals)
 
