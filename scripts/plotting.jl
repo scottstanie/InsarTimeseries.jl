@@ -209,29 +209,34 @@ end
 
 
 # Plot gps east up data
-function plot_eu(station_name, insar_slopes=nothing, marker=".")
+function plot_eu(station_name, insar_slopes=nothing; marker=".", title=station_name)
     # Defined in find_abs_shift TODO fix this
     dts, east, north, up = get_gps_enu(station_name)
 
     insar_east, insar_up = !isnothing(insar_slopes) ? insar_slopes : (nothing, nothing)
 
+    ylim = (-2.5, 2.5)
+    xticks = [dts[1], dts[Int(round(end//2))], dts[end]]
+
     fig, axes = plt.subplots(1, 2)
     axes[1].plot(dts, east, marker, label="gps")
-    axes[1].set_title("east")
+    axes[1].set_title("East")
     axes[1].set_ylabel("cm")
-    axes[1].set_ylim((-2.5, 2.5))
+    axes[1].set_ylim(ylim)
+    axes[1].set_xticks(xticks)
     if !isnothing(insar_east)
         _plot_insar_line(axes[1], dts, insar_east)
     end
 
     axes[2].plot(dts, up, marker, label="gps")
-    axes[2].set_title("up")
-    axes[2].set_ylim((-2.5, 2.5))
+    axes[2].set_title("Up")
+    axes[2].set_ylim(ylim)
+    axes[2].set_xticks(xticks)
     if !isnothing(insar_up)
         _plot_insar_line(axes[2], dts, insar_up)
     end
 
-    fig.suptitle(station_name)
+    fig.suptitle(title)
     return fig, axes
 end
 plot_gps_eu = plot_eu
@@ -271,7 +276,8 @@ function get_excl_hist(excl_map, geolist; as_pct=true, nonmasked_pixels=length(e
 end
 
 function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
-                                   vm=15, bins::Int=70, ref_station="TXKM", maxdays=800)
+                                   vm=20, bins::Int=70, ref_station="TXKM", maxdays=800,
+                                  nrows=2)
     # geolist, excls = count_dates(fname, dset)
     # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist);
     p2c = InsarTimeseries.PHASE_TO_CM
@@ -279,9 +285,14 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
     plot_stations = [s for s in station_name_list if s != ref_station]
     nplots = length(plot_stations)  # Not plotting reference station
 
+    # plt.xlabel("Centimeters Predicted by InSAR")
+    # plt.ylabel("Interferogram count")
+    # plt.title("InSAR Noise at Station NMHB")
+
     # m, n = 3, 5
-    m, n = 1, nplots    
-    fig, axes = plt.subplots(m, n)
+    m, n = nrows, Int(ceil(nplots/nrows))
+    # fig, axes = plt.subplots(m, n)
+    fig, axes = plt.subplots(1, 1, squeeze=false)
     # for ii in 1:m
         # for jj in 1:n
             # idx = (ii-1)*n + jj
@@ -302,12 +313,14 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
         # ax = axes[ii, jj]
         # ax = axes[idx]
 
-        n1, _, _ = ax.hist(unw_vals .* p2c, range=(-vm, vm), bins=bins, label="Original spread")
-        n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
-        ax.set_title("$name")
-        ax.grid("on")
+        n1, _, _ = ax.hist(unw_vals .* p2c, range=(-vm, vm), bins=bins, label="All data")
+        # n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
+        ax.set_xlabel("Centimeters")
+        # ax.set_title("$name")
+        ax.set_title("Interferogram count for $name")
+        # ax.grid("on")
     end
-    plt.legend()
+    # plt.legend()
     plt.show(block=false)
 end
 
