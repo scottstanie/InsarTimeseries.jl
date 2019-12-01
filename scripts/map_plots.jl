@@ -65,18 +65,8 @@ function coarse_grid_deg(demrsc, digits::Union{Int, Nothing}=2)
     return lon1:step:lon2, lat2:(-step):lat1
 end
 
-function plot_wells_per_mi(demrsc)
-    oil_prod = CSV.read("oil_production.csv");
-    oil_per_mi = coarse_bin_vals(demrsc, oil_prod, sum_vals=false, step_km=1/0.62);
 
-    df_sub = df[!, coalesce.(df[:, :sum15_17], 0) .> 0]
-
-    colors = broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
-    plt.figure(); 
-    plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max")
-    plt.colorbar()
-end
-
+# Make a new column in `df` with the sum of columns `years`
 function sum_years(df, years...; outcol=:yearsum)
     df_out = copy(df)
     yearsyms = [Symbol(y) for y in years]
@@ -89,17 +79,37 @@ function sum_years(df, years...; outcol=:yearsum)
 end
 
 
-function plot_wells_per_mi(demrsc; years=[2015, 2016, 2017])
+function _levels_colors(maxlevel=100)
+    levels = [0, 1, 5, 10, 15, 25, 50, maxlevel]
+    colors = broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    return levels, colors
+end
+
+function plot_wells_per_mi(demrsc; years=[2015, 2016, 2017], outname=nothing)
     oil_prod = CSV.read("oil_production.csv");
 
-    df_sub = df[!, coalesce.(df[:, :sum15_17], 0) .> 0]
+    outcol = :yearsum
+    df = sum_years(oil_prod, years...; outcol=outcol)
 
-    oil_per_mi = coarse_bin_vals(demrsc, oil_prod, sum_vals=false, step_km=1/0.62);
+    oil_per_mi = coarse_bin_vals(demrsc, df, sum_vals=false, step_km=1/0.62, valcol=outcol);
 
-    colors = broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
-    plt.figure(); 
-    plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max")
-    plt.colorbar()
+    levels, colors = _levels_colors(maximum(oil_per_mi))
+    fig, ax = plt.subplots()
+    # ax.contourf(oil_per_mi, colors=colors, levels=levels, origin="image", vmax=45, extend="max")
+    # plt.colorbar()
+    
+    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+    # ax.imshow(oil_per_mi, norm_(oil_per_mi))#, cmap=cmap_)
+
+    if !isnothing(outname)
+        save_img_geotiff(outname, oil_per_mi, demrsc, levels, colors)
+    end
+    return oil_per_mi, fig, ax
+end
+
+function save_img_geotiff(outfile::AbstractString, img, demrsc, levels, colors)
+    save_img_figure("tmp.png", img, levels, colors)
+    kml.create_geotiff(rsc_data=Dict(demrsc), img_filename="tmp.png", outfile=outfile)
 end
 
 # E.g.

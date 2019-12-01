@@ -24,6 +24,19 @@ function save_paper_figure(fig, fname, axis_off=false, dpi=350)
     fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=dpi)
 end
 
+function savefig_nomargin(fig, fname)
+    NullLocator = pyimport("matplotlib.ticker")
+
+    plt.subplots_adjust(0,0,1,1,0,0)
+    for ax in fig.axes
+        ax.axis("off")
+        ax.margins(0,0)
+        ax.xaxis.set_major_locator(NullLocator.NullLocator())
+        ax.yaxis.set_major_locator(NullLocator.NullLocator())
+    end
+    fig.savefig(filepath, pad_inches=0, bbox_inches="tight")
+end
+
 
 function read_last(fname, dset, do_permute=true)
     sz = size(fname, dset)
@@ -502,6 +515,7 @@ end
 save_img_geotiff(f, m::MapImage; kwargs...) = save_img_geotiff(f, m.image, m.demrsc; kwargs...)
 save_img_geotiff(f, m::MapImage, lats::Tuple{AbstractFloat, AbstractFloat},
                  lons::Tuple{AbstractFloat, AbstractFloat}; kwargs...) = save_img_geotiff(f, m[lats, lons].image, m[lats, lons].demrsc; kwargs...)
+
 
 function plot_stack_ts(stack, geolist, row, col; cmap="seismic_wide_y", vm=6, plotkwargs...)
     fig, axes = plt.subplots(1, 2)
