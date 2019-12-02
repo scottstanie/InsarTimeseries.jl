@@ -222,13 +222,12 @@ end
 
 
 # Plot gps east up data
-function plot_eu(station_name, insar_slopes=nothing; marker=".", title=station_name)
+function plot_eu(station_name, insar_slopes=nothing; marker=".", title=station_name, ylim=(-2.5, 2.5))
     # Defined in find_abs_shift TODO fix this
     dts, east, north, up = get_gps_enu(station_name)
 
     insar_east, insar_up = !isnothing(insar_slopes) ? insar_slopes : (nothing, nothing)
 
-    ylim = (-2.5, 2.5)
     xticks = [dts[1], dts[Int(round(end//2))], dts[end]]
 
     fig, axes = plt.subplots(1, 2)
@@ -253,6 +252,29 @@ function plot_eu(station_name, insar_slopes=nothing; marker=".", title=station_n
     return fig, axes
 end
 plot_gps_eu = plot_eu
+
+function plot_enu(station_name, marker=".", title=station_name, ylim=(-2.5, 2.5))
+    # Defined in find_abs_shift TODO fix this
+    dts, east, north, up = get_gps_enu(station_name)
+    xticks = [dts[1], dts[Int(round(end//2))], dts[end]]
+
+    fig, axes = plt.subplots(3, 1)
+    labels = ["East", "North", "Up"]
+
+    for (ax, label, data) in zip(axes, labels, (east, north, up))
+        ax.plot(dts, data, marker)
+        ax.set_ylabel("$label (cm)")
+        ax.set_ylim(ylim)
+        ax.set_xticks(xticks)
+        if ax != axes[end]
+            plt.setp(ax.get_xticklabels(), visible=false)
+        end
+    end
+
+    fig.suptitle(title)
+    return fig, axes
+end
+plot_gps_enu = plot_enu
 
 function _plot_insar_line(ax, dts, insar_slope; label="insar")
     # Offset to be zero centered for 3 years, slope to be per day
@@ -332,6 +354,7 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
         # ax.set_title("$name")
         ax.set_title("Interferogram count for $name")
         # ax.grid("on")
+        println("$name: Before std. dev : $(std(unw_vals)), after: $(std(u2))")
     end
     # plt.legend()
     plt.show(block=false)

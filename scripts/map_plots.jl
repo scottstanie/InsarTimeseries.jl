@@ -147,7 +147,8 @@ end
 function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing;
                           loncol=:lon, latcol=:lat, sizecol=:mag, datecol=:datetime,
                           size_scale=4, outname="test.gif", alpha=.4, vm=6, c="r", 
-                          delay=200, cmap="seismic_wide_y", extent=nothing, titles=nothing)
+                          delay=200, cmap="seismic_wide_y", extent=nothing, titles=nothing,
+                          bigfont=true)
     # (-104.0, -103.001666673056, 30.901666673336, 31.90000000028)
     extent = isnothing(stack) ? extent : MapImages.grid_extent(stack)
     xmin, xmax, ymin, ymax = extent
@@ -156,6 +157,12 @@ function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing
     fig, ax = plot_states(extent)
     # titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
     titles = isnothing(titles) ? string(date_list) : titles
+
+    if bigfont
+        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+        rcParams["font.size"] = 16
+        rcParams["font.weight"] = "bold"
+    end
 
 
     prevdate = Date(1,1,1)
@@ -184,6 +191,7 @@ function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing
     return fig, ax
 end
 # E.G.
+# eqs_txar = readdf("TXAR_events.csv"); eqs_txar_big = eqs_txar[(eqs_txar[!, :mag ] .> 0.7) .& (eqs_txar[!, :QP] .< 3), :];
 # animate_imgs_pts(eqs_txar_big, Date(2001,1,1):Dates.Year(1):Date(2018,1,1), extent=(-105., -100., 29., 33.), delay=650, size_scale=8, titles=["TXAR earthquakes in $(string(year(d)))" for d in date_list])
 #
 # animate_imgs_pts(eqs_txar_big, Date(2001,1,1):Dates.Year(1):Date(2018,1,1), extent=MapImages.grid_extent(demrsc), delay=550, size_scale=8, titles=[string(year(d)) for d in date_list])
@@ -196,22 +204,24 @@ shpreader = pyimport("cartopy.io.shapereader")
 sgeom = pyimport("shapely.geometry")
 cfeature = pyimport("cartopy.feature")
 
-function plot_states(extent, fig=nothing, ax=nothing; add_counties=true)
+function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_basins=true)
     fig = isnothing(fig) ? plt.figure() : fig
     ax = isnothing(ax) ? fig.add_axes([0, 0, 1, 1], projection=ccrs.LambertConformal()) : ax
 
     # extent = isnothing(stack) ? extent : MapImages.grid_extent(stack)
     ax.set_extent(extent, ccrs.Geodetic())
 
-    shapename = "admin_1_states_provinces_lakes_shp"
-    # states_shp = shpreader.natural_earth(resolution="110m", category="cultural", name=shapename)
-    # states_shp = shpreader.natural_earth(resolution="50m", category="cultural", name=shapename)
-    states_shp = shpreader.natural_earth(resolution="10m", category="cultural", name=shapename)
-
     # to get the effect of having just the states without a map "background"
     # turn off the outline and background patches
-    ax.background_patch.set_visible(false)
-    ax.outline_patch.set_visible(false)
+    # ax.background_patch.set_visible(false)
+    # ax.outline_patch.set_visible(false)
+
+
+    # shapename = "admin_1_states_provinces_lakes_shp"
+    # states_shp = shpreader.natural_earth(resolution="110m", category="cultural", name=shapename)
+    # states_shp = shpreader.natural_earth(resolution="50m", category="cultural", name=shapename)
+    # states_shp = shpreader.natural_earth(resolution="10m", category="cultural", name=shapename)
+
 
     # records = shpreader.Reader(states_shp).records()
     # states = shpreader.Reader(states_shp).geometries()
@@ -239,7 +249,7 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true)
     end
     pecos =(-103.49283 ,  31.4243)
     ax.plot(pecos..., "bo", ms=10, transform=ccrs.PlateCarree() ,zorder=3)
-    plt.text((.09 .+ pecos)..., "Pecos", fontdict=Dict("size"=>14, "weight"=>"bold"), horizontalalignment="left", transform=ccrs.Geodetic())
+    plt.text(((-.09, .09) .+ pecos)..., "Pecos", fontdict=Dict("size"=>14, "weight"=>"bold"), horizontalalignment="right", transform=ccrs.Geodetic())
 
     if add_counties
         reader = shpreader.Reader("./countyl010g_shp_nt00964/countyl010g.shp")
@@ -247,6 +257,15 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true)
         COUNTIES = cfeature.ShapelyFeature(counties, ccrs.PlateCarree())
         ax.add_feature(COUNTIES, facecolor="none", edgecolor="gray")
     end
+
+    if add_basins
+        reader = shpreader.Reader("./repermianbasinshapefile/Permian_Boundary_2018_TORA_Dutton.shp")
+        basins = collect(reader.geometries())[[3,4,6]]
+        # ax.add_geometries(basins, ccrs.epsh(3665), facecolor="gray", edgecolor="gray")
+        BASINS = cfeature.ShapelyFeature(basins, ccrs.epsg(3665))
+        ax.add_feature(BASINS, facecolor="none", edgecolor="black", linewidth=3)
+    end
+
 
     return fig, ax
 end
