@@ -457,12 +457,18 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title=""
     dts, los = get_gps_los(name, reference_station=ref)
     day_nums = _get_day_nums(dts)
 
-    ax.plot(dts, los, "b.", markersize=3, label="gps")
+    if bigfont
+        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+        rcParams["font.size"] = 20
+        rcParams["font.weight"] = "bold"
+    end
+
+    ax.plot(dts, los, "b.", markersize=3, label="GPS")
 
     if !isnothing(insar_mm)
         insar_cm_day = insar_mm / 365 / 10
         full_defo = insar_cm_day * (dts[end] - dts[1]).value
-        ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3)
+        ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3, label="Insar")
     end
 
     # Or if you want different settings for the grids:
@@ -471,11 +477,6 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title=""
     ax.set_yticks([-2, 0, 2])
 
     ax.set_ylim(ylim)
-    if bigfont
-        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
-        rcParams["font.size"] = 20
-        rcParams["font.weight"] = "bold"
-    end
 #     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
 #              ax.get_xticklabels() + ax.get_yticklabels()):
 #     item.set_fontsize(20)
