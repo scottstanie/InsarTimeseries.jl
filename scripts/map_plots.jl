@@ -6,6 +6,64 @@ import ImageFiltering: imfilter, Kernel
 
 import MapImages: nearest_pixel, nearest, grid, km_to_deg
 
+import KernelDensity.kde
+kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); kwargs...)
+kde(df::DataFrame, xcol::Symbol, ycol::Symbol, weightcol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); weights=df[!, weightcol], kwargs...)
+
+
+function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, do_project=true)
+
+    xx, yy = do_project ? project(df, xcol, ycol) : (df[!, xcol], df[!, ycol])
+
+    extent = isnothing(extent) ? (extrema(xx), extrema(yy)) : extent
+
+    # k = kde(df, xcol, ycol, weightcol; boundary=extent)
+    #
+    weights=df[!, weightcol]
+    k = kde((xx, yy), weights=weights; boundary=extent)
+    # k = kde((yy, xx), weights=weights)
+
+    xs, ys, img = k.x, k.y, permutedims(k.density)
+    
+    # Note on units:
+    # https://github.com/JuliaStats/KernelDensity.jl/blob/master/src/bivariate.jl#L58
+    # library does `1 / (sum(weights)*(sx*sy)^2)` to make units of the pdf `probabilty/area`,
+    # so we mult by the weight sum to make it `weightunit / area`
+    # E.G. barrels / meter^2 if we have projected
+    img = unnormalize ? img .* sum(df[!, weightcol]) : img
+    # If we have projecte4d and are using meters, multiply by 1e6 to make it / km^2
+    # If we're using degrees... divide by 10656 to make it / km^2
+    # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [1, 0] + [ys[1], xs[1]])  # 111.31709969219834
+    # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [0, 1] + [ys[1], xs[1]])  # 96.42150149618836
+    # julia> 111*96 10656
+    scale = do_project ? 1e6 : 1.0/10565
+    img .*=  scale
+    return img, xs, ys
+end
+
+function plot_kde(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, 
+                  do_project=true, cmap="Reds", vmax=nothing)
+    img, xs, ys = kde_image(df, xcol, ycol, weightcol, unnormalize=unnormalize, 
+                            extent=extent, do_project=do_project)
+
+    fig, ax = plt.subplots()
+    axim = ax.imshow(img, origin="lower", extent=Iterators.flatten(extent), cmap=cmap, vmax=vmax)
+    cbar = fig.colorbar(axim)
+    cbar.set_label("Units/sq. km", rotation=270)
+end
+
+import Geodesy: LLA, nad27, wgs84, UTMZfromLLA
+
+function project(lons, lats; datum=nad27, zone=13, north=true)
+    # txutm = UTMZfromLLA(datum)
+    txutm = UTMfromLLA(zone, north, datum)
+    pts = txutm.(LLA.(lats, lons, 0))
+    # Note: these will have units of meters
+    return [p.x for p in pts], [p.y for p in pts]
+end
+
+project(df::DataFrame, xcol::Symbol, ycol::Symbol; datum=nad27) = project(df[!, xcol], df[!, ycol], datum=datum)
+
 ### Gridding Functions for summing CSVs into bins ###
 #
 oob(row, col, out) = row < 1 || row > size(out, 1) || col < 1 || col > size(out, 2)
@@ -213,8 +271,8 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_bas
 
     # to get the effect of having just the states without a map "background"
     # turn off the outline and background patches
-    # ax.background_patch.set_visible(false)
-    # ax.outline_patch.set_visible(false)
+    ax.background_patch.set_visible(false)
+    ax.outline_patch.set_visible(false)
 
 
     # shapename = "admin_1_states_provinces_lakes_shp"
