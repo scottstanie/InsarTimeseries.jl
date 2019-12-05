@@ -5,22 +5,35 @@ import Interpolations: interpolate, extrapolate, BSpline, Constant, Flat
 import ImageFiltering: imfilter, Kernel
 
 import MapImages: nearest_pixel, nearest, grid, km_to_deg
-
+import Geodesy: LLA, nad27, wgs84, UTMZfromLLA
 import KernelDensity.kde
+
 kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); kwargs...)
 kde(df::DataFrame, xcol::Symbol, ycol::Symbol, weightcol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); weights=df[!, weightcol], kwargs...)
 
 
-function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, do_project=true)
+function project(lons, lats; datum=nad27, zone=13, north=true)
+    # txutm = UTMZfromLLA(datum)
+    txutm = UTMfromLLA(zone, north, datum)
+    pts = txutm.(LLA.(lats, lons, 0))
+    # Note: these will have units of meters
+    return [p.x for p in pts], [p.y for p in pts]
+end
 
+project(df::DataFrame, xcol::Symbol, ycol::Symbol; datum=nad27) = project(df[!, xcol], df[!, ycol], datum=datum)
+
+
+function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, boundary=nothing, do_project=true)
     xx, yy = do_project ? project(df, xcol, ycol) : (df[!, xcol], df[!, ycol])
 
-    extent = isnothing(extent) ? (extrema(xx), extrema(yy)) : extent
+    if isnothing(boundary)
+        boundary = isnothing(extent) ? (extrema(xx), extrema(yy)) : ((extent[1], extent[2]), (extent[3], extent[4])) 
+    end
 
-    # k = kde(df, xcol, ycol, weightcol; boundary=extent)
+    # k = kde(df, xcol, ycol, weightcol; boundary=boundary)
     #
     weights=df[!, weightcol]
-    k = kde((xx, yy), weights=weights; boundary=extent)
+    k = kde((xx, yy), weights=weights; boundary=boundary)
     # k = kde((yy, xx), weights=weights)
 
     xs, ys, img = k.x, k.y, permutedims(k.density)
@@ -36,10 +49,14 @@ function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, 
     # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [1, 0] + [ys[1], xs[1]])  # 111.31709969219834
     # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [0, 1] + [ys[1], xs[1]])  # 96.42150149618836
     # julia> 111*96 10656
-    scale = do_project ? 1e6 : 1.0/10565
+    scale = do_project ? 1e6 : 1.0/10656
     img .*=  scale
+
     return img, xs, ys
 end
+
+# function kde_stack(df, years, xcol=:LatNAD27, ycol=:LatNAD27; kwargs...)
+# end 
 
 function plot_kde(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, 
                   do_project=true, cmap="Reds", vmax=nothing)
@@ -52,17 +69,11 @@ function plot_kde(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing,
     cbar.set_label("Units/sq. km", rotation=270)
 end
 
-import Geodesy: LLA, nad27, wgs84, UTMZfromLLA
-
-function project(lons, lats; datum=nad27, zone=13, north=true)
-    # txutm = UTMZfromLLA(datum)
-    txutm = UTMfromLLA(zone, north, datum)
-    pts = txutm.(LLA.(lats, lons, 0))
-    # Note: these will have units of meters
-    return [p.x for p in pts], [p.y for p in pts]
+function plotstuff()
+    imgs = [kde_image(oil_prod, xc, yc, Symbol(y), do_project=false)[1] for y in 2014:2017]
 end
 
-project(df::DataFrame, xcol::Symbol, ycol::Symbol; datum=nad27) = project(df[!, xcol], df[!, ycol], datum=datum)
+
 
 ### Gridding Functions for summing CSVs into bins ###
 #
@@ -90,6 +101,7 @@ function coarse_bin_vals(demrsc, df; step_km=nothing, digits=nothing,
     else
         error("Need step_km or digits")
     end
+
     out = zeros(size(lats, 1), size(lons, 1))
     for (lon, lat, val) in eachrow(df[:, [loncol, latcol, valcol]])
         row = nearest(lats, lat)
@@ -173,33 +185,72 @@ end
 # E.g.
 # m = rand(5, 5);
 # stack = cat([m .+ .2i for i in 1:10]..., dims=3)
-function animate_stack(stack; outname="test.gif", vm=maximum(stack), delay=200, cmap="seismic_wide_y",
-                      geolist=nothing)
+function animate_stack(stack, date_list; plot_map=true, bigfont=true,
+                       loncol=:LongNAD27, latcol=:LatNAD27, xc=loncol, yc=latcol, sizecol=:mag,
+                       vm=maximum(stack), vmin=nothing, vmax=nothing, twoway=true,
+                       outname="test.gif", delay=500, cmap="seismic_wide_y", transparent=false,
+                       extent=nothing, titles=nothing)
 
-    fig, ax = plt.subplots()
+    if bigfont
+        rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+        rcParams["font.size"] = 16
+        rcParams["font.weight"] = "bold"
+    end
 
-    # function make_frame(i)
-    #     plt.imshow(stack[:,:,i+1], vmax=vm, vmin=-vm)
-    # end
-    # myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
-    # myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+    # (-104.0, -103.001666673056, 30.901666673336, 31.90000000028)
+    extent = isnothing(extent) ? MapImages.grid_extent(stack) : extent
+    xmin, xmax, ymin, ymax = extent
 
-    titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
-    for i = 1:size(stack, 3)
+    fig, ax = plot_map ? plot_states(extent) : plt.subplots()
+
+    # titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
+    titles = isnothing(titles) ? string.(date_list) : titles
+
+    for i=1:size(stack, 3)
         ax.clear()
-        ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap)
+
+        fig, ax = plot_map ? plot_states(extent, fig, ax) : (fig, ax)
+
+        img = stack[:, :, i]
+        vmin, vmax = _get_vminmax(img, vm, vmin, vmax, twoway=twoway)
+        img = transparent ? _cmap_transp(img, plt.cm.get_cmap(cmap), vmin, vmax) : img
+
+        if plot_map
+            ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent, zorder=2.5, transform=ccrs.PlateCarree())
+        else
+            ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent)
+        end
+
         ax.set_title(titles[i])
         fname = @sprintf("testgif_%04d",i)
         println("Saving $(titles[i]) as $fname")
         fig.savefig(fname, bbox_inches="tight")
     end
-
-    # Idk why, but you need to divide by 10 for it to really be ms for magick
-    #run(`convert -delay $(interval/10) -loop 0 tmp0\*.png tmp.gif`)
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
     rm.(glob("testgif_*.png"))
+    return fig, ax
 
-    return outname
+end
+
+# Example:
+# xc, yc = :LongNAD27, :LatNAD27
+# date_list = collect(2009:2017);
+# imgs_oil = cat([kde_image(oil_prod, xc, yc, Symbol(y), do_project=false, extent=extent)[1] for y in date_list]..., dims=3);
+# animate_stack(imgs, date_list, delay=900, vmax=5e4, vmin=0, cmap="Reds", bigfont=false, extent=extent, transparent=true, titles=["Oil Production density in $d" for d in date_list])
+
+# TODO: do this instead to CMAP, and not to the image, so that we can still use a colorbar (that isn't 0 to 1)
+# https://stackoverflow.com/questions/25408393/getting-individual-colors-from-a-color-map-in-matplotlib
+Normalize = pyimport("matplotlib.colors").Normalize
+function _cmap_transp(img, cmap, vmin=0, vmax=maximum(img))
+    # Any value whose absolute value is > .0001 will have zero transparency
+    # alphas = Normalize(0, .3, clip=true)(abs.(img))
+    alphas = Normalize(0, vmax, clip=true)(abs.(img))
+    alphas = clamp.(alphas, .2, 1)  # alpha value clipped at the bottom at .2
+
+    colors = Normalize(vmin, vmax, clip=true)(img);
+    colors = cmap(colors)
+    colors[:, :, end] = alphas
+    return colors
 end
 
 function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing;
@@ -359,4 +410,11 @@ function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
     rm.(glob("testgif_*.png"))
     return fig, ax
- end
+end
+
+
+# function make_frame(i)
+#     plt.imshow(stack[:,:,i+1], vmax=vm, vmin=-vm)
+# end
+# myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
+# myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
