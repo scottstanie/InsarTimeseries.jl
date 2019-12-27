@@ -87,5 +87,5 @@ function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, 
      plt.ylabel("CM")
 
      plot_grouped_by_day(geolist, intlist, unw_vals, sigma)
-     plot_big_days(geolist, intlist, unw_vals, Blin, nsigma=sigma)
+     plot_big_days(geolist, intlist, unw_vals, nsigma=sigma)
 end

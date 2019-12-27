@@ -381,7 +381,7 @@ end
 
 # oil_totals = CSV.read("PermianTotalByYear.csv"); oil_totals = oil_totals[1:end-1, :]
 function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active_color="r", titles=string.(xs),
-                    bigfont=true)
+                    bigfont=true, xticks=[2000, 2009, 2018], yticks=[0, 0.5, 1, 1.5, 2, 2.5])
     # years, values = oil_totals[:, :year], oil_totals[:, :oil_bbl]
     fig, ax = plt.subplots()
     if bigfont
@@ -397,8 +397,8 @@ function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active
 
         ax.bar(xs, values, color=colors)
 
-        ax.set_xticks([2000, 2009, 2017])
-        ax.set_yticks([0, 0.5, 1, 1.5, 2])
+        ax.set_xticks(xticks)
+        ax.set_yticks(yticks)
         ax.set_ylabel("Million bbl/day")
 
 

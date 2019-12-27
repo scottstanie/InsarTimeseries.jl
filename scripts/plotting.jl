@@ -180,23 +180,25 @@ function plot_grouped_by_day(rowcol::Tuple{Int, Int}, unwfile="unw_stack.h5";
 end
 
 
-function plot_big_days(geolist, intlist, vals, B; to_cm=true, label=nothing, nsigma=3, min_spread=0, color=nothing)
+function plot_big_days(geolist, intlist, vals; to_cm=true, label=nothing, nsigma=4, 
+                       min_spread=0, color=nothing, legend=true)
 
+    B = sum(InsarTimeseries.prepB(geolist, intlist), dims=2);
     # means = InsarTimeseries.mean_abs_val(geolist, intlist, v);
     # high_days = sort(collect(zip(means, geolist)), rev=true)[1:5]
     high_days = InsarTimeseries.nsigma_days(geolist, intlist, vals, nsigma, min_spread)
-    return plot_days(geolist, intlist, vals, B, high_days, to_cm=to_cm, label=label, color=color)
+    return plot_days(geolist, intlist, vals, B, high_days, to_cm=to_cm, label=label, color=color, legend=legend)
 end
 
 function plot_big_days(rowcol::Tuple{Int, Int}, unwfile="unw_stack.h5"; max_temp=800, max_date=nothing,
-                       to_cm=true, label=nothing, nsigma=3, min_spread=0, color=nothing)
+                       to_cm=true, label=nothing, nsigma=4, min_spread=0, color=nothing, legend=true)
     
-    geolist, intlist, igram_idxs, Blin, unw_vals = _get_pixel_data(rowcol, unwfile, max_temp, max_date)
-    plot_big_days(geolist, intlist, unw_vals, Blin; to_cm=to_cm, 
+    geolist, intlist, igram_idxs, _, unw_vals = _get_pixel_data(rowcol, unwfile, max_temp, max_date)
+    plot_big_days(geolist, intlist, unw_vals; to_cm=to_cm, 
                   label=label, nsigma=nsigma, min_spread=min_spread, color=color)
 end
 
-function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothing, color=nothing)
+function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothing, color=nothing, legend=true)
     scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
     v = vals .* scale   
 
@@ -215,7 +217,7 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
                    label="date=$dd")
         ax.set_ylim(ylims)
     end
-    fig.legend()
+    legend && fig.legend()
     plt.show(block=false)
     return fig, ax
 end
@@ -644,4 +646,23 @@ function plot_3d(img::MapImage; smooth=true, vm=nothing, colorbar=true)
 
     colorbar && fig.colorbar(surf, shrink=0.5, aspect=5)
     return fig, ax
+end
+
+function pnas_outlier_figure(station_name="TXFS")
+    # unw_vals = [h5read("gps_pixels.h5", name) for name in station_name_list78];
+    unw_vals = h5read("gps_pixels.h5", station_name)
+    geolist = Sario.load_geolist_from_h5("gps_pixels.h5");
+    intlist = Sario.load_intlist_from_h5("gps_pixels.h5");
+
+    geolist18 = geolist[geolist .> Date(2018,1,1)]
+    idxs = InsarTimeseries._good_idxs(geolist18, intlist)
+    intlist17 = intlist[idxs]
+
+    geolist17 = geolist[geolist .< Date(2018,1,1)]
+    unw_vals17 = unw_vals[idxs]
+    
+    # NMHB plotting
+    fig, ax = plot_big_days(geolist17, intlist17, unw_vals17, legend=true)
+
+    return (geolist17, intlist17, unw_vals17)
 end
