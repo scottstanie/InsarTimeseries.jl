@@ -28,7 +28,7 @@ all_stations = sort(unique([station_name_list78; station_name_list85]))
 # Functions for error evaluation
 rms(arr::AbstractArray{T, 1}) where {T <: Any} = sqrt(mean(filter(!isnan, arr.^2)))
 # rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
-maxabs(x) = maximum(abs.(x))
+maxabs(x) = maximum(abs.(filter(!isnan, x)))
 
 """Function to take a velocity file and calculate the GPS errors at one station"""
 function get_gps_error(insar_fname::String, station_name::String; dset="velos", window=5, ref_station=nothing, verbose=false, shift=0.0)
