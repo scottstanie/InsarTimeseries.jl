@@ -202,7 +202,7 @@ function plot_days(geolist, intlist, vals, B, date_arr; to_cm=true, label=nothin
     scale = to_cm ? InsarTimeseries.PHASE_TO_CM : 1
     v = vals .* scale   
 
-    fig, ax =plt.subplots()
+    fig, ax = plt.subplots()
     ax.scatter(B, v, label=label)
 
     ym = maximum(abs.(v)) * 1.2
@@ -454,9 +454,11 @@ function plot_image_line(img::MapImage, rowcol1, rowcol2; plotkwargs...)
     axes[2].set_xlabel("km")
 end
 
-function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title="", bigfont=false)
+function plot_gps_los(name, insar_mm=nothing; ref="TXKM", start_date=Date(2014,11,1), 
+                      end_date=(2019,2,1), ylim=(-3, 3), title="", bigfont=false, offset=true)
     fig, ax = plt.subplots()
-    dts, los = get_gps_los(name, reference_station=ref)
+    dts, los = get_gps_los(name, reference_station=ref,
+                           start_date=start_date, end_date=end_date)
     day_nums = _get_day_nums(dts)
 
     if bigfont
@@ -465,12 +467,13 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title=""
         rcParams["font.weight"] = "bold"
     end
 
-    ax.plot(dts, los, "b.", markersize=3, label="GPS")
+    ax.plot(dts, los, "b.", markersize=5, label="GPS")
 
     if !isnothing(insar_mm)
         insar_cm_day = insar_mm / 365 / 10
         full_defo = insar_cm_day * (dts[end] - dts[1]).value
-        ax.plot(dts, -full_defo/2 .+ day_nums .* insar_cm_day, "r", lw=3, label="Insar")
+        bias = offset ? -full_defo/2 : 0
+        ax.plot(dts, bias .+ day_nums .* insar_cm_day, "r", lw=3, label="Insar")
     end
 
     # Or if you want different settings for the grids:
@@ -482,7 +485,7 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", ylim=(-3, 3), title=""
 #     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
 #              ax.get_xticklabels() + ax.get_yticklabels()):
 #     item.set_fontsize(20)
-    return fig
+    return fig, ax
 end
 
 function plot_los_maps(los_map_file="los_map.h5"; cmap="jet")
@@ -648,21 +651,72 @@ function plot_3d(img::MapImage; smooth=true, vm=nothing, colorbar=true)
     return fig, ax
 end
 
-function pnas_outlier_figure(station_name="TXFS")
+function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=2.5, w=7.5)
+    _remove_ticks(ax) = ax.tick_params(axis="both", which="both", bottom=false, top=false, labelbottom=false,
+                                       left=false, right=false, labelleft=false)
+    _set_figsize(fig, h=h, w=w) = (fig.set_figheight(h), fig.set_figwidth(w))
+
     # unw_vals = [h5read("gps_pixels.h5", name) for name in station_name_list78];
     unw_vals = h5read("gps_pixels.h5", station_name)
     geolist = Sario.load_geolist_from_h5("gps_pixels.h5");
     intlist = Sario.load_intlist_from_h5("gps_pixels.h5");
 
-    geolist18 = geolist[geolist .> Date(2018,1,1)]
+    end_date = Date(2018,1,1)
+    geolist18 = geolist[geolist .> end_date]
     idxs = InsarTimeseries._good_idxs(geolist18, intlist)
     intlist17 = intlist[idxs]
 
-    geolist17 = geolist[geolist .< Date(2018,1,1)]
+    geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
     
-    # NMHB plotting
-    fig, ax = plot_big_days(geolist17, intlist17, unw_vals17, legend=true)
+    # plot grouped by date
+    fig, ax = plot_big_days(geolist17, intlist17, unw_vals17, legend=false, color=outlier_color)
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("outliers2.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+# function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
+    geo = geolist17
+    means = InsarTimeseries.mean_abs_val(geo, intlist17, p2c * unw_vals17)
+    println("median val: $(median(means))")
+    fig, ax = plt.subplots()
+    ax.scatter(geo, means, label="means by date")
+    nsigma = 4
+    low, high = InsarTimeseries.two_way_cutoff(means, nsigma)
+    ax.plot(geo, ones(length(geo)) * high, label="$nsigma sigma MAD cutoff")
+    bigidx = means .> high 
+    ax.scatter(geo[bigidx], means[bigidx], c=outlier_color)
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("outliers1.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+
+    # GPS vs insar solutions
+    Blin = sum(InsarTimeseries.prepB(geolist17, intlist17), dims=2);
+    before = (Blin \ unw_vals17) * p2c * 365 * 10  # Change to mm/year
+
+    start_date=Date(2015,1,1)
+    ref = nothing
+    fig, ax = plot_gps_los(station_name, before; ref=ref,
+                           end_date=end_date, start_date=start_date,
+                           ylim=(-3, 3), title="", bigfont=false, offset=false)
+
+    # Now solve without outliers
+    dts, los = get_gps_los(station_name, reference_station=ref, end_date=end_date, start_date=start_date)
+    day_nums = _get_day_nums(dts)
+    idxs = InsarTimeseries._good_idxs(geolist17[bigidx], intlist17)
+    after = p2c * (Blin[idxs] \ unw_vals17[idxs])  # cm/day
+    full_defo = after * (dts[end] - dts[1]).value
+    # ax.plot(dts, -full_defo/2 .+ day_nums .* after, "c", lw=3, label="Insar")
+    ax.plot(dts, day_nums .* after, "c", lw=3, label="Insar")
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("outliers3.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+    println("Before: $before mm/yr, $(before * (dts[end] - dts[1]).value /3650) total defo")
+    println("After: $(after * 3650) mm/yr, $full_defo total defo")
 
     return (geolist17, intlist17, unw_vals17)
 end
+
+_get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
