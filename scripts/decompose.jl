@@ -56,9 +56,10 @@ function plot_east_up(east, up; cmap="seismic_wide_y", vm=20, east_scale=1.0, ti
     return fig, axes
 end
 
-function demo_east_up(fn="velocities_prune_l1.h5"; dset="velos/1", full=true, vm=20, east_scale=1.0, shifta=0.0, shiftd=0.0, cmap="seismic_wide_y", show=true)
+function demo_east_up(fn="velocities_prune_l1.h5"; dset="velos/1", full=true, vm=20, east_scale=1.0, shifta=0.0, shiftd=0.0, 
+                      asc_path="/data1/scott/pecos/path78-bbox2/igrams_looked_18/", desc_path="/data4/scott/path85/stitched/igrams_looked_18/",
+                      cmap="seismic_wide_y", show=true)
     if full
-        asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked_18/", "/data4/scott/path85/stitched/igrams_looked_18/")
         # asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked/", "/data4/scott/path85/stitched/igrams_looked/")
         asc_fname, desc_fname = map(x -> joinpath(x, fn), (asc_path, desc_path))
         asc_img, desc_img = MapImages.find_overlaps(asc_fname, desc_fname, dset)
