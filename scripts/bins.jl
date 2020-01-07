@@ -9,6 +9,9 @@ using PyCall; gps = pyimport("apertools.gps");
 include("./map_plots.jl")
 
 
+barrel2gal = 42.0
+gal2barrel = 1.0/barrel2gal
+
 dfmt = dateformat"y-m-d H:M:S.s"
 readdf(fname) = coalesce.(CSV.read(fname, dateformat=dfmt), 0)
 
@@ -57,3 +60,6 @@ axes[2, 2].set_title("Eqs")
 # axes[1, 2].imshow(netbins, vmax=1e6, vmin=-1e6, cmap="seismic")
 #
 
+
+@time frac_simple = DataFrame(load("FracFocus_OneLine_Final.xlsx", "simple_heel"));
+frac2016 = @where(frac_simple, cols(st) .> Date(2016,1,1), cols(st) .< (Dates.Year(1) + Date(2016,1,1)));

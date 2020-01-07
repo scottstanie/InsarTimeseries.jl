@@ -1,6 +1,7 @@
 using PyCall
 anim = pyimport("matplotlib.animation")
 using DataFrames
+using DataFramesMeta
 import Interpolations: interpolate, extrapolate, BSpline, Constant, Flat
 import ImageFiltering: imfilter, Kernel
 
@@ -11,6 +12,10 @@ import KernelDensity.kde
 kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); kwargs...)
 kde(df::DataFrame, xcol::Symbol, ycol::Symbol, weightcol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); weights=df[!, weightcol], kwargs...)
 
+ccrs = pyimport("cartopy.crs")
+shpreader = pyimport("cartopy.io.shapereader")
+sgeom = pyimport("shapely.geometry")
+cfeature = pyimport("cartopy.feature")
 
 function project(lons, lats; datum=nad27, zone=13, north=true)
     # txutm = UTMZfromLLA(datum)
@@ -148,6 +153,8 @@ function sum_years(df, years...; outcol=:yearsum)
     return df_out
 end
 
+funccols(df, f=sum) = [f(col) for col in eachcol(curdf)]
+funccols(df, cols, f=sum) = [f(df[!, col]) for col in cols]
 
 function _levels_colors(maxlevel=100)
     levels = [0, 1, 5, 10, 15, 25, 50, maxlevel]
@@ -155,6 +162,8 @@ function _levels_colors(maxlevel=100)
     return levels, colors
 end
 
+dfmt = dateformat"y-m-d H:M:S.s"
+readdf(fname) = coalesce.(CSV.read(fname, dateformat=dfmt), 0)
 function plot_wells_per_mi(demrsc; years=[2015, 2016, 2017], outname=nothing)
     oil_prod = CSV.read("oil_production.csv");
 
@@ -165,8 +174,8 @@ function plot_wells_per_mi(demrsc; years=[2015, 2016, 2017], outname=nothing)
 
     levels, colors = _levels_colors(maximum(oil_per_mi))
     fig, ax = plt.subplots()
-    # ax.contourf(oil_per_mi, colors=colors, levels=levels, origin="image", vmax=45, extend="max")
-    # plt.colorbar()
+    axim = ax.contourf(oil_per_mi, colors=colors, levels=levels, origin="image", vmax=45, extend="max")
+    fig.colorbar(axim)
     
     cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
     # ax.imshow(oil_per_mi, norm_(oil_per_mi))#, cmap=cmap_)
@@ -182,6 +191,123 @@ function save_img_geotiff(outfile::AbstractString, img, demrsc, levels, colors)
     kml.create_geotiff(rsc_data=Dict(demrsc), img_filename="tmp.png", outfile=outfile)
 end
 
+function plot_oil_water_bar()
+    oil_prod = readdf("oil_production.csv");
+    water_inj = readdf("water_injection.csv");
+
+    xs = 2009:2017
+    oilyears = funccols(oil_prod, [Symbol(y) for y in xs])
+    wateryears = funccols(water_inj, [Symbol(y) for y in xs])
+
+    fig, axes = plt.subplots(1, 2)
+    bg_color="b"
+    active_color="r"
+    colors = fill(bg_color, length(xs)); colors[end] = active_color
+
+    xticks=[2009, 2013, 2017]
+    # yticks=[0, 0.5, 1, 1.5, 2, 2.5]
+
+    titles = ["oil", "water"]
+    for (title, ax, values) in zip(titles, axes, [oilyears, wateryears])
+        ax.bar(xs, values, color=colors)
+        ax.set_xticks(xticks)
+        # ax.set_yticks(yticks)
+        ax.set_ylabel("Million bbl/day")
+
+        ax.set_title(title)
+    end
+end
+
+function plot_oil_volume_grid(demrsc; outname=nothing)
+    oil_prod = readdf("oil_production.csv");
+    valcol = Symbol(2017)
+    oil_prod17 = @where(oil_prod, cols(valcol) .> 0);
+
+    grid_size_mi = 10
+    oil_grid = coarse_bin_vals(demrsc, oil_prod17, sum_vals=true, 
+                               step_km=grid_size_mi/0.62, valcol=valcol);
+
+    oil_grid[oil_grid .== 0] .= NaN
+
+    levels = [0, .01, 1, 2, 4, 7, 10, 15, 20] .* 1e6
+    colors = broadcast(t -> t./256, [ (0, 0, 0, 0), (69, 117, 199, 200), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    fig, ax = plt.subplots()
+    axim = ax.contourf(oil_grid, colors=colors, levels=levels, origin="image", vmax=maximum(levels), extend="max")
+    fig.colorbar(axim)
+    
+    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+
+    if !isnothing(outname)
+        save_img_geotiff(outname, oil_grid, demrsc, levels, colors)
+    end
+    return oil_grid, fig, ax
+end
+
+function plot_water_volume_grid(demrsc; outname=nothing, grid_size_mi = 5)
+    water_inj = readdf("water_injection.csv");
+    valcol = Symbol(2017)
+    water_inj17 = @where(water_inj, cols(valcol) .> 0);
+
+    water_grid = coarse_bin_vals(demrsc, water_inj17, sum_vals=true, 
+                               step_km=grid_size_mi/0.62, valcol=valcol);
+
+    water_grid[water_grid .== 0] .= NaN
+
+    # levels = [0, .01, 1, 2, 4, 7, 10, 15, 20] .* 1e6  # For 10 mi grid
+    # levels_adjust = 10 / grid_size_mi / 2
+    # levels .*= levels_adjust
+    levels = [0, .01, 1, 5, 10, 20, 40, 80, 180] .* 1e6
+    colors = broadcast(t -> t./256, [ (0, 0, 0, 0), (69, 117, 199, 200), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    fig, ax = plt.subplots()
+    axim = ax.contourf(water_grid, colors=colors, levels=levels, origin="image", vmax=maximum(levels), extend="max")
+    fig.colorbar(axim)
+    
+    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+
+    if !isnothing(outname)
+        save_img_geotiff(outname, water_grid, demrsc, levels, colors)
+    end
+    return water_grid, fig, ax
+end
+
+macro name(arg)
+    x = string(arg)
+    quote
+        $x
+    end
+end
+depth1(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .< lowdepth)
+depth2(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .> lowdepth, cols(depthcol) .< middepth)
+depth3(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .> middepth)
+function plot_water_bubbles_grouped(demrsc; outname=nothing)
+    loncol, latcol,depthcol = :LongNAD27, :LatNAD27, :BotPerfDepth
+
+    delaware = sgeom.shape(JSON.parsefile("delaware_shape.geojson")["features"][1]["geometry"])
+    midland = sgeom.shape(JSON.parsefile("midland_shape.geojson")["features"][1]["geometry"])
+    central_basin = sgeom.shape(JSON.parsefile("central_basin_shape.geojson")["features"][1]["geometry"])
+
+    water_inj = readdf("water_injection.csv");
+    valcol = Symbol(2017)
+    water_inj17 = @where(water_inj, cols(valcol) .> 0);
+    pts = sgeom.Point.(collect(zip(water_inj17[!, loncol], water_inj17[!, latcol])))
+
+    delaware_pts = water_inj17[delaware.contains.(pts), :]
+    central_basin_pts = water_inj17[central_basin.contains.(pts), :]
+    midland_pts = water_inj17[midland.contains.(pts), :]
+
+    rows = []
+    for p in [delaware_pts, central_basin_pts, midland_pts]
+        for d in [depth1, depth2, depth3]
+            curdf = d(p)[!, [loncol, latcol, depthcol, valcol]]
+            curout = [f(col) for (f, col) in zip([mean, mean, mean, sum], eachcol(curdf))]
+            push!(rows, curout)
+            println("$d: $curout")
+        end
+    end
+    outdf = DataFrame(permutedims(hcat(rows...)), [:Lon, :Lat, :DepthBot, :Volume2017])
+    CSV.write("water_inj_depth_avgs.csv", outdf)
+    return outdf
+end
 # E.g.
 # m = rand(5, 5);
 # stack = cat([m .+ .2i for i in 1:10]..., dims=3)
@@ -308,10 +434,6 @@ end
 # animate_imgs_pts(eqs_txar, geolist, stack78)
 
 # plt.figure(); plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max"); plt.colorbar()
-ccrs = pyimport("cartopy.crs")
-shpreader = pyimport("cartopy.io.shapereader")
-sgeom = pyimport("shapely.geometry")
-cfeature = pyimport("cartopy.feature")
 
 function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_basins=true)
     fig = isnothing(fig) ? plt.figure() : fig
@@ -370,7 +492,7 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_bas
     if add_basins
         reader = shpreader.Reader("./repermianbasinshapefile/Permian_Boundary_2018_TORA_Dutton.shp")
         basins = collect(reader.geometries())[[3,4,6]]
-        # ax.add_geometries(basins, ccrs.epsh(3665), facecolor="gray", edgecolor="gray")
+        # ax.add_geometries(basins, ccrs.epsg(3665), facecolor="gray", edgecolor="gray")
         BASINS = cfeature.ShapelyFeature(basins, ccrs.epsg(3665))
         ax.add_feature(BASINS, facecolor="none", edgecolor="black", linewidth=3)
     end
@@ -418,3 +540,8 @@ end
 # end
 # myanim = anim.FuncAnimation(fig, make_frame, frames=size(stack,3), interval=20)
 # myanim[:save]("test2.mp4", bitrate=-1, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+
+# TODO Data cleanup
+# water_inj[!, :BotPerfDepth] .== 0
+# water_inj17 = @transform(water_inj17, depthdiff = :BotPerfDepth .- :TopPerfDepth);
+# water_inj17[water_inj17.depthdiff .< 0, :]

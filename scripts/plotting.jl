@@ -341,9 +341,9 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
 
         # geolist, intlist, valid_igram_indices = load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", maxdays)
         # unw_vals = get_stack_vals("unw_stack.h5", name, 1, "stack_flat_shifted", valid_igram_indices)
-        unw_vals = h5read("gps_pixels.h5", name)
-        geolist = Sario.load_geolist_from_h5("gps_pixels.h5")
-        intlist = Sario.load_intlist_from_h5("gps_pixels.h5")
+        unw_vals = h5read("gps_pixels_78.h5", name)
+        geolist = Sario.load_geolist_from_h5("gps_pixels_78.h5")
+        intlist = Sario.load_intlist_from_h5("gps_pixels_78.h5")
 
         g2, i2, u2 = InsarTimeseries.remove_outliers(geolist, intlist, unw_vals)
 
@@ -351,7 +351,7 @@ function hist_change_from_outliers(station_name_list, fname, dset="velos/1";
         # ax = axes[idx]
 
         n1, _, _ = ax.hist(unw_vals .* p2c, range=(-vm, vm), bins=bins, label="All data")
-        # n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
+        n1, _, _ = ax.hist(u2 .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed")
         ax.set_xlabel("Centimeters")
         # ax.set_title("$name")
         ax.set_title("Interferogram count for $name")
@@ -455,7 +455,8 @@ function plot_image_line(img::MapImage, rowcol1, rowcol2; plotkwargs...)
 end
 
 function plot_gps_los(name, insar_mm=nothing; ref="TXKM", start_date=Date(2014,11,1), 
-                      end_date=(2019,2,1), ylim=(-3, 3), title="", bigfont=false, offset=true)
+                      end_date=(2019,2,1), ylim=(-3, 3), title="", bigfont=false, offset=true,
+                      lw=5, gps_color="#86b251")
     fig, ax = plt.subplots()
     dts, los = get_gps_los(name, reference_station=ref,
                            start_date=start_date, end_date=end_date)
@@ -467,13 +468,13 @@ function plot_gps_los(name, insar_mm=nothing; ref="TXKM", start_date=Date(2014,1
         rcParams["font.weight"] = "bold"
     end
 
-    ax.plot(dts, los, "b.", markersize=5, label="GPS")
+    ax.plot(dts, los, ".", color=gps_color, markersize=7, label="GPS")
 
     if !isnothing(insar_mm)
         insar_cm_day = insar_mm / 365 / 10
         full_defo = insar_cm_day * (dts[end] - dts[1]).value
         bias = offset ? -full_defo/2 : 0
-        ax.plot(dts, bias .+ day_nums .* insar_cm_day, "r", lw=3, label="Insar")
+        ax.plot(dts, bias .+ day_nums .* insar_cm_day, "r", lw=lw, label="Insar")
     end
 
     # Or if you want different settings for the grids:
@@ -651,15 +652,16 @@ function plot_3d(img::MapImage; smooth=true, vm=nothing, colorbar=true)
     return fig, ax
 end
 
-function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=2.5, w=7.5)
+function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5, bins=40)
+    # Formatting functions:
     _remove_ticks(ax) = ax.tick_params(axis="both", which="both", bottom=false, top=false, labelbottom=false,
                                        left=false, right=false, labelleft=false)
     _set_figsize(fig, h=h, w=w) = (fig.set_figheight(h), fig.set_figwidth(w))
 
     # unw_vals = [h5read("gps_pixels.h5", name) for name in station_name_list78];
-    unw_vals = h5read("gps_pixels.h5", station_name)
-    geolist = Sario.load_geolist_from_h5("gps_pixels.h5");
-    intlist = Sario.load_intlist_from_h5("gps_pixels.h5");
+    unw_vals = h5read("gps_pixels_78.h5", station_name)
+    geolist = Sario.load_geolist_from_h5("gps_pixels_78.h5");
+    intlist = Sario.load_intlist_from_h5("gps_pixels_78.h5");
 
     end_date = Date(2018,1,1)
     geolist18 = geolist[geolist .> end_date]
@@ -669,13 +671,14 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=2.5, w=7.
     geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
     
-    # plot grouped by date
+    # 1. plot grouped by date
     fig, ax = plot_big_days(geolist17, intlist17, unw_vals17, legend=false, color=outlier_color)
     _remove_ticks(ax)
     _set_figsize(fig)
     fig.savefig("outliers2.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
-# function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
+    # 2. cm vs baseline igram outlier plot
+    # function plot_grouped_by_day(geo, int, vals, nsigma=0, min_spread=2)
     geo = geolist17
     means = InsarTimeseries.mean_abs_val(geo, intlist17, p2c * unw_vals17)
     println("median val: $(median(means))")
@@ -687,17 +690,18 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=2.5, w=7.
     bigidx = means .> high 
     ax.scatter(geo[bigidx], means[bigidx], c=outlier_color)
     _remove_ticks(ax)
-    _set_figsize(fig)
+    _set_figsize(fig)  # Double the width here
     fig.savefig("outliers1.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
 
-    # GPS vs insar solutions
+    # 3. line  plot of insar after outliers vs GPS
     Blin = sum(InsarTimeseries.prepB(geolist17, intlist17), dims=2);
     before = (Blin \ unw_vals17) * p2c * 365 * 10  # Change to mm/year
 
     start_date=Date(2015,1,1)
     ref = nothing
-    fig, ax = plot_gps_los(station_name, before; ref=ref,
+    lw = 5
+    fig, ax = plot_gps_los(station_name, before; ref=ref, lw=lw,
                            end_date=end_date, start_date=start_date,
                            ylim=(-3, 3), title="", bigfont=false, offset=false)
 
@@ -705,18 +709,80 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=2.5, w=7.
     dts, los = get_gps_los(station_name, reference_station=ref, end_date=end_date, start_date=start_date)
     day_nums = _get_day_nums(dts)
     idxs = InsarTimeseries._good_idxs(geolist17[bigidx], intlist17)
-    after = p2c * (Blin[idxs] \ unw_vals17[idxs])  # cm/day
+    vals_after_outliers = unw_vals17[idxs]
+    after = p2c * (Blin[idxs] \ vals_after_outliers)  # cm/day
     full_defo = after * (dts[end] - dts[1]).value
     # ax.plot(dts, -full_defo/2 .+ day_nums .* after, "c", lw=3, label="Insar")
-    ax.plot(dts, day_nums .* after, "c", lw=3, label="Insar")
+    ax.plot(dts, day_nums .* after, "C0", lw=lw)
     _remove_ticks(ax)
-    _set_figsize(fig)
+    _set_figsize(fig, h, 2.3w)
     fig.savefig("outliers3.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
     println("Before: $before mm/yr, $(before * (dts[end] - dts[1]).value /3650) total defo")
     println("After: $(after * 3650) mm/yr, $full_defo total defo")
 
+    # 4. histogram before/after outlier
+    fig, ax = plt.subplots()
+
+    # ax = axes[ii, jj]
+    # ax = axes[idx]
+    vm = maximum(abs.(unw_vals17 * p2c))
+    n1, _, _ = ax.hist(unw_vals17.* p2c, range=(-vm, vm), bins=bins, label="All data", color="red")
+    n1, _, _ = ax.hist(vals_after_outliers .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed", color="C0")
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("outliers4.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+
+
+
+    stds78 = Float64.(std.([h5read("gps_pixels_78.h5", name) for name in station_name_list78]))
+    dists78 = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in station_name_list78]
+    df78 = DataFrame(dists=dists78, stds=stds78, names=station_name_list78)
+
+    stds85 = Float64.(std.([h5read("gps_pixels_85.h5", name) for name in station_name_list85]))
+    dists85 = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in station_name_list85]
+    df85 = DataFrame(dists=dists85, stds=stds85, names=station_name_list85)
+
+    sm78 = lm(@formula(stds ~ dists), df78)
+    a1, b1 = coef(sm78)
+    sm85 = lm(@formula(stds ~ dists), df85)
+    a2, b2 = coef(sm85)
+
+    fig, ax = plt.subplots()
+    ax.scatter(dists78, stds78, s=40)
+    xs = 1:maximum(dists78)
+    ax.plot(xs, a1 .+ b1 .* xs, lw=3)
+
+    ax.scatter(dists85, stds85, s=40)
+    xs = 1:maximum(dists85)
+    ax.plot(xs, a2 .+ b2 .* xs, lw=3)
+
+    ax.set_xlabel("km from TXKM")
+    ax.set_ylabel("Std. Dev. of unw values")
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("outliers5.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
     return (geolist17, intlist17, unw_vals17)
 end
 
 _get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
+
+
+function pnas_gps_error_table()
+    p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked/"
+    p85 = "/data4/scott/path85/stitched/igrams_looked/"
+
+   
+    errors = []
+    # errors85_4 = get_gps_error(p85*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
+    # errors78_4 = get_gps_error(p78*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
+
+    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", "velocities_2018_stackavg_max800.h5", "velocities_2017_current.h5"]
+        push!(errors, get_gps_error(p85*f, all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.))
+        push!(errors, get_gps_error(p78*f, all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.))
+    end
+    df = DataFrame(all_stations, round.(errors, digits=2)...)
+    show(stdout, MIME("text/latex"), df)
+end
