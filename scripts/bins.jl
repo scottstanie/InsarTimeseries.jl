@@ -18,6 +18,8 @@ readdf(fname) = coalesce.(CSV.read(fname, dateformat=dfmt), 0)
 demrsc = Sario.load("dem_all.rsc")
 water_prod = readdf("water_production.csv")
 oil_prod = readdf("oil_production.csv")
+gas_prod = readdf("gas_production.csv");
+gas_inj = readdf("gas_injection.csv");
 water_inj = readdf("water_injection.csv")
 
 waterinjbins = bin_vals(demrsc, water_inj)
@@ -59,7 +61,9 @@ axes[2, 1].set_title("Fracs")
 axes[2, 2].set_title("Eqs")
 # axes[1, 2].imshow(netbins, vmax=1e6, vmin=-1e6, cmap="seismic")
 #
+oil_prod17 = @where(oil_prod, cols(Symbol(2017)) .> 0);
+water_inj17 = @where(water_inj, cols(Symbol(2017)) .> 0);
+water_prod17 = @where(water_prod, cols(Symbol(2017)) .> 0);
 
-
-@time frac_simple = DataFrame(load("FracFocus_OneLine_Final.xlsx", "simple_heel"));
-frac2016 = @where(frac_simple, cols(st) .> Date(2016,1,1), cols(st) .< (Dates.Year(1) + Date(2016,1,1)));
+# @time frac_simple = DataFrame(load("FracFocus_OneLine_Final.xlsx", "simple_heel"));
+# frac2016 = @where(frac_simple, cols(st) .> Date(2016,1,1), cols(st) .< (Dates.Year(1) + Date(2016,1,1)));

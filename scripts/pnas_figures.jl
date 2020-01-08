@@ -51,21 +51,23 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
     ax.scatter(df_dists[!, :dists], df_dists[!, :stds], s=40)
     xs = 1:maximum(df_dists[!, :dists])
     ax.plot(xs, a .+ b .* xs, lw=3)
-
+    _remove_ticks(ax)
+    _set_figsize(fig)
     fig.savefig("outliers_b.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
     # c) errors in 2, 3, 4 year solution at GPS vs distance, stacking only
     # d) errors in 2, 3, 4 year solution at GPS vs distance, after outlier removal
     df, errors = get_gps_errors(to_cm=true)
-    # df = @where(df, :station .!= "TXKM")
+    df = @where(df, :station .!= "TXKM")
 
     years = collect(2016:2018)
     cols1 = [Symbol("p$(n)_stack_$(y)") for y=years, n=[78, 85]]
     cols2 = [Symbol("p$(n)_outliers_$(y)") for y=years, n=[78, 85] ]
     colors = ["b", "g", "k"]
+    fnames = ["outliers_c.pdf", "outliers_d.pdf"]
 
-    maxy = 5
-    for cols in [cols1, cols2]
+    maxy = 3
+    for (idx, cols) in enumerate([cols1, cols2])
         fig, ax = plt.subplots()
         # errvals = abs.(vcat([df[!, c] for c in cols]...))
         for yidx = 1:3
@@ -85,6 +87,11 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
             a, b = coef(sm)
             @show a, b*50
             ax.plot(xs, a .+ b .* xs, colors[yidx], lw=3)
+
+            _remove_ticks(ax)
+            _set_figsize(fig)
+            fname = fnames[idx]
+            fig.savefig(fname, bbox_inches="tight", transparent=true, dpi=100)
         end
     end
 
@@ -158,7 +165,7 @@ end
 
 function _errs_to_cm(df)
     # mm/year, to cm for 2,3,4 years
-    scales = vcat(2 .* ones(4), 3 .* ones(4), 4.1 .* ones(4)) ./ 10
+    scales = vcat(4.1 .* ones(4), 3 .* ones(4), 2 .* ones(4)) ./ 10
     for (s, c) in zip(scales, names(df)[3:end])
         df[!, c] = df[!, c] .* s
     end 
