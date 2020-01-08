@@ -248,7 +248,8 @@ function get_gps_errors(outfile="gps_errors.csv")
                :p78_outliers_2016,
               ]
 
-    df = DataFrame(errors,columns)
+    df = DataFrame(errors, columns)
+    CSV.write("gps_errors.csv", df)
     return df, errors
 end
 
