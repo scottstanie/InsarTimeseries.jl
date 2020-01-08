@@ -1,4 +1,5 @@
 using HDF5
+using Dates
 import PyPlot
 import Polynomials
 import Dierckx: Spline2D
@@ -6,6 +7,8 @@ using PyCall
 kml = pyimport("apertools.kml")
 using Printf
 using Glob
+using GLM
+using DataFrames
 
 import MapImages
 import MapImages: MapImage
@@ -775,14 +778,21 @@ function pnas_gps_error_table()
     p85 = "/data4/scott/path85/stitched/igrams_looked/"
 
    
-    errors = []
+    errors = Any[]
+    push!(errors, all_stations)
     # errors85_4 = get_gps_error(p85*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
     # errors78_4 = get_gps_error(p78*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
 
-    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", "velocities_2018_stackavg_max800.h5", "velocities_2017_current.h5"]
-        push!(errors, get_gps_error(p85*f, all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.))
-        push!(errors, get_gps_error(p78*f, all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.))
+    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", "velocities_2017_stackavg_max800.h5", "velocities_2017_current.h5"]
+        fname = p85*f; @show fname
+        push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
+        fname = p78*f; @show fname
+        push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
     end
-    df = DataFrame(all_stations, round.(errors, digits=2)...)
+    df = DataFrame(errors)
     show(stdout, MIME("text/latex"), df)
+    @show extrema.(filter.(!isnan, errors[2:end]))
+    @show rms.(errors[2:end])
+    @show maximum.(filter.(!isnan, [abs.(a) for a in errors[2:end]]))
+    return df
 end
