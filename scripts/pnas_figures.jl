@@ -1,4 +1,5 @@
-
+import CSV
+include("./plotting.jl")
 # Formatting functions:
 _remove_ticks(ax) = ax.tick_params(axis="both", which="both", bottom=false, top=false, labelbottom=false,
                                    left=false, right=false, labelleft=false)
@@ -116,6 +117,25 @@ function pnas_outlier_figure_old(station_name="TXMC", outlier_color="r", h=3, w=
 end
 
 function pnas_outlier_figure()
+    dists = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in all_stations]
+
+    stds78 = Float64.(std.([h5read("gps_pixels_78.h5", name) for name in station_name_list78]))
+    dists78 = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in station_name_list78]
+
+    stds85 = Float64.(std.([h5read("gps_pixels_85.h5", name) for name in station_name_list85]))
+    dists85 = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in station_name_list85]
+    df_dists = DataFrame(dists=vcat(dists78, dists85), stds=vcat(stds78, stds85), names=(station_name_list78, station_name_list85))
+
+    sm = lm(@formula(stds ~ dists), df_dists)
+    a, b = coef(sm)
+    @show a, b*50
+
+    fig, ax = plt.subplots()
+    ax.scatter(df_dists[!, :dists], df_dists[!, :stds], s=40)
+    xs = 1:maximum(df_dists[!, :dists])
+    ax.plot(xs, a .+ b .* xs, lw=3)
+
+    df, errors = get_gps_errors()
 end
 
 
@@ -186,14 +206,19 @@ end
 
 
 function get_gps_errors(outfile="gps_errors.csv")
-    isfile(outfile) && CSV.read(outfile)
+    if isfile(outfile)
+        df = CSV.read(outfile)
+        return df, [c for c in eachcol(df)][3:end]
+    end
 
     p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked/"
     p85 = "/data4/scott/path85/stitched/igrams_looked/"
 
    
+    dists = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in all_stations]
     errors = Any[]
     push!(errors, all_stations)
+    push!(errors, dists)
     # errors85_4 = get_gps_error(p85*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
     # errors78_4 = get_gps_error(p78*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
 
@@ -208,6 +233,7 @@ function get_gps_errors(outfile="gps_errors.csv")
         push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
     end
     columns = [:station,
+               :dist_to_txkm,
                :p85_stack_2018,
                :p78_stack_2018,
                :p85_outliers_2018,
@@ -229,9 +255,9 @@ end
 function pnas_gps_error_table()
     df, errors = get_gps_errors()
     show(stdout, MIME("text/latex"), df)
-    @show extrema.(filter.(!isnan, errors[2:end]))
-    @show rms.(errors[2:end])
-    @show maximum.(filter.(!isnan, [abs.(a) for a in errors[2:end]]))
+    @show extrema.(filter.(!isnan, errors[3:end]))
+    @show rms.(errors[3:end])
+    @show maximum.(filter.(!isnan, [abs.(a) for a in errors[3:end]]))
     return df
 end
 
