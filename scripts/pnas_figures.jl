@@ -185,7 +185,9 @@ end
 
 
 
-function pnas_gps_error_table()
+function get_gps_errors(outfile="gps_errors.csv")
+    isfile(outfile) && CSV.read(outfile)
+
     p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked/"
     p85 = "/data4/scott/path85/stitched/igrams_looked/"
 
@@ -195,13 +197,37 @@ function pnas_gps_error_table()
     # errors85_4 = get_gps_error(p85*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
     # errors78_4 = get_gps_error(p78*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
 
-    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", "velocities_2017_stackavg_max800.h5", "velocities_2017_current.h5"]
+    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", 
+              "velocities_2017_stackavg_max800.h5", "velocities_2017_current.h5",
+              "velocities_2016_stackavg_max800.h5", "velocities_2016_current.h5",
+             ]
+
         fname = p85*f; @show fname
         push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
         fname = p78*f; @show fname
         push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
     end
-    df = DataFrame(errors)
+    columns = [:station,
+               :p85_stack_2018,
+               :p78_stack_2018,
+               :p85_outliers_2018,
+               :p78_outliers_2018,
+               :p85_stack_2017,
+               :p78_stack_2017,
+               :p85_outliers_2017,
+               :p78_outliers_2017,
+               :p85_stack_2016,
+               :p78_stack_2016,
+               :p85_outliers_2016,
+               :p78_outliers_2016,
+              ]
+
+    df = DataFrame(errors,columns)
+    return df, errors
+end
+
+function pnas_gps_error_table()
+    df, errors = get_gps_errors()
     show(stdout, MIME("text/latex"), df)
     @show extrema.(filter.(!isnan, errors[2:end]))
     @show rms.(errors[2:end])
