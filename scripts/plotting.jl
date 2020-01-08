@@ -738,7 +738,6 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
 
 
 
-
     stds78 = Float64.(std.([h5read("gps_pixels_78.h5", name) for name in station_name_list78]))
     dists78 = [MapImages.latlon_to_dist(MapImages.station_latlon("TXKM"), MapImages.station_latlon(n)) for n in station_name_list78]
     df78 = DataFrame(dists=dists78, stds=stds78, names=station_name_list78)
@@ -770,10 +769,14 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
     return (geolist17, intlist17, unw_vals17)
 end
 
+function pnas_noise_figure()
+end
+
 _get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
 
+function get_gps_errors(outfile="gps_errors.csv")
+    isfile(outfile) && CSV.read(outfile)
 
-function pnas_gps_error_table()
     p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked/"
     p85 = "/data4/scott/path85/stitched/igrams_looked/"
 
@@ -783,13 +786,37 @@ function pnas_gps_error_table()
     # errors85_4 = get_gps_error(p85*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
     # errors78_4 = get_gps_error(p78*"velocities_2018_current.h5", all_stations, dset="velos_shifted/1", verbose=true, window=7, shift=-0.)
 
-    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", "velocities_2017_stackavg_max800.h5", "velocities_2017_current.h5"]
+    for f in ["velocities_2018_stackavg_max800.h5", "velocities_2018_current.h5", 
+              "velocities_2017_stackavg_max800.h5", "velocities_2017_current.h5",
+              "velocities_2016_stackavg_max800.h5", "velocities_2016_current.h5",
+             ]
+
         fname = p85*f; @show fname
         push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
         fname = p78*f; @show fname
         push!(errors, round.(get_gps_error(fname, all_stations, dset="velos_shifted/1", verbose=false, window=7, shift=-0.), digits=2))
     end
-    df = DataFrame(errors)
+    columns = [:station,
+               :p85_stack_2018,
+               :p78_stack_2018,
+               :p85_outliers_2018,
+               :p78_outliers_2018,
+               :p85_stack_2017,
+               :p78_stack_2017,
+               :p85_outliers_2017,
+               :p78_outliers_2017,
+               :p85_stack_2016,
+               :p78_stack_2016,
+               :p85_outliers_2016,
+               :p78_outliers_2016,
+              ]
+
+    df = DataFrame(errors,columns)
+    return df, errors
+end
+
+function pnas_gps_error_table()
+    df, errors = get_gps_errors()
     show(stdout, MIME("text/latex"), df)
     @show extrema.(filter.(!isnan, errors[2:end]))
     @show rms.(errors[2:end])
