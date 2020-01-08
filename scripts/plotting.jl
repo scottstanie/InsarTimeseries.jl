@@ -796,3 +796,14 @@ function pnas_gps_error_table()
     @show maximum.(filter.(!isnan, [abs.(a) for a in errors[2:end]]))
     return df
 end
+
+function write_gps_pixels(station_names, max_temp=800)
+    geolist, intlist, valid_idxs = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt ", max_temp)
+    gpss = [get_stack_vals("unw_stack.h5", s, 3, "stack_flat_shifted", valid_idxs) for s in station_names]
+    for (idx, s) in enumerate(station_names)
+        h5write("gps_pixels.h5", s, gpss[idx])
+    end
+    Sario.save_intlist_to_h5("gps_pixels.h5", intlist)
+    Sario.save_geolist_to_h5("gps_pixels.h5", geolist)
+    Sario.save_dem_to_h5("gps_pixels.h5", Sario.load("dem.rsc"))
+end
