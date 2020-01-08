@@ -798,7 +798,7 @@ function pnas_gps_error_table()
 end
 
 function write_gps_pixels(station_names, max_temp=800)
-    geolist, intlist, valid_idxs = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt ", max_temp)
+    geolist, intlist, valid_idxs = InsarTimeseries.load_geolist_intlist("unw_stack.h5", "geolist_ignore.txt", max_temp)
     gpss = [get_stack_vals("unw_stack.h5", s, 3, "stack_flat_shifted", valid_idxs) for s in station_names]
     for (idx, s) in enumerate(station_names)
         h5write("gps_pixels.h5", s, gpss[idx])
