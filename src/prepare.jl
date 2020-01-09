@@ -216,7 +216,8 @@ sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
 function remove_ramp(z, mask::AbstractArray{<:Number})
     # z_masked = copy(z)  # Do I really want a copy??
     z[mask] .= NaN
-    return z - estimate_ramp(z)
+    # return z - estimate_ramp(z)
+    return z - quadratic_ramp(z)
 end
 
 function remove_ramp(z, mask_idx::Int; do_permute=false)
@@ -249,7 +250,6 @@ end
 Since it is an order 1 surface, it will be 3 numbers, a, b, c from
      ax + by + c = z
 """
-# TODO: Fix the mem-allocations here
 function estimate_ramp(z::AbstractArray{<:AbstractFloat, 2})
     A = ones((length(z), 3))
     coeffs = Array{eltype(A), 1}(undef, (3,))
@@ -273,6 +273,38 @@ function estimate_ramp(z::AbstractArray{<:AbstractFloat, 2})
         # again subtract 1 to keep consistent with the fitting
         y, x = idx.I .- 1
         z_fit[idx] = a*x + b*y + c
+    end
+
+    return z_fit
+end
+
+function quadratic_ramp(z::AbstractArray{<:AbstractFloat, 2})
+    A = ones((length(z), 6))
+    coeffs = Array{eltype(A), 1}(undef, (6,))
+    z_fit = similar(z)
+
+    zidxs = CartesianIndices(z)
+    for idx in 1:size(A, 1)
+        # if good_idxs[idx]
+        # row, col is equiv to y, x, but subtract 1 to start at 0
+        y, x = zidxs[idx].I .- 1
+        A[idx, 1] = x
+        A[idx, 2] = y
+        A[idx, 3] = x * y
+        A[idx, 4] = x^2
+        A[idx, 5] = y^2
+        # end
+    end
+
+    good_idxs = .~isnan.(z)
+    coeffs .= A[vec(good_idxs), :] \ z[vec(good_idxs)]
+    # coeffs will be 6 elements for the quadratic
+    a, b, c, d, e, f = coeffs
+
+    for idx in CartesianIndices(z_fit)
+        # again subtract 1 to keep consistent with the fitting
+        y, x = idx.I .- 1
+        z_fit[idx] = a*x + b*y + c*x*y + d*x^2 + e*y^2 + f
     end
 
     return z_fit
