@@ -1,9 +1,49 @@
 import CSV
 include("./plotting.jl")
 # Formatting functions:
-_remove_ticks(ax) = ax.tick_params(axis="both", which="both", bottom=false, top=false, labelbottom=false,
-                                   left=false, right=false, labelleft=false)
+_remove_ticks(ax) = ax.tick_params(axis="both", which="both", 
+                                   bottom=false, top=false, 
+                                   labelbottom=false, labelleft=false,
+                                   left=false, right=false
+                                  )
 _set_figsize(fig, h=3, w=3.5) = (fig.set_figheight(h), fig.set_figwidth(w))
+
+function plot_rrc_oil_water()
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+    rcParams["font.family"] = "Helvetica"
+    rcParams["font.size"] = 16
+    rcParams["font.weight"] = "bold"
+
+    data = readdf("summary_inj_prod.csv")
+    oilyears = data[!, :production]
+    wateryears = data[!, :injection]
+    xs = data[!, :Year]
+
+    fig, axes = plt.subplots(2, 1)
+    # fig2, axes2 = plt.subplots(2, 1)
+    bg_color="b"
+    active_color="r"
+    colors = fill(bg_color, length(xs)); colors[end-1] = active_color
+
+    xticks=[2007, 2011, 2015, 2018]
+    # yticks=[0, 0.5, 1, 1.5, 2, 2.5]
+
+    titles = ["Oil Production", "Total Injections"]
+    for (title, ax, values) in zip(titles, axes, [oilyears, wateryears])
+        vals = values ./ 365 ./ 1e6
+        # ax.bar(xs, vals, color=colors)
+        ax.plot(xs, vals, "-o", lw=5, ms=10)
+        ax.set_xticks(xticks)
+        # ax.set_yticks(yticks)
+        ax.set_ylabel("Million bbl/day")
+        ax.grid()
+        ax.set_title(title)
+    end
+    fig.set_figheight(9)
+    fig.set_figwidth(4.5)
+    fig.savefig("cisr-lines.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+end
 
 function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5, bins=40)
     # a. histogram before/after outlier
@@ -18,8 +58,11 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
     intlist17 = intlist[idxs]
     geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
-    vm = maximum(abs.(unw_vals17 * p2c))
-    n1, _, _ = ax.hist(unw_vals17.* p2c, range=(-vm, vm), bins=bins, label="All data", color="red")
+    vm = maximum(abs.(unw_vals17 .* p2c))
+    n1, _, _ = ax.hist(unw_vals17 .* p2c, range=(-vm, vm), bins=bins, label="All data", color="red")
+    MAT.matwrite("outliers_hist_vals.mat", Dict("unw_vals_$station_name" => unw_vals17 .* p2c))
+    # n1, _, _ = ax.hist(unw_vals17.* p2c, range=(-vm, vm), bins=bins, label="All data", color="red", density=true, alpha=0.5)
+    ax.grid()
 
     means = InsarTimeseries.mean_abs_val(geolist17, intlist17, unw_vals17)
     nsigma = 4
@@ -28,6 +71,10 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
     idxs = InsarTimeseries._good_idxs(geolist17[bigidx], intlist17)
     vals_after_outliers = unw_vals17[idxs]
     n1, _, _ = ax.hist(vals_after_outliers .* p2c, range=(-vm, vm), bins=bins, label="Outliers removed", color="C0")
+    # n1, _, _ = ax.hist(vals_after_outliers .* p2c, range=(-vm, vm), bins=bins, density=true, label="Outliers removed", color="C0", alpha=.5)
+    ax.set_xlim((-15, 15))
+    ax.set_xticks([-15, -7.5, 0, 7.5, 15])
+    ax.set_yticks([0, 50, 100])
     _remove_ticks(ax)
     _set_figsize(fig)
     fig.savefig("outliers_a.pdf", bbox_inches="tight", transparent=true, dpi=100)
@@ -48,13 +95,21 @@ function pnas_outlier_figure(station_name="TXMC", outlier_color="r", h=3, w=3.5,
     @show a, b*50
 
     fig, ax = plt.subplots()
-    ax.scatter(df_dists[!, :dists], df_dists[!, :stds], s=40)
-    xs = 1:maximum(df_dists[!, :dists])
+    dists, stds = (df_dists[!, :dists], df_dists[!, :stds])
+    ax.scatter(dists, stds, s=40)
+    xs = 1:maximum(dists)
     ax.plot(xs, a .+ b .* xs, lw=3)
+    ax.set_ylim((0, 10))
+    ax.set_yticks([0, 3, 6, 9])
+    ax.set_xticks([0, 100, 200])
+    ax.grid()
     _remove_ticks(ax)
     _set_figsize(fig)
     fig.savefig("outliers_b.pdf", bbox_inches="tight", transparent=true, dpi=100)
+    MAT.matwrite("outliers_b.mat", Dict("a" => a, "b" => b, "xs" => collect(xs), "dists" => dists, "stds" => stds))
 
+
+    return
     # c) errors in 2, 3, 4 year solution at GPS vs distance, stacking only
     # d) errors in 2, 3, 4 year solution at GPS vs distance, after outlier removal
     df, errors = get_gps_errors(to_cm=true)
@@ -258,6 +313,7 @@ function pnas_outlier_figure_old(station_name="TXMC", outlier_color="r", h=3, w=
 
     geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
+    geolist17, intlist17, unw_vals17 = (geolist, intlist, unw_vals)
     
     # 1. plot grouped by date
     fig, ax = plot_big_days(geolist17, intlist17, unw_vals17, legend=false, color=outlier_color)
@@ -355,3 +411,125 @@ function pnas_outlier_figure_old(station_name="TXMC", outlier_color="r", h=3, w=
     return (geolist17, intlist17, unw_vals17)
 end
 
+# Hunjoo figures
+# 
+function dict_to_vars(d::AbstractDict{String, Any})
+    for key in keys(d)
+        @eval $(Symbol(key)) = d[$(QuoteNode(key))]
+    end
+end
+function get_wells()
+wolfidx = occursin.("WOLFCAMP", ff[!, prodcol]);
+delidx = occursin.("DELAWARE", ff[!, prodcol]);
+end
+
+function hunjoo_figures()
+    rcParams["font.family"] = "Helvetica"
+    rcParams["font.size"] = 16
+    rcParams["font.weight"] = "medium"
+
+    variables = MAT.matread("/Users/scott/Documents/Learning/PNAS-git-overleaf/data/PNAS_Geomechanics3.mat")
+    # dict_to_vars(variables)  # Fails cuz of some namespace thing
+    for key in keys(variables)
+        @eval $(Symbol(key)) = variables[$(QuoteNode(key))]
+    end
+    #  Area of Interest
+    R_earth = 3959*5280; # (miles to feet) Earth Radius
+
+    XD_min = -103.59;
+    XD_max = -103.44;
+    YD_min = 31.32;
+    YD_max = 31.47;
+
+    # Reservoir properties
+    RD = Reservoir[:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
+    RR_R_D1 = (Reservoir[:,3]/(5*3280.84)*55).^2;      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
+    RR_R_D2 = (Reservoir[:,3]/(1*3280.84)*35).^2;      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
+
+    # Cities
+    Pecos = [-103.4932, 31.4229];             # (degrees)
+
+    ZD_min = -15.0;
+    ZD_max = 15.0;
+    c_min = -10.0; 
+    c_max = 10.0;
+    FZ_min = -4.0;
+    FZ_max = 2.0;
+
+    # Fig 1 Figures
+    # Pecos Area (InSAR + Producing Wells)
+    fig, ax = plt.subplots()
+    ax.imshow(Z_Disp_I18, cmap="seismic_wide_y", vmax=7, vmin=-7)  #,"EdgeColor","none")   # InSAR data
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("hunjoo1.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+  
+    # Vertical Deformation in Area of Interest
+    fig, ax = plt.subplots()
+    # hold on
+    # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
+    vm = 10
+    axim = ax.imshow(Z_Disp_VV18, cmap="seismic_wide_y", vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    # fig.colorbar(axim)
+    ax.plot(BB_XD[[1, end]], BB_YD[[1, end]], lw=1.5)
+    ax.plot(Pecos[1],Pecos[2], "ko");
+
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("hunjoo2.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+
+    # Reservoir + Fault Model
+    fig, ax = plt.subplots()
+    # surf(XD,YD,Z_Disp_T(:,:,3),"EdgeColor","none")
+    axim = ax.imshow(Z_Disp_T[:, :, 3], cmap="seismic_wide_y", vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    # fig.colorbar(axim)
+    ax.plot(BB_XD[[1, end]], BB_YD[[1, end]], lw=1.5)
+    ax.plot(Pecos[1],Pecos[2], "ko");
+
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("hunjoo3.pdf", bbox_inches="tight", transparent=true, dpi=100)
+
+    # B-B' cross-section
+    fig, ax1 = plt.subplots()
+    ax1.plot(BB_L',BB_Z_Disp_I18,"bs", label="2018 InSAR")
+    ax1.plot(BB_L',BB_Z_Disp_R18,"r-.",lw=1.5, label="Reservoir")
+    ax1.plot(BB_L',BB_Z_Disp_F18,"r:",lw=1.5, label="Fault")
+    ax1.plot(BB_L',BB_Z_Disp_T18,"r-",lw=1.5, label="Res. + Fault")
+    ax1.set_xlim((0,maximum(BB_L)))
+    ax1.set_ylim((2*FZ_min, 2*FZ_max))
+    ax1.set_xlabel("B-B' (km)")
+    ax1.set_ylabel("Surface Deformation (cm)")
+
+    # yyaxis right
+    ax2 = ax1.twinx()
+    ax2.plot(BB_FC[:,1,1],BB_FC[:,2,1],"g-",lw=2.0)
+    ax2.plot(BB_FC[:,1,2],BB_FC[:,2,2],"g-",lw=2.0)
+    ax2.plot(BB_FC[:,1,3],BB_FC[:,2,3],"g-",lw=2.0)
+    ax2.plot(BB_FC[:,1,4],BB_FC[:,2,4],"g-",lw=2.0)
+    # text(BB_FC(2,1,1),BB_FC(2,2,1),"F1",lw=2.0)  #,"VerticalAlignment","top")
+    # text(BB_FC(2,1,2),BB_FC(2,2,2),"F2",lw=2.0)  #,"VerticalAlignment","top")
+    # text(BB_FC(2,1,3),BB_FC(2,2,3),"F3",lw=2.0)  #,"VerticalAlignment","top")
+    # text(BB_FC(2,1,4),BB_FC(2,2,4),"F4",lw=2.0)  #,"VerticalAlignment","top")
+    ax2.set_ylabel("Fault Depth (km)")
+    ax2.set_xlim((0,maximum(BB_L)))
+    ax2.set_ylim((0.5*FZ_min, 0.5*FZ_max))
+    # ax2.legend(["2018 InSAR","Reservoir Model","Fault Model","Res.+Fault Model","Location","northeast"])
+    # set(findobj(gcf,"type","axes"),"FontSize",12,"TickDir","out")
+    #
+    xticks=[0, 7, 14]
+    y1ticks=[-8, -4, 0, 4]
+    y2ticks=[-2, -1, 0, 1]
+
+    ax1.set_xticks(xticks)
+    ax1.set_yticks(y1ticks)
+    ax2.set_yticks(y2ticks)
+    ax1.grid()
+    fig.legend(frameon=false, fontsize="small", ncol=2)
+
+    _set_figsize(fig, 1.3 .* [3, 3.5]...)
+    # _set_figsize(fig)
+    fig.savefig("hunjoo4.pdf", bbox_inches="tight", transparent=true, dpi=100)
+end
