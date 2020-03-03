@@ -1,4 +1,7 @@
 import CSV
+using DataFramesMeta
+rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+
 include("./plotting.jl")
 # Formatting functions:
 _remove_ticks(ax) = ax.tick_params(axis="both", which="both", 
@@ -428,11 +431,12 @@ function hunjoo_figures()
     rcParams["font.size"] = 16
     rcParams["font.weight"] = "medium"
 
-    variables = MAT.matread("/Users/scott/Documents/Learning/PNAS-git-overleaf/data/PNAS_Geomechanics3.mat")
+    # variables = MAT.matread("/Users/scott/Documents/Learning/PNAS-git-overleaf/data/PNAS_Geomechanics3.mat")
+    variables = MAT.matread("/Users/scott/Desktop/figures/hunjoo/PNAS_Geomechanics7.mat")
     # dict_to_vars(variables)  # Fails cuz of some namespace thing
-    for key in keys(variables)
-        @eval $(Symbol(key)) = variables[$(QuoteNode(key))]
-    end
+    # for key in keys(variables)
+    #     @eval $(Symbol(key)) = variables[$(QuoteNode(key))]
+    # end
     #  Area of Interest
     R_earth = 3959*5280; # (miles to feet) Earth Radius
 
@@ -442,9 +446,9 @@ function hunjoo_figures()
     YD_max = 31.47;
 
     # Reservoir properties
-    RD = Reservoir[:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
-    RR_R_D1 = (Reservoir[:,3]/(5*3280.84)*55).^2;      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
-    RR_R_D2 = (Reservoir[:,3]/(1*3280.84)*35).^2;      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
+    RD = variables["Reservoir"][:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
+    RR_R_D1 = (variables[ "Reservoir" ][:,3]/(5*3280.84)*55).^2;      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
+    RR_R_D2 = (variables[ "Reservoir" ][:,3]/(1*3280.84)*35).^2;      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
 
     # Cities
     Pecos = [-103.4932, 31.4229];             # (degrees)
@@ -458,39 +462,44 @@ function hunjoo_figures()
 
     # Fig 1 Figures
     # Pecos Area (InSAR + Producing Wells)
-    fig, ax = plt.subplots()
-    ax.imshow(Z_Disp_I18, cmap="seismic_wide_y", vmax=7, vmin=-7)  #,"EdgeColor","none")   # InSAR data
-    _remove_ticks(ax)
-    _set_figsize(fig)
-    fig.savefig("hunjoo1.pdf", bbox_inches="tight", transparent=true, dpi=100)
+    # fig, ax = plt.subplots()
+    # ax.imshow(Z_Disp_I18, cmap="seismic_wide_y", vmax=7, vmin=-7)  #,"EdgeColor","none")   # InSAR data
+    # _remove_ticks(ax)
+    # _set_figsize(fig)
+    # fig.savefig("hunjoo1.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
   
-    # Vertical Deformation in Area of Interest
-    fig, ax = plt.subplots()
-    # hold on
-    # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
+    cmap = "seismic_narrow_y"
     vm = 10
-    axim = ax.imshow(Z_Disp_VV18, cmap="seismic_wide_y", vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    # Vertical Deformation in Area of Interest
+    # fig, ax = plt.subplots()
+    # # hold on
+    # # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
+    # axim = ax.imshow(variables[ "Z_Disp_VV18" ], cmap=cmap, vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
     # fig.colorbar(axim)
-    ax.plot(BB_XD[[1, end]], BB_YD[[1, end]], lw=1.5)
-    ax.plot(Pecos[1],Pecos[2], "ko");
+    # ax.plot(variables[ "BB_XD" ][[1, end]], variables[ "BB_YD" ][[1, end]], lw=1.5)
+    # ax.plot(Pecos[1],Pecos[2], "ko");
 
-    _remove_ticks(ax)
-    _set_figsize(fig)
-    fig.savefig("hunjoo2.pdf", bbox_inches="tight", transparent=true, dpi=100)
+    # # _remove_ticks(ax)
+    # # _set_figsize(fig)
+    # fig.savefig("hunjoo2.pdf", bbox_inches="tight", transparent=true, dpi=100)
+    demrsc = MapImages.from_grid(variables[ "XD_VV18" ], variables[ "YD_VV18" ]);
+    # save_img_geotiff("hunjoo2.tif", MapImage(Z_Disp_VV18, demrsc), cmap=cmap, vm=vm)
 
 
     # Reservoir + Fault Model
     fig, ax = plt.subplots()
     # surf(XD,YD,Z_Disp_T(:,:,3),"EdgeColor","none")
-    axim = ax.imshow(Z_Disp_T[:, :, 3], cmap="seismic_wide_y", vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    im_mod = variables[ "Z_Disp_T" ][:, :, 3]
+    axim = ax.imshow(im_mod, cmap=cmap, vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
     # fig.colorbar(axim)
-    ax.plot(BB_XD[[1, end]], BB_YD[[1, end]], lw=1.5)
+    ax.plot(variables[ "BB_XD" ][[1, end]], variables[ "BB_YD" ][[1, end]], lw=1.5)
     ax.plot(Pecos[1],Pecos[2], "ko");
 
     _remove_ticks(ax)
     _set_figsize(fig)
     fig.savefig("hunjoo3.pdf", bbox_inches="tight", transparent=true, dpi=100)
+    save_img_geotiff("hunjoo3.tif", MapImage(im_mod, demrsc), cmap=cmap, vm=vm)
 
     # B-B' cross-section
     fig, ax1 = plt.subplots()
