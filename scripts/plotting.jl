@@ -119,8 +119,11 @@ end
 
 function plot_img_diff(f1, f2, d1="velos/1", d2="velos/1"; 
                        title1="$f1: $d1", title2="$f2: $d2",
+                       looks1 = (1, 1), looks2 = (1, 1),
                        vm1=nothing, vmd=4, kwargs...)
     m1, m2 =  MapImage(f1, d1), MapImage(f2, d2)
+    m1 = Sario.take_looks(m1, looks1...)
+    m2 = Sario.take_looks(m2, looks2...)
     return plot_img_diff(m1, m2; title1=title1, title2=title2, vm1=vm1, vmd=vmd, kwargs...), m1, m2
 end
 function plot_img_diff(a1::AbstractArray, a2::AbstractArray;
@@ -592,4 +595,48 @@ end
 
 
 _get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
+
+# function h5_to_mat(filename, outname=replace(filename ".h5"  => ".mat"))
+import MAT
+function h5_to_mat()
+    p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked_18/"
+    p85 = "/data4/scott/path85/stitched/igrams_looked_18/"
+    outname = "cumulative_maps.mat"   
+
+    varnames, values = [], []
+    for (pp, path) in zip(["asc", "desc"], [p78, p85])
+        for year in 2016:2018
+            fname = path*"velocities_$(year)_current.h5"
+            geolist = Sario.load_geolist_from_h5(fname, "velos/1")
+            num_days = (geolist[end] - geolist[1]).value
+            # c1 = num_days .* permutedims(h5read(fname, "velos/1")) ./ 3650
+            defo = num_days .* permutedims(h5read(fname, "velos_shifted/1")) ./ 3650
+            varname = "$(pp)_$(year)_deformation"
+            push!(varnames, varname)
+            push!(values, defo)
+
+            g_varname = "$(pp)_$(year)_geolist"
+            push!(varnames, g_varname)
+            push!(values, string.(geolist)  )
+        end
+
+    end
+    demrsc1 = Sario.load_dem_from_h5(p78 * "velocities_2018_current.h5")
+    gx1, gy1 = MapImages.grid(demrsc1)
+    demrsc2 = Sario.load_dem_from_h5(p85 * "velocities_2018_current.h5")
+    gx2, gy2 = MapImages.grid(demrsc2)
+    dd = Dict{String, Any}(
+        "asc_lats"=> collect(gy1), "asc_lons" => collect(gx1),
+        "asc_demrsc" => string(demrsc1),
+        "desc_lats"=> collect(gy2), "desc_lons" => collect(gx2),
+        "desc_demrsc" => string(demrsc2),
+    )
+
+
+    for (kk, vv) in zip(varnames, values)
+        dd[kk] = vv
+    end
+    MAT.matwrite(outname, dd)
+end
+
 

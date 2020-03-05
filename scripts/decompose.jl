@@ -126,17 +126,45 @@ function save_east_up_decomp(fname, shifta, shiftd; vm=12, show=true, dset="velo
     days = (g[end] - g[1]).value
     @show days
 
-    eastcut = east[latrange, lonrange] .* (days  / 3650)
-    upcut = up[latrange, lonrange] .* (days  / 3650)
+    if isnothing(latrange) || isnothing(lonrange)
+        eastcut = east .* (days  / 3650)
+        upcut = up .* (days  / 3650)
+    else
+        eastcut = east[latrange, lonrange] .* (days  / 3650)
+        upcut = up[latrange, lonrange] .* (days  / 3650)
+    end
     gx, gy = MapImages.grid(eastcut.demrsc)
 
     println("Lat range: $(extrema(gy))")
     println("Lon range: $(extrema(gx))")
     println("Saving lats, lons, ups, easts to $outname")
-    matwrite(outname, Dict("lats"=> gy, "lons" => gx, 
+
+    dd = Dict("lats"=> gy, "lons" => gx, 
                            "up" => upcut.image, 
-                           "east" => eastcut.image));
-    return eastcut, upcut, gx, gy
+                           "east" => eastcut.image)
+    isnothing(outname) && return dd
+    matwrite(outname, dd);
+    return dd
+end
+
+function save_all_east_up(outname=outname)
+    dd_all = Dict{String, Any}()
+
+    # p78 = "/data1/scott/pecos/path78-bbox2/igrams_looked/"
+    # p85 = "/data4/scott/path85/stitched/igrams_looked/"
+
+    varnames, values = [], []
+    for year in 2016:2018
+        fname = "velocities_$(year)_current.h5"
+        dd = save_east_up_decomp(fname, 0, 0, dset="velos_shifted/1", show=false, outname=nothing, latrange=nothing)
+        dd_all["lats"] = dd["lats"]
+        dd_all["lons"] = dd["lons"]
+        dd_all["east_$year"] = dd["east"]
+        dd_all["up_$year"] = dd["up"]
+        dd_all["east_$year"] = dd["east"]
+    end
+    matwrite(outname , dd_all);
+    return dd_all
 end
 
 station_overlap = ["TXMH", "TXFS", "TXAD", "TXS3", "NMHB", "TXKM"]
