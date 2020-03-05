@@ -8,7 +8,10 @@ function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table s begin
-        "--looks"
+        "--xlooks"
+            default = 1
+            arg_type = Int
+        "--ylooks"
             default = 1
             arg_type = Int
     end
@@ -18,9 +21,10 @@ end
 
 function main()
     parsed_args = parse_commandline()
-    looks = parsed_args["looks"]
-    @show looks
-    @time create_igrams(looks, looks)
+    collooks = parsed_args["xlooks"]
+    rowlooks = parsed_args["ylooks"]
+    @show rowlooks, collooks
+    @time create_igrams(rowlooks, collooks)
 end
 
 main()
