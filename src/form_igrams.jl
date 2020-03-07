@@ -63,6 +63,8 @@ function create_igrams(rowlooks=1, collooks=1)
 
     println("Preallocating arrays")
     # Pre-allocate arrays for speed
+    # Note transpose of cols/rows, since we'll read in
+    # without transposing the data
     fullrows, fullcols = size(fulldemrsc)
     early = zeros(ComplexF32, fullcols, fullrows)
     late = zeros(ComplexF32, fullcols, fullrows)
@@ -99,13 +101,15 @@ function create_igrams(rowlooks=1, collooks=1)
         # println("Forming int, cor")
         # @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
 
-        # TODO: see if this takes care of all pre-allocating arrays
+        # TODO: see about ArchGdal operating on blocks for low memory footprint
+      
+        # Note again: flipped collooks/rowlooks since we read in as transposed
         println("Forming igram")
-        @time igram .= make_igam!(igram, early, late, rowlooks, collooks)
+        @time igram .= make_igam!(igram, early, late, collooks, rowlooks)
         println("Forming cor")
-        powlooks!(ampslc1, early, rowlooks, collooks)
+        powlooks!(ampslc1, early, collooks, rowlooks)
         ampslc1 .= sqrt.(ampslc1)
-        powlooks!(ampslc2, early, rowlooks, collooks)
+        powlooks!(ampslc2, early, collooks, rowlooks)
         ampslc2 .= sqrt.(ampslc2)
 
         amp .= real.(abs.(igram))
