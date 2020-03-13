@@ -31,6 +31,7 @@ function _make_cor(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArra
     ampslc1 = sqrt.(powlooks(slc1, rowlooks, collooks))
     ampslc2 = sqrt.(powlooks(slc2, rowlooks, collooks))
     amp = @. real(abs(igram))
+    @show extrema(ampslc1), extrema(ampslc2), extrema(amp)
     cor = real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
     return cor, amp, igram
 end
@@ -109,7 +110,7 @@ function create_igrams(rowlooks=1, collooks=1)
         println("Forming cor")
         powlooks!(ampslc1, early, collooks, rowlooks)
         ampslc1 .= sqrt.(ampslc1)
-        powlooks!(ampslc2, early, collooks, rowlooks)
+        powlooks!(ampslc2, late, collooks, rowlooks)
         ampslc2 .= sqrt.(ampslc2)
 
         amp .= real.(abs.(igram))
