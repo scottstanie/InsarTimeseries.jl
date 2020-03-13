@@ -31,7 +31,7 @@ function _make_cor(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArra
     ampslc1 = sqrt.(powlooks(slc1, rowlooks, collooks))
     ampslc2 = sqrt.(powlooks(slc2, rowlooks, collooks))
     amp = @. real(abs(igram))
-    @show extrema(ampslc1), extrema(ampslc2), extrema(amp)
+    # @show extrema(ampslc1), extrema(ampslc2), extrema(amp)
     cor = real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
     return cor, amp, igram
 end
@@ -73,7 +73,8 @@ function create_igrams(rowlooks=1, collooks=1)
     igram = zeros(ComplexF32, cols, rows)
 
     ampslc1 = zeros(Float32, cols, rows)
-    ampslc2 = similar(ampslc1)
+    # ampslc2 = similar(ampslc1)
+    ampslc2 = zeros(Float32, cols, rows)
     amp = similar(ampslc1)
     cor = similar(ampslc1)
     outcor = zeros(Float32, (cols, rows, 2))
@@ -98,6 +99,7 @@ function create_igrams(rowlooks=1, collooks=1)
         println("Loading $late_file")
         @time read!(late_file, late)
 
+        # @show extrema(abs.(late)), extrema(abs.(early))
         # transposed, so flip row/col
         # println("Forming int, cor")
         # @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
@@ -105,15 +107,18 @@ function create_igrams(rowlooks=1, collooks=1)
         # TODO: see about ArchGdal operating on blocks for low memory footprint
       
         # Note again: flipped collooks/rowlooks since we read in as transposed
-        println("Forming igram")
-        @time igram .= make_igam!(igram, early, late, collooks, rowlooks)
-        println("Forming cor")
+        println("Forming amps")
         powlooks!(ampslc1, early, collooks, rowlooks)
         ampslc1 .= sqrt.(ampslc1)
+
         powlooks!(ampslc2, late, collooks, rowlooks)
         ampslc2 .= sqrt.(ampslc2)
+        println("Forming igram")
+        @time igram .= make_igam!(igram, early, late, collooks, rowlooks)
 
+        println("Forming cor")
         amp .= real.(abs.(igram))
+        # @show extrema(ampslc1), extrema(ampslc2), extrema(amp)
         cor .= real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
 
         println("Saving $cor_name, $igram_name")
