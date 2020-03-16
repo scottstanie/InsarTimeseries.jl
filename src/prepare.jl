@@ -213,16 +213,20 @@ end
 
 sliceview(stack) = [view(stack, :, :, i) for i in 1:size(stack, 3)]
 
-function remove_ramp(z, mask::AbstractArray{<:Number})
+function remove_ramp(z, mask::AbstractArray{<:Number}; use_quadratic=false)
     # z_masked = copy(z)  # Do I really want a copy??
     z[mask] .= NaN
-    # return z - estimate_ramp(z)
-    return z - quadratic_ramp(z)
+
+    if use_quadratic
+        return z - quadratic_ramp(z)
+    else
+        return z - estimate_ramp(z)
+    end
 end
 
-function remove_ramp(z, mask_idx::Int; do_permute=false)
+function remove_ramp(z, mask_idx::Int; do_permute=false, use_quadratic=false)
     mask = _read_mask(mask_idx, do_permute)
-    return remove_ramp(z, mask)
+    return remove_ramp(z, mask, use_quadratic=use_quadratic)
 end
 
 function remove_lowpass(z, mask::AbstractArray{<:Number})
