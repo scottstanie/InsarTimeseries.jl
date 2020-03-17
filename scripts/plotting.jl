@@ -502,7 +502,9 @@ function plot_los_maps(los_map_file="los_map.h5"; cmap="jet")
     titles=["east", "north", "up"]
     for i = 1:3
         s = stack[:,:,i]
-        axim = axes[i].imshow(abs.(s), cmap=cmap, vmin=0, vmax=1)
+        # If the LOS vector is negative, shift the range to -1 -> 0
+        vmin, vmax = (s[1] < 0) ? (-1, 0) : (0, 1)
+        axim = axes[i].imshow(s, cmap=cmap, vmin=vmin, vmax=vmax)
         fig.colorbar(axim, ax=axes[i])
         t = titles[i]
         axes[i].set_title("$t: extrema: $(round.(extrema(s), digits=2))")
