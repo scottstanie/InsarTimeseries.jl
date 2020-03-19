@@ -355,7 +355,8 @@ function create_hdf5_stack(filename::String,
     h5write(filename, STACK_MEAN_DSET, mean_buf)
 
     # Now save dem rsc as well
-    dem_rsc = load(Sario.find_rsc_file(directory=directory))
+    # dem_rsc = load(Sario.find_rsc_file(directory=directory))
+    dem_rsc = load(joinpath(directory, "dem.rsc"))
     Sario.save_dem_to_h5(filename, dem_rsc; overwrite=overwrite)
     if isnothing(geo_path)
         geo_path = dirname(dirname(abspath(directory)))
@@ -422,7 +423,7 @@ function shift_unw_file(unw_stack_file::String; stack_flat_dset=nothing,
             throw("Need $stack_flat_dset to be created in $unw_stack_file before shift stack can be run")
         end
 
-        stack_in = f[stack_flat_dset]
+        # stack_in = f[stack_flat_dset]
         d_create(f,
             stack_flat_shifted_dset,
             datatype(Float32),
