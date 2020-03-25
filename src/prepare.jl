@@ -347,7 +347,7 @@ function create_hdf5_stack(filename::String,
             mean_buf += arr_buf
         end
     end
-    h5writeattr(filename, dset_name, Dict("filenames" => file_list))
+    h5write(filename, dset_name*"_filenames", file_list)
 
 
     !Sario.check_dset(filename, STACK_MEAN_DSET, overwrite) && return
