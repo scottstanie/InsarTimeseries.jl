@@ -1,11 +1,12 @@
 import ArchGDAL 
 function geolocate(slc::AbstractArray, lons::AbstractArray, lats::AbstractArray,
-                  step_deg)
+                  step_deg=0.1)
     geolons, geolats = coarse_grid_deg(lons, lats, step_deg)
     geoslc = zeros(eltype(slc), size(geolats, 1), size(geolons, 1))
     # Add counts to take avg when multiple pixels fall in same output bucket
     counts = zeros(size(geoslc));
 
+    println("Using step size $step_deg")
     println("Input/output sizes:")
     @show size(lons), size(lats), size(slc)
     @show size(geolons), size(geolats), size(geoslc)
@@ -52,10 +53,7 @@ function loadfiles()
     return (slc, lats, lons)
 end
 
-function testgeocode(step_deg=0.0002)
-    # step_deg = 0.001  # Leads to 935x892
-    slc, lats, lons = loadfiles()
-    geoslc, geolons, geolats = geolocate(slc, lons, lats, step_deg)
+function write_geotiff(geoslc, geolons, geolats, outname="geoslc.tif")
     height, width = size(geoslc)
 
     ArchGDAL.create("geoslc.tif", driver=ArchGDAL.getdriver("GTiff"), width=width, height=height, nbands=1, dtype=Float32) do dataset
@@ -68,5 +66,12 @@ function testgeocode(step_deg=0.0002)
     run(`gdal_edit.py geoslc.tif -a_srs EPSG:4326 -a_ullr $ulx $uly $lrx $lry`)
     # xres = geolons[2] - geolons[1]
     # yres = geolats[2] - geolats[1]
-    # run(`gdal_edit.py geoslc.tif -a_srs EPSG:4236 -tr $xres $yres -a_ullr $ulx $uly $lrx $lry`)
+    # run(`gdal_edit.py geoslc.tif -a_srs EPSG:4236 -tr $xres $yres -a_ullr $ulx $uly $lrx $lry
+end
+
+function testgeocode(step_deg=0.0002)
+    # step_deg = 0.001  # Leads to 935x892
+    slc, lats, lons = loadfiles()
+    geoslc, geolons, geolats = geolocate(slc, lons, lats, step_deg)
+    write_geotiff(geoslc, geolons, geolats, outname="geoslc.tif")
 end
