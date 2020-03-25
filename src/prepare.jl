@@ -2,7 +2,7 @@ using Distributed: pmap, workers, WorkerPool
 
 function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
                         ref_col=nothing, ref_station=nothing, 
-                        geo_path=nothing, window=5, zero_masked=true)
+                        geo_path=nothing, window=5, zero_masked=false)
     igram_path = abspath(igram_path)
 
     unw_stack_file = abspath(joinpath(igram_path, UNW_FILENAME))
@@ -13,14 +13,14 @@ function prepare_stacks(igram_path; overwrite=false, ref_row=nothing,
     create_mask_stacks(igram_path, mask_filename=mask_stack_file,
                        overwrite=overwrite, geo_path=geo_path) 
 
-
     # Step 2: use these masks to zero bad ares to zero in .int and .cc files
     # Note: this may have been run already after making .int files, before unwrapping
     if zero_masked
         zero_masked_areas(igram_path, input_exts=[".int", ".cc", ".unw"])
     end
 
-    create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite, do_repack=true)
+    # TODO: Leave out cc stack for now
+    # create_hdf5_stack(cc_stack_file, ".cc", overwrite=overwrite, do_repack=true)
 
     deramp_unws(igram_path, input_ext=".unw", output_ext=".unwflat", overwrite=overwrite)
 
@@ -58,7 +58,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     end
 
     row_looks, col_looks = find_looks_taken(igram_path, geo_path=geo_path)
-    dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
+    dem_rsc = Sario.load(Sario.find_rsc_file(directory=igram_path))
 
     loop_over_files(_get_geo_mask, geo_path, ".geo", ".geo.mask",
                     looks=(row_looks, col_looks), out_dir=igram_path,
@@ -69,7 +69,7 @@ function create_mask_stacks(igram_path; mask_filename=nothing, geo_path=nothing,
     save_masks(igram_path, geo_path, overwrite=overwrite)
 
     # Finall, add the aux. information
-    dem_rsc = load(Sario.find_rsc_file(directory=igram_path))
+    dem_rsc = Sario.load(Sario.find_rsc_file(directory=igram_path))
     Sario.save_dem_to_h5(mask_filename, dem_rsc, DEM_RSC_DSET, overwrite=overwrite)
 
     geo_date_list = Sario.find_geos(directory=geo_path, parse=true)
@@ -113,7 +113,7 @@ function save_masks(igram_path, geo_path; overwrite=false,
 
         new_mask = early_mask .| late_mask
         int_mask_stack[:, :, idx] .= new_mask
-        # save(out_filename, new_mask)
+        # save(out_filename, new_mask)  # If we want to save the igram mask itself
     end
     save_hdf5_stack(mask_filename, igram_dset_name, convert(Array{Bool}, int_mask_stack), overwrite=false)
     save_hdf5_stack(mask_filename, geo_dset_name, convert(Array{Bool}, geo_mask_stack), overwrite=false)
@@ -121,7 +121,7 @@ function save_masks(igram_path, geo_path; overwrite=false,
     # Also create one image of the total masks
     # TODO: any way to have sum reduce the dims?
     h5write(mask_filename, GEO_MASK_SUM_DSET, 
-            permutedims(sum(geo_mask_stack, dims=3)[:, :, 1]))
+            permutedims(dropdims(sum(geo_mask_stack, dims=3), dims=3)))
 end
 
 function _remaining_files(in_files::Array{String, 1}, out_files::Array{String, 1}, overwrite::Bool)
@@ -331,7 +331,7 @@ function create_hdf5_stack(filename::String,
 
     file_list = find_files(file_ext, directory)
 
-    testf = load(file_list[1])
+    testf = Sario.load(file_list[1])
     rows, cols = size(testf)
     # Note: since we're just loading/saving, don't permute on way in or way out
     shape = (cols, rows, length(file_list))
@@ -342,7 +342,7 @@ function create_hdf5_stack(filename::String,
     h5open(filename, "r+") do hf
         dset = hf[dset_name]
         for (idx, f) in enumerate(file_list)
-            arr_buf .= load(f, do_permute=false)
+            arr_buf .= Sario.load(f, do_permute=false)
             dset[:, :, idx] = arr_buf
             mean_buf += arr_buf
         end
@@ -355,8 +355,8 @@ function create_hdf5_stack(filename::String,
     h5write(filename, STACK_MEAN_DSET, mean_buf)
 
     # Now save dem rsc as well
-    # dem_rsc = load(Sario.find_rsc_file(directory=directory))
-    dem_rsc = load(joinpath(directory, "dem.rsc"))
+    # dem_rsc = Sario.load(Sario.find_rsc_file(directory=directory))
+    dem_rsc = Sario.load(joinpath(directory, "dem.rsc"))
     Sario.save_dem_to_h5(filename, dem_rsc; overwrite=overwrite)
     if isnothing(geo_path)
         geo_path = dirname(dirname(abspath(directory)))
@@ -574,7 +574,7 @@ end
 
 function _load_and_run(f, name_in, name_out, args...; looks=(1, 1), kwargs...)
     println("Input: $name_in, out: $name_out")
-    input_arr = load(name_in; looks=looks, kwargs...)
+    input_arr = Sario.load(name_in; looks=looks, kwargs...)
     out_arr = f(input_arr, args...)
     save(name_out, out_arr; kwargs...)
 end
@@ -597,8 +597,8 @@ function find_looks_taken(igram_path;
         geo_path = dirname(dirname(abspath(igram_path)))
     end
 
-    geo_dem_rsc = load(joinpath(geo_path, geo_dem_file))
-    igram_dem_rsc = load(joinpath(igram_path, igram_dem_file))
+    geo_dem_rsc = Sario.load(joinpath(geo_path, geo_dem_file))
+    igram_dem_rsc = Sario.load(joinpath(igram_path, igram_dem_file))
 
     row_looks = div(geo_dem_rsc.rows, igram_dem_rsc.rows)
     col_looks = div(geo_dem_rsc.cols, igram_dem_rsc.cols)
