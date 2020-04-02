@@ -82,10 +82,12 @@ function demo_point(rowcol; sigma=3, max_temp=800, show=true, refpoint=nothing, 
 
      # Plot unregularized
      plt.figure()
-     plt.plot(geolist, p2c .* InsarTimeseries.integrate_velocities(B \ unw_vals, InsarTimeseries.day_diffs(geolist)), label="unreg", "bo-")
+     unreg = p2c .* InsarTimeseries.integrate_velocities(B \ unw_vals, InsarTimeseries.day_diffs(geolist))
+     plt.plot(geolist, unreg, label="unreg", "bo-")
      plt.title("Unregularized solution")
      plt.ylabel("CM")
 
      plot_grouped_by_day(geolist, intlist, unw_vals, sigma)
      plot_big_days(geolist, intlist, unw_vals, nsigma=sigma)
+     return unreg
 end
