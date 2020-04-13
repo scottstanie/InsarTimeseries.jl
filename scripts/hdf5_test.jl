@@ -6,12 +6,13 @@ try
     rm("test2.h5")
 catch
 end
-function write_in_layers_repack(filename="test1.h5", dset_name="test")
+function write_in_layers_repack(filename = "test1.h5", dset_name = "test")
     file_list = Glob.glob("*.unw")
     stack_size = (720, 720, length(file_list))
 
     h5open(filename, "cw") do f
-        d_create(f,
+        d_create(
+            f,
             dset_name,
             datatype(Float32),
             dataspace(stack_size),
@@ -25,7 +26,7 @@ function write_in_layers_repack(filename="test1.h5", dset_name="test")
     h5open(filename, "cw") do hf
         dset = hf[dset_name]
         for (idx, f) in enumerate(file_list)
-            arr_buf .= Sario.load(f, do_permute=true)
+            arr_buf .= Sario.load(f, do_permute = true)
             dset[:, :, idx] = arr_buf
         end
     end
@@ -34,21 +35,23 @@ function write_in_layers_repack(filename="test1.h5", dset_name="test")
     return
 end
 
-function write_in_pixel_chunks(filename="test2.h5", dset_name="test")
+function write_in_pixel_chunks(filename = "test2.h5", dset_name = "test")
     file_list = Glob.glob("*.unw")
     stack_size = (720, 720, length(file_list))
-    m = Array{Float32, 3}(undef, stack_size);
+    m = Array{Float32,3}(undef, stack_size)
     println("Reading all layers into memory")
     for (idx, f) in enumerate(file_list)
         m[:, :, idx] .= Sario.load(f)
     end
 
     h5open(filename, "cw") do f
-        d_create(f,
+        d_create(
+            f,
             dset_name,
             datatype(Float32),
             dataspace(stack_size),
-            "chunk", (1, 1, size(m, 3)),  # Seems better to repack?
+            "chunk",
+            (1, 1, size(m, 3)),  # Seems better to repack?
         )
     end
 

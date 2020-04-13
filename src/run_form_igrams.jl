@@ -9,11 +9,11 @@ function parse_commandline()
 
     @add_arg_table s begin
         "--xlooks"
-            default = 1
-            arg_type = Int
+        default = 1
+        arg_type = Int
         "--ylooks"
-            default = 1
-            arg_type = Int
+        default = 1
+        arg_type = Int
     end
 
     return parse_args(s)

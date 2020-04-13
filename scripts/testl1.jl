@@ -1,6 +1,12 @@
-push!(LOAD_PATH,joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
-# import InsarTimeseries
-using InsarTimeseries: PHASE_TO_CM, STACK_FLAT_SHIFTED_DSET, STACK_FLAT_DSET, STACK_DSET, CC_FILENAME, UNW_FILENAME
+push!(LOAD_PATH, joinpath(expanduser("~/repos/InsarTimeseries.jl/src/")))
+import InsarTimeseries
+using InsarTimeseries:
+    PHASE_TO_CM,
+    STACK_FLAT_SHIFTED_DSET,
+    STACK_FLAT_DSET,
+    STACK_DSET,
+    CC_FILENAME,
+    UNW_FILENAME
 using Dates
 using HDF5
 using LinearAlgebra
@@ -19,7 +25,7 @@ nm = NaNMath
 # import ECOS
 # import SCS
 
-p2c = InsarTimeseries.PHASE_TO_CM 
+p2c = InsarTimeseries.PHASE_TO_CM
 p2mm = InsarTimeseries.PHASE_TO_CM * 365 * 10
 
 # TODO: find the shift to match insar to gps best
@@ -29,8 +35,22 @@ p2mm = InsarTimeseries.PHASE_TO_CM * 365 * 10
 YLIMS = (-12, 12)
 # TODO: maybe get these names automatically?
 # PATH 78 
-station_name_list = ["NMHB", "TXAD", "TXBG", "TXBL", "TXCE", "TXFS", "TXKM", 
-                     "TXL2", "TXMC", "TXMH", "TXOE", "TXOZ", "TXS3", "TXSO"]
+station_name_list = [
+    "NMHB",
+    "TXAD",
+    "TXBG",
+    "TXBL",
+    "TXCE",
+    "TXFS",
+    "TXKM",
+    "TXL2",
+    "TXMC",
+    "TXMH",
+    "TXOE",
+    "TXOZ",
+    "TXS3",
+    "TXSO",
+]
 #
 # PATH 85
 # station_name_list = ["TXKM", "TXMH", "TXFS", "TXAL"]
@@ -54,7 +74,8 @@ max_temporal_baseline = 500
 # max_temporal_baseline = 1200
 
 # NOTE: not using the ignore file for now- using all .geos
-GEOLIST, INTLIST, VALID_IGRAM_INDICES = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, "", max_temporal_baseline);
+GEOLIST, INTLIST, VALID_IGRAM_INDICES =
+    InsarTimeseries.load_geolist_intlist(UNW_FILENAME, "", max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 
@@ -68,58 +89,127 @@ row, col = 1223, 943
 # Pecos subs.
 # row, col = [368, 131]
 
-function get_stack_vals(unw_stack_file::String, station_name::String, window=5,
-                        dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
-                        reference_station=nothing)
+function get_stack_vals(
+    unw_stack_file::String,
+    station_name::String,
+    window = 5,
+    dset = STACK_FLAT_DSET,
+    valid_indices = VALID_IGRAM_INDICES;
+    reference_station = nothing,
+)
     dem_rsc = sario.load("dem.rsc")
     lon, lat = gps.station_lonlat(station_name)
-    row, col = map(x-> convert(Int, x), 
-                   latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat))
+    row, col =
+        map(x -> convert(Int, x), latlon.nearest_pixel(dem_rsc, lon = lon, lat = lat))
 
     # println("Getting data at $station_name: row $row, col $col, lon $lon, lat $lat")
     unw_vals = _read_vals(unw_stack_file, row, col, window, dset, valid_indices)
-    return _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
+    return _subtract_reference(
+        unw_vals,
+        reference_station,
+        unw_stack_file,
+        window,
+        dset,
+        valid_indices,
+    )
 end
 
-function get_stack_vals(unw_stack_file::String, row::Int, col::Int, window=5,
-                        dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES;
-                        reference_station=nothing)
+function get_stack_vals(
+    unw_stack_file::String,
+    row::Int,
+    col::Int,
+    window = 5,
+    dset = STACK_FLAT_DSET,
+    valid_indices = VALID_IGRAM_INDICES;
+    reference_station = nothing,
+)
     unw_vals = _read_vals(unw_stack_file, row, col, window, dset, valid_indices)
-    return _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
+    return _subtract_reference(
+        unw_vals,
+        reference_station,
+        unw_stack_file,
+        window,
+        dset,
+        valid_indices,
+    )
 end
 
-function _read_vals(unw_stack_file, row, col, window=5, dset=STACK_FLAT_DSET, valid_indices=VALID_IGRAM_INDICES)
+function _read_vals(
+    unw_stack_file,
+    row,
+    col,
+    window = 5,
+    dset = STACK_FLAT_DSET,
+    valid_indices = VALID_IGRAM_INDICES,
+)
     # println("Loading $row, $col from $dset, avging window $window")
     halfwin = div(window, 2)
     # Note: swapping the col and row in h5read since julia is col-major
-    unw_depth = h5read(unw_stack_file, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin, :))
-    unw_vals_all = vec(mean(unw_depth, dims=(1,2)))
+    unw_depth =
+        h5read(unw_stack_file, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin, :))
+    unw_vals_all = vec(mean(unw_depth, dims = (1, 2)))
     unw_vals = unw_vals_all[valid_indices]
 end
 
-function _subtract_reference(unw_vals, reference_station, unw_stack_file, window, dset, valid_indices)
+function _subtract_reference(
+    unw_vals,
+    reference_station,
+    unw_stack_file,
+    window,
+    dset,
+    valid_indices,
+)
     isnothing(reference_station) && return unw_vals
-    return unw_vals - get_stack_vals(unw_stack_file, reference_station, window, dset, valid_indices)
+    return unw_vals -
+           get_stack_vals(unw_stack_file, reference_station, window, dset, valid_indices)
 end
 
 
-function solve_insar_ts(station_name::String, window::Int=5, reference_station=nothing; cutoff=false)
-    unw_vals = get_stack_vals(UNW_FILENAME, station_name, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window, cutoff=cutoff)
+function solve_insar_ts(
+    station_name::String,
+    window::Int = 5,
+    reference_station = nothing;
+    cutoff = false,
+)
+    unw_vals = get_stack_vals(
+        UNW_FILENAME,
+        station_name,
+        window,
+        reference_station = reference_station,
+    )
+    return solve_insar_ts(unw_vals, window, cutoff = cutoff)
 end
 
-function solve_insar_ts(row::Int, col::Int, window::Int=5, reference_station=nothing; cutoff=false)
-    unw_vals = get_stack_vals(UNW_FILENAME, row, col, window, reference_station=reference_station)
-    return solve_insar_ts(unw_vals, window, cutoff=cutoff)
+function solve_insar_ts(
+    row::Int,
+    col::Int,
+    window::Int = 5,
+    reference_station = nothing;
+    cutoff = false,
+)
+    unw_vals = get_stack_vals(
+        UNW_FILENAME,
+        row,
+        col,
+        window,
+        reference_station = reference_station,
+    )
+    return solve_insar_ts(unw_vals, window, cutoff = cutoff)
 end
 
-function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cutoff=false)
+function solve_insar_ts(unw_vals::Array{<:AbstractFloat,1}, window::Int = 5; cutoff = false)
 
     B = InsarTimeseries.build_B_matrix(GEOLIST, INTLIST)
-    Blin = sum(B, dims=2)
+    Blin = sum(B, dims = 2)
 
     if cutoff
-         v_linear_l1, v_linear_lstsq = InsarTimeseries.solve_after_cutoff(GEOLIST, INTLIST, unw_vals, Blin, in_mm_yr=false)
+        v_linear_l1, v_linear_lstsq = InsarTimeseries.solve_after_cutoff(
+            GEOLIST,
+            INTLIST,
+            unw_vals,
+            Blin,
+            in_mm_yr = false,
+        )
         return v_linear_lstsq, 0, v_linear_l1, 0
     end
 
@@ -142,18 +232,25 @@ function solve_insar_ts(unw_vals::Array{<:AbstractFloat, 1}, window::Int=5; cuto
 end
 
 function integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
-    linear_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_lstsq, timediffs)
-    unreg_lstsq = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_lstsq, timediffs)
+    linear_lstsq =
+        PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_lstsq, timediffs)
+    unreg_lstsq =
+        PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_lstsq, timediffs)
     linear_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_linear_l1, timediffs)
     unreg_l1 = PHASE_TO_CM .* InsarTimeseries.integrate_velocities(v_unreg_l1, timediffs)
     return linear_lstsq, unreg_lstsq, linear_l1, unreg_l1
 end
 
-function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title="", ylims=YLIMS)
+function plot_insar(geolist, insar_linear_ts, insar_unreg_ts; title = "", ylims = YLIMS)
     # TODO: fix plotting to pyplot
     plt.figure()
-    p = plt.plot(geolist, insar_linear_ts, label="linear insar", 
-                 linewidth=3, ylims=ylims)
+    p = plt.plot(
+        geolist,
+        insar_linear_ts,
+        label = "linear insar",
+        linewidth = 3,
+        ylims = ylims,
+    )
     plt.ylabel("cm")
     # plt.plot(geolist, insar_unreg_ts, label="unreg insar", marker=:o, linealpha=0.0)
     return p
@@ -162,25 +259,32 @@ end
 function plot_gps(dts, gps_los_data, gps_poly)
     day_nums = _get_day_nums(dts)
     # TODO: fix plotting to pyplot
-    plt.plot(dts, gps_los_data, "gx", markersize=1, label="gps")
+    plt.plot(dts, gps_los_data, "gx", markersize = 1, label = "gps")
     # plt.plot(dts, gps_poly(day_nums),  color=:green, linewidth=3, label="gps line fit")
 end
 
-_get_day_nums(dts) = [( d - dts[1]).value for d in dts]
+_get_day_nums(dts) = [(d - dts[1]).value for d in dts]
 
-function process_pixel(; station_name=nothing, plotting=false, reference_station=REFERENCE_STATION,
-                       window=5, verbose=true, cutoff=false)
+function process_pixel(;
+    station_name = nothing,
+    plotting = false,
+    reference_station = REFERENCE_STATION,
+    window = 5,
+    verbose = true,
+    cutoff = false,
+)
     total_interval_days = (GEOLIST[end] - GEOLIST[1]).value
 
     # First solve for the velocities in L1 vs L2 to compare to GPS
     reference_station = "TXKM"
-    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 = solve_insar_ts(station_name, window, reference_station, cutoff=cutoff)
+    v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1 =
+        solve_insar_ts(station_name, window, reference_station, cutoff = cutoff)
 
     # NOTE: CURRENLT IGNORING THE REFERENCE STATION AND FORCING IT TO BE NOTHING
     slope_gps_mm_yr = InsarTimeseries.solve_gps_ts(station_name, nothing)
 
-    slope_insar_l2_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_lstsq)[1] # solution currently in phase
-    slope_insar_l1_mm_yr = (365 * 10 * PHASE_TO_CM * v_linear_l1)[1]
+    slope_insar_l2_mm_yr = (365*10*PHASE_TO_CM*v_linear_lstsq)[1] # solution currently in phase
+    slope_insar_l1_mm_yr = (365*10*PHASE_TO_CM*v_linear_l1)[1]
 
     l2_error = slope_gps_mm_yr - slope_insar_l2_mm_yr
     l1_error = slope_gps_mm_yr - slope_insar_l1_mm_yr
@@ -200,15 +304,13 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
 
     if plotting
         # Now get the full time series of insar by integrating
-        linear_lstsq, unreg_lstsq, linear_l1, unreg_l1 = integrate_velos(v_linear_lstsq,
-                                                                         v_unreg_lstsq,
-                                                                         v_linear_l1,
-                                                                         v_unreg_l1)
+        linear_lstsq, unreg_lstsq, linear_l1, unreg_l1 =
+            integrate_velos(v_linear_lstsq, v_unreg_lstsq, v_linear_l1, v_unreg_l1)
         # Plot the solutions vs gps
-        plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title="L2 least squares solution")
+        plot_insar(GEOLIST, linear_lstsq, unreg_lstsq, title = "L2 least squares solution")
         plot_gps(dts, gps_los_data, gps_poly)
 
-        plot_insar(GEOLIST, linear_l1, unreg_l1, title="L1 norm minimization")
+        plot_insar(GEOLIST, linear_l1, unreg_l1, title = "L1 norm minimization")
         plot_gps(dts, gps_los_data, gps_poly)
 
         plot(p1, p2)
@@ -218,7 +320,7 @@ function process_pixel(; station_name=nothing, plotting=false, reference_station
     return l1_error, l2_error
 end
 
-function calc_error_matrix(station_name_list, plotting=false)
+function calc_error_matrix(station_name_list, plotting = false)
     println("Calculating errors at all station/reference combos")
     l1_error_matrix = zeros(length(station_name_list), length(station_name_list))
     l2_error_matrix = zeros(length(station_name_list), length(station_name_list))
@@ -227,8 +329,12 @@ function calc_error_matrix(station_name_list, plotting=false)
         println("Calculating errors for $ref_name")
         for (j, station_name) in enumerate(station_name_list)
             # println("Processing $station_name")
-            l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, 
-                                               reference_station=ref_name, verbose=false)
+            l1_error, l2_error = process_pixel(
+                station_name = station_name,
+                plotting = plotting,
+                reference_station = ref_name,
+                verbose = false,
+            )
             l1_error_matrix[i, j] = l1_error
             l2_error_matrix[i, j] = l2_error
         end
@@ -242,19 +348,20 @@ function print_matrix_stats(l1_error_matrix, l2_error_matrix, station_name_list)
     for (mat, lname) in zip((l2_error_matrix, l1_error_matrix), ("L2", "L1"))
         println("$lname RESULTS:")
         println("Name | RMS error | Total abs | Max abs")
-        for i in 1:length(station_name_list)
+        for i = 1:length(station_name_list)
             row = mat[i, :]
-            a, b, c, d = station_name_list[i], rms(row), total_abs_error(row), maximum(abs.(row))
+            a, b, c, d =
+                station_name_list[i], rms(row), total_abs_error(row), maximum(abs.(row))
             @printf("%s :    %.2f     |   %.2f   |    %.2f \n", a, b, c, d)
         end
     end
 end
 
 # Functions for error evaluation
-rms(arr::AbstractArray{Any, 1}) = sqrt(mean(arr.^2))
-rms(arr::AbstractArray{Any, 2}) = [rms(arr[i, :]) for i in 1:size(arr, 1)]
-total_abs_error(arr::AbstractArray{Any, 1}) = sum(abs.(arr))
-total_abs_error(arr::AbstractArray{Any, 2}) = sum(abs.(arr), dims=2)
+rms(arr::AbstractArray{Any,1}) = sqrt(mean(arr .^ 2))
+rms(arr::AbstractArray{Any,2}) = [rms(arr[i, :]) for i = 1:size(arr, 1)]
+total_abs_error(arr::AbstractArray{Any,1}) = sum(abs.(arr))
+total_abs_error(arr::AbstractArray{Any,2}) = sum(abs.(arr), dims = 2)
 
 
 
@@ -302,8 +409,13 @@ end
 # err_diffs = new_errs .- bases;
 
 function plot_errs(err_diffs, geolist)
-    scatter(geolist, err_diffs[1, :], label="RMS", title="difference in errors (negative=improvement)")
-    scatter!(geolist, err_diffs[2, :], label="maximum")
+    scatter(
+        geolist,
+        err_diffs[1, :],
+        label = "RMS",
+        title = "difference in errors (negative=improvement)",
+    )
+    scatter!(geolist, err_diffs[2, :], label = "maximum")
 end
 
 
@@ -325,7 +437,8 @@ l1_errors, l2_errors = [], []
 
 if false
     for station_name in station_name_list
-        l1_error, l2_error = process_pixel(station_name=station_name, plotting=plotting, cutoff=true)
+        l1_error, l2_error =
+            process_pixel(station_name = station_name, plotting = plotting, cutoff = true)
         append!(l2_errors, l2_error)
         append!(l1_errors, l1_error)
     end
@@ -358,23 +471,36 @@ end
 function plotunws(B1, B2, unw1, unw2)
     yh = maximum(vcat(unw1, unw2)) + 1
     yl = minimum(vcat(unw1, unw2)) - 1
-    p1 = plot(B1, unw1, line=:nothing, marker=:o, color=:blue, ylims=(yl, yh))
-    p2 = plot(B2, unw2, line=:nothing, marker=:o, color=:green, ylims=(yl, yh))
+    p1 = plot(B1, unw1, line = :nothing, marker = :o, color = :blue, ylims = (yl, yh))
+    p2 = plot(B2, unw2, line = :nothing, marker = :o, color = :green, ylims = (yl, yh))
     plot(p1, p2)
 end
 
-function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing, window=1)
+function load_multi_temp(baselines...; station_name = nothing, rowcol = nothing, window = 1)
     intlists, idxs, vals, Bs, ccvals = [], [], [], [], []
     for baseline in baselines
-        geolist, cur_intlist, cur_valid_idxs = InsarTimeseries.load_geolist_intlist(UNW_FILENAME, ignore_geo_file, baseline);
+        geolist, cur_intlist, cur_valid_idxs =
+            InsarTimeseries.load_geolist_intlist(UNW_FILENAME, ignore_geo_file, baseline)
         if isnothing(station_name)
-            cur_unw_vals = get_stack_vals(UNW_FILENAME, rowcol..., window, STACK_FLAT_DSET,
-                                        cur_valid_idxs, reference_station="TXKM");
+            cur_unw_vals = get_stack_vals(
+                UNW_FILENAME,
+                rowcol...,
+                window,
+                STACK_FLAT_DSET,
+                cur_valid_idxs,
+                reference_station = "TXKM",
+            )
             # TODO: add back in when the stack sizes match up again
             # ccval = get_stack_vals(UNW_FILENAME, rowcol..., window, STACK_DSET, cur_valid_idxs)
         else
-            cur_unw_vals = get_stack_vals(UNW_FILENAME, station_name, window, STACK_FLAT_DSET,
-                                        cur_valid_idxs, reference_station="TXKM");
+            cur_unw_vals = get_stack_vals(
+                UNW_FILENAME,
+                station_name,
+                window,
+                STACK_FLAT_DSET,
+                cur_valid_idxs,
+                reference_station = "TXKM",
+            )
             # TODO: add back in when the stack sizes match up again
             # ccval = get_stack_vals(UNW_FILENAME, station_name, window, STACK_DSET, cur_valid_idxs)
         end
@@ -383,25 +509,25 @@ function load_multi_temp(baselines...; station_name=nothing, rowcol=nothing, win
         push!(intlists, cur_intlist)
         push!(idxs, cur_valid_idxs)
         push!(vals, cur_unw_vals)
-        push!(Bs, sum(B, dims=2))
+        push!(Bs, sum(B, dims = 2))
         # push!(ccvals, ccval)
     end
     return intlists, idxs, vals, Bs # , ccvals
 end
 
-function plot_multi_temp(Bs, vals, temps, title=".unw vals at different baselines")
+function plot_multi_temp(Bs, vals, temps, title = ".unw vals at different baselines")
     n = length(Bs)
 
-    sort!(temps, rev=true)
-    sort!(Bs, by=x->length(x), rev=true)
-    sort!(vals, by=x->length(x), rev=true)
+    sort!(temps, rev = true)
+    sort!(Bs, by = x -> length(x), rev = true)
+    sort!(vals, by = x -> length(x), rev = true)
 
     ym = maximum(maximum(abs.(v)) for v in vals) + 3
     # fig, axes = plt.subplots(1, n)
     fig, axes = plt.subplots()
     for ii = 1:n
         # axes[ii].plot(Bs[ii], vals[ii], ".")
-        axes.plot(Bs[ii], vals[ii], ".", label=temps[ii])
+        axes.plot(Bs[ii], vals[ii], ".", label = temps[ii])
     end
     axes.set_ylim((-ym, ym))
     axes.legend()
@@ -413,12 +539,12 @@ end
 function calc_exclude_dates(fname, dset)
     geolist = Sario.load_geolist_from_h5(fname, dset)
     excls = Sario.load(fname, "excluded/1")
-    excl_map = InsarTimeseries.decode_excluded(excls, geolist);
+    excl_map = InsarTimeseries.decode_excluded(excls, geolist)
     return geolist, get_excl_hist(excl_map, geolist)
 end
 
 # @time excl_map = InsarTimeseries.decode_excluded(excls, geolist)
-function get_excl_hist(excl_map, geolist; as_pct=true)
+function get_excl_hist(excl_map, geolist; as_pct = true)
     counts = zeros(length(geolist))
     for idx in eachindex(excl_map)
         was_excluded = .!isnothing.(indexin(geolist, excl_map[idx]))

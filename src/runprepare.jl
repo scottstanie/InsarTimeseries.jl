@@ -9,30 +9,31 @@ function parse_commandline()
 
     @add_arg_table s begin
         "--overwrite"
-            action = :store_true
-            help = "Erase previous processed stack files"
+        action = :store_true
+        help = "Erase previous processed stack files"
         "--zero"
-            action = :store_true
-            help = "Run just the igram zeroing step"
+        action = :store_true
+        help = "Run just the igram zeroing step"
         "--igram-path"
-            default = "."
-            help = "Path containing .int files"
+        default = "."
+        help = "Path containing .int files"
         "--geo-path"
-            default = "../"
-            help = "Path containing .geo files"
+        default = "../"
+        help = "Path containing .geo files"
         "--ref-station"
-            arg_type = String
-            help = "Name of a gps reference station to shift the stack to."*
-                   " Will overwrite the current shifted dataset if specified"
+        arg_type = String
+        help =
+            "Name of a gps reference station to shift the stack to." *
+            " Will overwrite the current shifted dataset if specified"
         "--ref-row"
-            arg_type = Int
+        arg_type = Int
         "--ref-col"
-            arg_type = Int
+        arg_type = Int
         "--window"
-            arg_type = Int
-            range_tester = x-> (x>=1)
-            help = "Size of window to use to shift stack"
-            default = 5
+        arg_type = Int
+        range_tester = x -> (x >= 1)
+        help = "Size of window to use to shift stack"
+        default = 5
     end
 
     return parse_args(s)
@@ -41,7 +42,7 @@ end
 function main()
     parsed_args = parse_commandline()
     println("Parsed args:")
-    for (arg,val) in parsed_args
+    for (arg, val) in parsed_args
         @show arg, val
     end
 
@@ -54,15 +55,25 @@ function main()
     ref_col = parsed_args["ref-col"]
     window = parsed_args["window"]
 
-    if zero 
+    if zero
         mask_filename = abspath(joinpath(igram_path, InsarTimeseries.MASK_FILENAME))
-        @time InsarTimeseries.create_mask_stacks(igram_path, overwrite=overwrite, geo_path=geo_path,
-                                                mask_filename=mask_filename)
-        zero_masked_areas(igram_path, input_exts=[".int", ".cc"], overwrite=overwrite)
+        @time InsarTimeseries.create_mask_stacks(
+            igram_path,
+            overwrite = overwrite,
+            geo_path = geo_path,
+            mask_filename = mask_filename,
+        )
+        zero_masked_areas(igram_path, input_exts = [".int", ".cc"], overwrite = overwrite)
     else
-        @time InsarTimeseries.prepare_stacks(igram_path, overwrite=overwrite, geo_path=geo_path, 
-                                             ref_row=ref_row, ref_col=ref_col, ref_station=ref_station, 
-                                             window=window)
+        @time InsarTimeseries.prepare_stacks(
+            igram_path,
+            overwrite = overwrite,
+            geo_path = geo_path,
+            ref_row = ref_row,
+            ref_col = ref_col,
+            ref_station = ref_station,
+            window = window,
+        )
     end
 
 end

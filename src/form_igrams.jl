@@ -6,7 +6,13 @@ function make_igam(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, coll
     return take_looks(slc1 .* conj.(slc2), rowlooks, collooks)
 end
 
-function make_igam!(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
+function make_igam!(
+    igram::AbstractArray,
+    slc1::AbstractArray,
+    slc2::AbstractArray,
+    rowlooks::Int,
+    collooks::Int,
+)
     # We are assuming it's okay to overwrite slc2
     slc2 .*= conj.(slc1)
     slc2 .= conj.(slc2)
@@ -22,12 +28,23 @@ function powlooks!(out::AbstractArray, image::AbstractArray, rowlooks::Int, coll
     return take_looks!(out, abs2.(image), rowlooks, collooks)
 end
 
-function make_int_cor(slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
+function make_int_cor(
+    slc1::AbstractArray,
+    slc2::AbstractArray,
+    rowlooks::Int,
+    collooks::Int,
+)
     igram = make_igam(slc1, slc2, rowlooks, collooks)
     return _make_cor(igram, slc1, slc2, rowlooks, collooks)
 end
 
-function _make_cor(igram::AbstractArray, slc1::AbstractArray, slc2::AbstractArray, rowlooks::Int, collooks::Int)
+function _make_cor(
+    igram::AbstractArray,
+    slc1::AbstractArray,
+    slc2::AbstractArray,
+    rowlooks::Int,
+    collooks::Int,
+)
     ampslc1 = sqrt.(powlooks(slc1, rowlooks, collooks))
     ampslc2 = sqrt.(powlooks(slc2, rowlooks, collooks))
     amp = @. real(abs(igram))
@@ -46,14 +63,14 @@ function form_igram_names()
     for line in sbas_lines
         early_file, late_file, temp, spatial = split(line)
         # "../S1A_20141104.geo"
-        igram_name = join(map(_get_date, [early_file, late_file]), '_') *".int"
+        igram_name = join(map(_get_date, [early_file, late_file]), '_') * ".int"
         push!(out, (igram_name, String(early_file), String(late_file)))
     end
     # Note: Sorting so that ALL igrams with `early_file` are formed in a for
     return sort(out)
 end
 
-function create_igrams(rowlooks=1, collooks=1)
+function create_igrams(rowlooks = 1, collooks = 1)
     current_ints = glob("*.int")
     current_cors = glob("*.cc")
 
@@ -105,7 +122,7 @@ function create_igrams(rowlooks=1, collooks=1)
         # @time cor, amp, igram = make_int_cor(early, late, collooks, rowlooks)
 
         # TODO: see about ArchGdal operating on blocks for low memory footprint
-      
+
         # Note again: flipped collooks/rowlooks since we read in as transposed
         println("Forming amps")
         powlooks!(ampslc1, early, collooks, rowlooks)
@@ -122,15 +139,14 @@ function create_igrams(rowlooks=1, collooks=1)
         cor .= real.(amp ./ (eps(Float32) .+ (ampslc1 .* ampslc2)))
 
         println("Saving $cor_name, $igram_name")
-        outcor[:, :, 1] .= amp;
-        outcor[:, :, 2] .= cor;
-        Sario.save(cor_name, outcor, do_permute=false)
-        Sario.save(igram_name, igram, do_permute=false)
+        outcor[:, :, 1] .= amp
+        outcor[:, :, 2] .= cor
+        Sario.save(cor_name, outcor, do_permute = false)
+        Sario.save(igram_name, igram, do_permute = false)
     end
     GC.gc()
 end
 
 # julia> "../S1A_20141128.geo" |> x-> split(x, '_')[2] |> x -> split(x, '.')[1]
 #     "20141128"
-_get_date(geo_name) = geo_name |> x-> split(x, '_')[2] |> x -> split(x, '.')[1]
-
+_get_date(geo_name) = geo_name |> x -> split(x, '_')[2] |> x -> split(x, '.')[1]

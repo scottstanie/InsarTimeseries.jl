@@ -17,4 +17,4 @@ else
     dbfile = Glob.glob("../*.db*")[1]
 end
 
-@time InsarLOS.create_los_map(directory=".", dbfile=dbfile, outfile="los_map.h5");
+@time InsarLOS.create_los_map(directory = ".", dbfile = dbfile, outfile = "los_map.h5");

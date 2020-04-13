@@ -27,19 +27,22 @@ const REFERENCE_ATTR = "reference"
 const REFERENCE_STATION_ATTR = "reference_station"
 
 # Type alias for commonly used compositite type
-const Igram = Tuple{Date, Date}
+const Igram = Tuple{Date,Date}
 
 # To check if either date of an igram is contained with a geo date list
-Base.in(igram::Igram, geo_date_list::AbstractArray{Date}) = ((igram[1] in geo_date_list) || (igram[2] in geo_date_list))
+Base.in(igram::Igram, geo_date_list::AbstractArray{Date}) =
+    ((igram[1] in geo_date_list) || (igram[2] in geo_date_list))
 
-Base.in(date::Date, igram_list::AbstractArray{Igram}) = [date in igram for igram in igram_list]
+Base.in(date::Date, igram_list::AbstractArray{Igram}) =
+    [date in igram for igram in igram_list]
 
 temporal_baseline(igram::Igram) = (igram[2] - igram[1]).value
-temporal_baseline(igram_list::Array{Igram}) = [temporal_baseline(igram) for igram in igram_list]
-span(dates::AbstractArray{Date, 1}) = (dates[end] - dates[1]).value
-span(igrams::AbstractArray{Igram, 1}) = (sort(igrams)[end][2] - sort(igrams)[1][1]).value
+temporal_baseline(igram_list::Array{Igram}) =
+    [temporal_baseline(igram) for igram in igram_list]
+span(dates::AbstractArray{Date,1}) = (dates[end] - dates[1]).value
+span(igrams::AbstractArray{Igram,1}) = (sort(igrams)[end][2] - sort(igrams)[1][1]).value
 
-_get_day_nums(dts::AbstractArray{Date, 1}) = [( d - dts[1]).value for d in dts]
+_get_day_nums(dts::AbstractArray{Date,1}) = [(d - dts[1]).value for d in dts]
 
 
 # Extend views to work for datasets
@@ -95,4 +98,3 @@ function getmemavail()
     memline = split(lines, '\n')[2]
     return parse(Float64, split(memline)[end])
 end
-

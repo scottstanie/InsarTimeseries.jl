@@ -20,25 +20,46 @@ _excl_dset(dset) = _match_dset_path(dset, "excluded")
 # is_excluded(total, included) = isnothing.(indexin(total, included))  # Too much space :(
 
 
-function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
-                           outfile, outdset, geolist, intlist, alpha,
-                           L1=false; prune_outliers=true, sigma=4, prune_fast=false, 
-                           row=nothing, col=nothing)
-    unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+function proc_pixel_linear(
+    unw_stack_file,
+    in_dset,
+    valid_igram_indices,
+    outfile,
+    outdset,
+    geolist,
+    intlist,
+    alpha,
+    L1 = false;
+    prune_outliers = true,
+    sigma = 4,
+    prune_fast = false,
+    row = nothing,
+    col = nothing,
+)
+    unw_pixel_raw =
+        h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         println("$row, $col: nan")
         return
     end
-    
+
     # Also load correlations for cutoff
     # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
     # cor_thresh = 0.05
     # cor_pixel, cor_thresh = nothing, 0.0
-    
+
     linear = true
-    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune_outliers=prune_outliers, sigma=sigma,
-                                                              prune_fast=prune_fast)
+    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(
+        unw_pixel_raw,
+        geolist,
+        intlist,
+        alpha,
+        linear;
+        L1 = L1,
+        prune_outliers = prune_outliers,
+        sigma = sigma,
+        prune_fast = prune_fast,
+    )
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
@@ -51,19 +72,40 @@ function proc_pixel_linear(unw_stack_file, in_dset, valid_igram_indices,
     return
 end
 
-function proc_pixel_daily(unw_stack_file, in_dset, valid_igram_indices,
-                          outfile, outdset, geolist, intlist, alpha,
-                          L1=false; prune_outliers=true, sigma=4, prune_fast=false, 
-                          row=nothing, col=nothing)
-    unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+function proc_pixel_daily(
+    unw_stack_file,
+    in_dset,
+    valid_igram_indices,
+    outfile,
+    outdset,
+    geolist,
+    intlist,
+    alpha,
+    L1 = false;
+    prune_outliers = true,
+    sigma = 4,
+    prune_fast = false,
+    row = nothing,
+    col = nothing,
+)
+    unw_pixel_raw =
+        h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
     if any(isnan.(unw_pixel_raw))
         return
     end
 
     linear = false
-    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(unw_pixel_raw, geolist, intlist, alpha, linear;
-                                                              L1=L1, prune_outliers=prune_outliers, sigma=sigma,
-                                                              prune_fast=prune_fast)
+    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(
+        unw_pixel_raw,
+        geolist,
+        intlist,
+        alpha,
+        linear;
+        L1 = L1,
+        prune_outliers = prune_outliers,
+        sigma = sigma,
+        prune_fast = prune_fast,
+    )
 
     phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
 
@@ -87,15 +129,31 @@ function _unreg_to_cm(soln_velos, geolist_short, geolist_full)
     return PHASE_TO_CM * interpolate_phase(geolist_short, phi_clean, geolist_full)
 end
 
-function calc_soln(unw_pixel, geolist, intlist, alpha, constant_velocity;
-                   L1=true, cor_pixel=nothing, cor_thresh=0.0, 
-                   prune_outliers=true, sigma=4, prune_fast=false)::Tuple{Array{Float32, 1}, Int64, Array, Array}
+function calc_soln(
+    unw_pixel,
+    geolist,
+    intlist,
+    alpha,
+    constant_velocity;
+    L1 = true,
+    cor_pixel = nothing,
+    cor_thresh = 0.0,
+    prune_outliers = true,
+    sigma = 4,
+    prune_fast = false,
+)::Tuple{Array{Float32,1},Int64,Array,Array}
     geo_clean, intlist_clean, unw_clean = geolist, intlist, unw_pixel
     if prune_outliers
-        geo_clean, intlist_clean, unw_clean = remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff=sigma)
+        geo_clean, intlist_clean, unw_clean =
+            remove_outliers(geo_clean, intlist_clean, unw_clean, mean_sigma_cutoff = sigma)
     end
     if cor_thresh > 0 && !isnothing(cor_pixel)
-        intlist_clean, unw_clean = prune_cor(intlist_clean, unw_clean, cor_pixel=cor_pixel, cor_thresh=cor_thresh)
+        intlist_clean, unw_clean = prune_cor(
+            intlist_clean,
+            unw_clean,
+            cor_pixel = cor_pixel,
+            cor_thresh = cor_thresh,
+        )
     end
     if prune_fast
         intlist_clean, unw_clean = shrink_baseline(geo_clean, intlist_clean, unw_clean)
@@ -122,24 +180,30 @@ end
 
 
 """Run sbas on multiple processes"""
-function run_sbas(unw_stack_file::String,
-                  dset::String,
-                  outfile::String,
-                  outdset::String,
-                  geolist,
-                  intlist, 
-                  valid_igram_indices, 
-                  constant_velocity::Bool, 
-                  alpha::Real,
-                  L1::Bool=false,
-                  prune_outliers=true,
-                  sigma=4,
-                  prune_fast=false) 
+function run_sbas(
+    unw_stack_file::String,
+    dset::String,
+    outfile::String,
+    outdset::String,
+    geolist,
+    intlist,
+    valid_igram_indices,
+    constant_velocity::Bool,
+    alpha::Real,
+    L1::Bool = false,
+    prune_outliers = true,
+    sigma = 4,
+    prune_fast = false,
+)
 
-    L1 ? println("Using L1 penalty for fitting") : println("Using least squares for fitting")
-    prune_outliers ? println("Pruning .geo dates for outliers") : println("Not pruning outliers.")
-    prune_fast ? println("Shrinking baseline on fast pixels") : println("Not shrinking baseline.")
-    alpha > 0 ? println("Regularizing solution with alpha = $alpha") : println("No regularization")
+    L1 ? println("Using L1 penalty for fitting") :
+    println("Using least squares for fitting")
+    prune_outliers ? println("Pruning .geo dates for outliers") :
+    println("Not pruning outliers.")
+    prune_fast ? println("Shrinking baseline on fast pixels") :
+    println("Not shrinking baseline.")
+    alpha > 0 ? println("Regularizing solution with alpha = $alpha") :
+    println("No regularization")
 
     # TODO: do I ever really care about these to change as variable?
     # rho, alpha, abstol = 1.0, 1.6, 1e-3
@@ -161,7 +225,7 @@ function run_sbas(unw_stack_file::String,
 
     println("Making new writing file for each of $(length(Distributed.workers()))")
     @time @sync @distributed for id in Distributed.workers()
-        h5open(string(id)*outfile, "w") do fout
+        h5open(string(id) * outfile, "w") do fout
             d_create(fout, outdset, datatype(Float32), dataspace(outsize)) #, "chunk", chunksize)
             d_create(fout, _count_dset(outdset), datatype(Int32), dataspace(nrows, ncols))
             d_create(fout, _excl_dset(outdset), datatype(Int64), dataspace(nrows, ncols))
@@ -169,30 +233,47 @@ function run_sbas(unw_stack_file::String,
             # d_create(fout, _stddev_raw_dset(outdset), datatype(Float64), dataspace(nrows, ncols))
         end
     end
- 
+
     @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
-    # @time @sync @distributed for (row, col) in collect(Iterators.product(300:400, 300:400))
-        proc_func(unw_stack_file, dset, valid_igram_indices, outfile, 
-                   outdset, geolist, intlist, alpha, L1;
-                   prune_outliers=prune_outliers, sigma=sigma, prune_fast=prune_fast, 
-                   row=row, col=col)
+        # @time @sync @distributed for (row, col) in collect(Iterators.product(300:400, 300:400))
+        proc_func(
+            unw_stack_file,
+            dset,
+            valid_igram_indices,
+            outfile,
+            outdset,
+            geolist,
+            intlist,
+            alpha,
+            L1;
+            prune_outliers = prune_outliers,
+            sigma = sigma,
+            prune_fast = prune_fast,
+            row = row,
+            col = col,
+        )
     end
     println("Merging files into $outfile")
     @time merge_partial_files(outfile, outdset, _count_dset(outdset), _excl_dset(outdset))
-                              # _stddev_dset(outdset), _stddev_raw_dset(outdset))
+    # _stddev_dset(outdset), _stddev_raw_dset(outdset))
 
     # _save_std_attrs(outfile, outdset)
     return outfile, outdset
 end
 
 # Need the .I so we can use to load from h5 
-get_unmasked_idxs(geolist, do_permute=false) = [cart_idx.I for cart_idx in
-                                                findall(.!Sario.load_mask(geolist, do_permute=do_permute))]
+get_unmasked_idxs(geolist, do_permute = false) = [
+    cart_idx.I for cart_idx in findall(.!Sario.load_mask(geolist, do_permute = do_permute))
+]
 
 function _save_std_attrs(outfile, outdset)
-    attr_dict1 = Dict("description" => "original unwrapped (shifted) std. dev of pixels", "units" => "cm")
+    attr_dict1 = Dict(
+        "description" => "original unwrapped (shifted) std. dev of pixels",
+        "units" => "cm",
+    )
     h5writeattr(outfile, _stddev_raw_dset(outdset), attr_dict1)
-    attr_dict2 = Dict("description" => "Final, outlier-removed std. dev of pixels", "units" => "cm")
+    attr_dict2 =
+        Dict("description" => "Final, outlier-removed std. dev of pixels", "units" => "cm")
     h5writeattr(outfile, _stddev_dset(outdset), attr_dict2)
 end
 
@@ -201,13 +282,13 @@ function interpolate_phase(geo_clean, phis, geolist_full)
     return interp1d(_get_day_nums(geo_clean), phis, _get_day_nums(geolist_full))
 end
 
-function interp1d(x, y, xv, k=1)
-    sp = Dierckx.Spline1D(x, y, k=k)
+function interp1d(x, y, xv, k = 1)
+    sp = Dierckx.Spline1D(x, y, k = k)
     return sp(xv)
 end
 
 
-function prepB(geolist, intlist, constant_velocity=false, alpha=0)
+function prepB(geolist, intlist, constant_velocity = false, alpha = 0)
     if constant_velocity
         return Float32.(reshape(temporal_baseline(intlist), :, 1))
     end
@@ -223,7 +304,7 @@ end
 
 # In case we make each pixel inversion more complicated (extra penalty functions, etc.)
 # TODO: does a Val type for the case with no extra zeros help here?
-function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zeros=0)
+function invert_pixel(pixel::Array{Float32,1}, pB::Array{Float32,2}, extra_zeros = 0)
     if extra_zeros == 0
         return pB * pixel
     else
@@ -232,10 +313,22 @@ function invert_pixel(pixel::Array{Float32, 1}, pB::Array{Float32,2}, extra_zero
 end
 
 # Defined in optimize.jl
-function invert_pixel_l1(pixel::AbstractArray{<:AbstractFloat}, B::AbstractArray{<:AbstractFloat}; 
-                      rho=1.0, alpha=1.6, lu_tuple=nothing, abstol=1e-3)
-    return Float32.(huber_fit(Float64.(B), Float64.(pixel), rho, alpha, 
-                              lu_tuple=lu_tuple, abstol=abstol))
+function invert_pixel_l1(
+    pixel::AbstractArray{<:AbstractFloat},
+    B::AbstractArray{<:AbstractFloat};
+    rho = 1.0,
+    alpha = 1.6,
+    lu_tuple = nothing,
+    abstol = 1e-3,
+)
+    return Float32.(huber_fit(
+        Float64.(B),
+        Float64.(pixel),
+        rho,
+        alpha,
+        lu_tuple = lu_tuple,
+        abstol = abstol,
+    ))
 end
 
 
@@ -245,7 +338,7 @@ Each row corresponds to an igram, each column to a .geo
 Values will be t_k+1 - t_k for columns after the -1 in A,
 up to and including the +1 entry
 """
-function build_B_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1})
+function build_B_matrix(geolist::Array{Date,1}, intlist::Array{Igram,1})
 
     timediffs = day_diffs(geolist)
     # We take the first .geo to be time 0, leave out of matrix
@@ -286,7 +379,7 @@ Returns the incident-like matrix from the SBAS paper: A*phi = dphi
     Each row corresponds to an igram, each column to a .geo
     value will be -1 on the early (slave) igrams, +1 on later (master)
 """
-function build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1})
+function build_A_matrix(geolist::Array{Date,1}, intlist::Array{Igram,1})
     # We take the first .geo to be time 0, leave out of matrix
     # Match on date (not time) to find indices
     geolist = geolist[2:end]
@@ -294,7 +387,7 @@ function build_A_matrix(geolist::Array{Date, 1}, intlist::Array{Igram, 1})
     M = length(intlist)  # Number of igrams, 
     N = length(geolist)
     A = zeros(Int8, M, N)
-    for i in 1:M
+    for i = 1:M
         early_date, late_date = intlist[i]
         idx_early = findfirst(isequal(early_date), geolist)
         if ~isnothing(idx_early)  # The first SLC will not be in the matrix
@@ -309,11 +402,11 @@ end
 
 
 
-_D(n) = spdiagm(0 => -ones(n-1), 1=>ones(n-1))[1:end-1, :]
+_D(n) = spdiagm(0 => -ones(n - 1), 1 => ones(n - 1))[1:end-1, :]
 
 """For Tikhonov regularization, pad the B matrix with alpha*D"""
-function augment_B(B::Array{Float32, 2}, alpha::Real)
-    extra = alpha*I
+function augment_B(B::Array{Float32,2}, alpha::Real)
+    extra = alpha * I
     n = size(B, 2)
     return Float64.(vcat(B, alpha * _D(n)))  # Note: as of 9/29/19, qr has bug for sparse float32 matrices
 end
@@ -324,14 +417,14 @@ augment_zeros(B, unw) = vcat(unw, zeros(size(B, 1) - length(unw)))
 #     extra = alpha*I
 #     return Float32.(vcat(B, ))
 # end
- 
+
 # TODO: this can't work for huge stacks
-function augment_matrices(B::Array{Float32, 2}, unw_stack::Array{Float32, 3}, alpha::Real)
-    B = Float32.(vcat(B, alpha*I))
+function augment_matrices(B::Array{Float32,2}, unw_stack::Array{Float32,3}, alpha::Real)
+    B = Float32.(vcat(B, alpha * I))
     # Now make num rows match
     nrows, ncols, nlayers = size(unw_stack)
     zeros_shape = (nrows, ncols, size(B, 1) - nlayers)
-    unw_stack = Float32.(cat(unw_stack, zeros(zeros_shape), dims=3))
+    unw_stack = Float32.(cat(unw_stack, zeros(zeros_shape), dims = 3))
     return B, unw_stack
 end
 
@@ -357,7 +450,7 @@ end
 
 
 """Finds the number of days between successive .geo files"""
-function day_diffs(geolist::Array{Date, 1})
+function day_diffs(geolist::Array{Date,1})
     [difference.value for difference in diff(geolist)]
 end
 
@@ -370,7 +463,10 @@ Arguments:
     timediffs are the days between each SAR acquisitions
         length will be 1 less than num SAR acquisitions
 """
-function integrate_velocities(velocities::AbstractArray{<:AbstractFloat, 1}, timediffs::Array{Int, 1})
+function integrate_velocities(
+    velocities::AbstractArray{<:AbstractFloat,1},
+    timediffs::Array{Int,1},
+)
     phi_diffs = velocities .* timediffs
     phi_arr = cumsum(coalesce.(phi_diffs, 0))
     pushfirst!(phi_arr, 0)
@@ -387,27 +483,28 @@ end
 #   will be all noise- we can't reliably sense such quickly moving ground
 #
 # TODO: figure out which should go in separate file for cleanliness
-function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff=4)
+function remove_outliers(geolist, intlist, unw_pixel; mean_sigma_cutoff = 4)
     # TODO: verify this third criteria?
 
     # @show mean_sigma_cutoff
     # @show size(intlist), size(geolist), std(unw_pixel)
     # 1. find outliers in this pixels' values and remove them
-    geo_clean, intlist_clean, unw_clean = peel_nsigma(geolist, intlist, unw_pixel, nsigma=mean_sigma_cutoff)
+    geo_clean, intlist_clean, unw_clean =
+        peel_nsigma(geolist, intlist, unw_pixel, nsigma = mean_sigma_cutoff)
     # @show size(intlist_clean), size(geo_clean), std(unw_clean)
     return geo_clean, intlist_clean, unw_clean
 end
 
 # 2. low correlation cleaning
-function prune_cor(intlist, unw_pixel, cor_pixel, cor_thresh=0.0)
-    low_cor_igrams = intlist[cor_pixel .< cor_thresh]
+function prune_cor(intlist, unw_pixel, cor_pixel, cor_thresh = 0.0)
+    low_cor_igrams = intlist[cor_pixel.<cor_thresh]
     intlist_clean, unw_clean = remove_igrams(intlist, unw_pixel, low_cor_igrams)
     return intlist_clean, unw_clean
 end
 
 # 3. with rought velocity estimate, find igrams with too long of baseline
 # Here we assume that the faster the ground moves, the shortwer basline we need to keep
-function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=2.0)
+function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff = 2.0)
     # return test_short(geolist, intlist, unw_pixel)
     # intlist_short, unw_short = test_short(geolist, intlist, unw_pixel)
 
@@ -415,7 +512,7 @@ function shrink_baseline(geolist, intlist, unw_pixel; fast_cm_cutoff=2.0)
     # velo_orig = PHASE_TO_CM * (Blin \ unw_pixel)[1]  # cm / day
     # day_cutoff = fast_cm_cutoff / v_orig
 
-    v_orig = abs(365 .* PHASE_TO_CM * (Blin \ unw_pixel)[1])  # cm / year
+    v_orig = abs(365 .* PHASE_TO_CM * (Blin\unw_pixel)[1])  # cm / year
     if v_orig > 2
         day_cutoff = 450
     elseif v_orig > 1.5
@@ -446,7 +543,7 @@ function test_short(geolist, intlist, unw_pixel)
     ds = 600:-50:400
     velos = [solve_temp_cutoff(geolist, intlist, unw_pixel, d) for d in ds]
     velo_diffs = diff(velos)
-    velo_ratios = @views velos[2:end] ./   velos[1:end-1]
+    velo_ratios = @views velos[2:end] ./ velos[1:end-1]
     # @show velos
     # @show velo_diffs
     # @show velo_ratios
@@ -465,24 +562,27 @@ function test_short(geolist, intlist, unw_pixel)
     end
 end
 
-function solve_temp_cutoff(geolist, intlist, unw_pixel, day_cutoff=400)
+function solve_temp_cutoff(geolist, intlist, unw_pixel, day_cutoff = 400)
     Blin = prepB(geolist, intlist, true)
     short_idxs = temporal_baseline(intlist) .< day_cutoff
-    velo_new = 365 * PHASE_TO_CM * (Blin[short_idxs, :] \ unw_pixel[short_idxs])[1]  # cm / yr
+    velo_new = 365 * PHASE_TO_CM * (Blin[short_idxs, :]\unw_pixel[short_idxs])[1]  # cm / yr
     return velo_new
 end
 
-function short_vs_long(geolist, intlist, unw_pixel, day_cutoff=400)
+function short_vs_long(geolist, intlist, unw_pixel, day_cutoff = 400)
     Blin = prepB(geolist, intlist, true)
     short_idxs = temporal_baseline(intlist) .< day_cutoff
-    velo_short = 365 * PHASE_TO_CM * (Blin[short_idxs, :] \ unw_pixel[short_idxs])[1]  # cm / yr
+    velo_short = 365 * PHASE_TO_CM * (Blin[short_idxs, :]\unw_pixel[short_idxs])[1]  # cm / yr
     long_idxs = temporal_baseline(intlist) .> day_cutoff
-    velo_long = 365 * PHASE_TO_CM * (Blin[long_idxs, :] \ unw_pixel[long_idxs])[1]  # cm / yr
+    velo_long = 365 * PHASE_TO_CM * (Blin[long_idxs, :]\unw_pixel[long_idxs])[1]  # cm / yr
     return velo_short, velo_long
 end
 
-function remove_igrams(intlist, unw_vals,
-                       bad_items::Union{Date, AbstractArray{Date}, AbstractArray{Igram}}...)
+function remove_igrams(
+    intlist,
+    unw_vals,
+    bad_items::Union{Date,AbstractArray{Date},AbstractArray{Igram}}...,
+)
     good_idxs = trues(size(intlist))
     for item in bad_items
         good_idxs .&= _good_idxs(item, intlist)
@@ -502,13 +602,15 @@ function remove_by_idx(good_idxs::AbstractArray, intlist, unw_vals, B)
     B_clean = B[good_idxs, :]
     unw_clean = unw_vals[good_idxs]
     intlist_clean = intlist[good_idxs]
-    return intlist_clean, unw_clean, B_clean 
+    return intlist_clean, unw_clean, B_clean
 end
 
 function _good_idxs(bad_date_arr::AbstractArray{Date}, intlist)
-    return .!reduce((x, y)-> x .| y, 
-                    (b in intlist for b in bad_date_arr),
-                    init=falses(size(intlist)));
+    return .!reduce(
+        (x, y) -> x .| y,
+        (b in intlist for b in bad_date_arr),
+        init = falses(size(intlist)),
+    )
 end
 
 function _good_idxs(bad_igram_arr::AbstractArray{Igram}, intlist)
@@ -523,14 +625,14 @@ _good_idxs(bad_date::Date, intlist) = .!(bad_date in intlist)
 Used for robust variance est. (as a cutoff for outliers)
 See https://en.wikipedia.org/wiki/Robust_measures_of_scale#IQR_and_MAD
 Normalize makes it equal to stddev for normally dist. data"""
-mednsigma(arr, n=4) = n * mad(arr, normalize=true)  
+mednsigma(arr, n = 4) = n * mad(arr, normalize = true)
 
-modzscore(arr) = (arr .- median(arr)) ./ mad(arr, normalize=true)
+modzscore(arr) = (arr .- median(arr)) ./ mad(arr, normalize = true)
 
 
 # min_spread added in case `mad` produces a very low number,
 # so if you want to avoid removing lots, set based on your data
-function two_way_cutoff(arr, nsigma, min_spread=0)
+function two_way_cutoff(arr, nsigma, min_spread = 0)
     # min_spread = abs(2 * median(arr))
     # spread = 1.5 * iqr(arr)
     spread = max(min_spread, mednsigma(arr, nsigma))
@@ -541,18 +643,18 @@ function two_way_cutoff(arr, nsigma, min_spread=0)
     return (low, high)
 end
 
-function two_way_outliers(arr, nsigma, min_spread=0)
+function two_way_outliers(arr, nsigma, min_spread = 0)
     # return abs.(modzscore(arr)) .> nsigma
     low, high = two_way_cutoff(arr, nsigma, min_spread)
     return (arr .< low) .| (arr .> high)
 end
 
 """Simpler means by day: just abs. value of phases, either mean or median"""
-mean_abs_val(geolist, intlist, unw_vals) = [mean(abs.(vals_by_date(d, intlist, unw_vals)))
-                                            for d in geolist];
-median_abs_val(geolist, intlist, unw_vals) = [median(abs.(vals_by_date(d, intlist, unw_vals)))
-                                              for d in geolist];
- # valsq(geolist, intlist, unw_vals) = [mean(vals_by_date(d, intlist, unw_vals) .^ 2) for d in geolist];
+mean_abs_val(geolist, intlist, unw_vals) =
+    [mean(abs.(vals_by_date(d, intlist, unw_vals))) for d in geolist];
+median_abs_val(geolist, intlist, unw_vals) =
+    [median(abs.(vals_by_date(d, intlist, unw_vals))) for d in geolist];
+# valsq(geolist, intlist, unw_vals) = [mean(vals_by_date(d, intlist, unw_vals) .^ 2) for d in geolist];
 
 """Get the values (unw, cc, etc.) of one date"""
 vals_by_date(date::Date, intlist, vals) = vals[date in intlist]
@@ -563,7 +665,7 @@ vals_by_date(date_arr::Array{Date}, intlist, vals) = [vals[d in intlist] for d i
 
 
 """Remove all igrams corresponding to the dates with means falling outside an `nsigma` interval"""
-function peel_nsigma(geo, int, val; nsigma=4)
+function peel_nsigma(geo, int, val; nsigma = 4)
     dates_to_remove = nsigma_days(geo, int, val, nsigma)
     int2, val2 = remove_igrams(int, val, dates_to_remove)
     geo2 = [g for g in geo if !(g in dates_to_remove)]
@@ -571,7 +673,7 @@ function peel_nsigma(geo, int, val; nsigma=4)
 end
 
 """Return the days of `geo` which are more than nsigma away from mean"""
-function nsigma_days(geo, int, val, nsigma=4, min_spread=2)
+function nsigma_days(geo, int, val, nsigma = 4, min_spread = 2)
     means = mean_abs_val(geo, int, val)
     out_idxs = two_way_outliers(means, nsigma, min_spread)
 
@@ -589,19 +691,19 @@ function encode_missing(total, included)
     out = Int64(0)
     for (i, t) in enumerate(total)
         if !(t in included)
-            out += 2^(i-1)
+            out += 2^(i - 1)
         end
     end
     return out
 end
 
-function decode_excluded(excl_int::Int64, geos::Array{Date, 1})
+function decode_excluded(excl_int::Int64, geos::Array{Date,1})
     excl_bitstring = reverse(bitstring(excl_int)[end-length(geos)+1:end])
     return [geos[i] for (i, g) in enumerate(geos) if excl_bitstring[i] == '1']
 end
 
-function decode_excluded(excl_int_map::AbstractArray{Int64, 2}, geos::Array{Date, 1})
-    out = Array{Array{Date, 1}, 2}(undef, size(excl_int_map))
+function decode_excluded(excl_int_map::AbstractArray{Int64,2}, geos::Array{Date,1})
+    out = Array{Array{Date,1},2}(undef, size(excl_int_map))
     for idx in eachindex(excl_int_map)
         out[idx] = decode_excluded(excl_int_map[idx], geos)
     end

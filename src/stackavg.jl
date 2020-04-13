@@ -4,9 +4,18 @@
 
 saves a 2D array of velocities: mm per year
 """
-function run_stackavg(unw_stack_file::String, input_dset::String, outfile::String,
-                      outdset::String, geolist::Array{Date, 1}, valid_igram_list::Array{Igram, 1};
-                      stack_all=true, reference_station=nothing, ref_row=nothing, ref_col=nothing)
+function run_stackavg(
+    unw_stack_file::String,
+    input_dset::String,
+    outfile::String,
+    outdset::String,
+    geolist::Array{Date,1},
+    valid_igram_list::Array{Igram,1};
+    stack_all = true,
+    reference_station = nothing,
+    ref_row = nothing,
+    ref_col = nothing,
+)
 
     # Figure out which of all the igrams we want to use
     # chosen_igrams = pick_igrams(geolist)
@@ -21,8 +30,10 @@ function run_stackavg(unw_stack_file::String, input_dset::String, outfile::Strin
     full_igram_list = load_intlist_from_h5(unw_stack_file)
 
     picked_igram_indices = indices_from_full(chosen_igrams, full_igram_list)
-    println("Out of $(length(picked_igram_indices)) desired igrams, "*
-            "$(sum(isnothing.(picked_igram_indices))) are missing")
+    println(
+        "Out of $(length(picked_igram_indices)) desired igrams, " *
+        "$(sum(isnothing.(picked_igram_indices))) are missing",
+    )
     filter!(.!isnothing, picked_igram_indices)
 
     # Load only these 
@@ -44,7 +55,7 @@ function run_stackavg(unw_stack_file::String, input_dset::String, outfile::Strin
 
     # Now with proper igrams picked, just divide the total phase by time diff sum
     timediffs = temporal_baseline(chosen_igrams)
-    phase_sum = sum(unw_stack, dims=3)[:, :, 1]
+    phase_sum = sum(unw_stack, dims = 3)[:, :, 1]
     avg_velo = phase_sum ./ sum(timediffs)
 
     # Finally, save as a mm/year velocity
@@ -65,14 +76,14 @@ end
 as interferograms to average
 
 """
-function stack_indices(geolist::Array{Date, 1})
+function stack_indices(geolist::Array{Date,1})
     num_geos = length(geolist)
     # We round up here so that if there is an odd number, 
     # we just ignore the middle date 
     # e.g. dates [1,2,3,4,5] would be [1,4], [2,5]
     idx_span = ceil(num_geos / 2)
     num_igrams = floor(num_geos / 2)
-    return [Int.((i, i + idx_span)) for i in 1:num_igrams]
+    return [Int.((i, i + idx_span)) for i = 1:num_igrams]
 end
 
 
@@ -85,7 +96,7 @@ function removefirst!(array, value)
     return isnothing(idx) ? array : deleteat!(array, idx)
 end
 
-function remove_all_igrams!(array, geo_dates) 
+function remove_all_igrams!(array, geo_dates)
     for date in geo_dates
         for idx = 1:2
             deleteat!(array, findall(x -> x[idx] == date, array))
@@ -95,19 +106,20 @@ end
 
 
 """Get all igrams that start with `geo_date`"""
-find_igrams(igram_list::Array{Igram, 1}, geo_date::Date) = filter(ig -> ig[1] == geo_date, igram_list)
+find_igrams(igram_list::Array{Igram,1}, geo_date::Date) =
+    filter(ig -> ig[1] == geo_date, igram_list)
 
 max_igram(igram_list, geo_date) = find_igrams(igram_list, geo_date)[end]
 
-function pick_igrams(full_geolist::Array{Date, 1}, full_igram_list::Array{Igram, 1})
+function pick_igrams(full_geolist::Array{Date,1}, full_igram_list::Array{Igram,1})
     geolist = copy(full_geolist)
     igram_list = copy(full_igram_list)
 
-    total_timespan = (geolist[end] - geolist[1]).value  
+    total_timespan = (geolist[end] - geolist[1]).value
     # Find this value to make sure no igram goes over half
     half_span = total_timespan / 2
 
-    chosen_igrams = Array{Igram, 1}()
+    chosen_igrams = Array{Igram,1}()
 
     while length(geolist) > 1
         cur_geo = popfirst!(geolist)
@@ -126,7 +138,7 @@ end
 
 
 """ Ideal way to pick stack igrams: evenly spaced"""
-function pick_igrams_default(geolist::Array{Date, 1})::Array{Igram, 1}
+function pick_igrams_default(geolist::Array{Date,1})::Array{Igram,1}
     geo_pairs = stack_indices(geolist)
     return [(geolist[i1], geolist[i2]) for (i1, i2) in geo_pairs]
 end

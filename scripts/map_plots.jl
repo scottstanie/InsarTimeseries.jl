@@ -9,15 +9,17 @@ import MapImages: nearest_pixel, nearest, grid, km_to_deg
 import Geodesy: LLA, nad27, wgs84, UTMZfromLLA
 import KernelDensity.kde
 
-kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); kwargs...)
-kde(df::DataFrame, xcol::Symbol, ycol::Symbol, weightcol::Symbol; kwargs...) = kde((df[!, xcol], df[!, ycol]); weights=df[!, weightcol], kwargs...)
+kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) =
+    kde((df[!, xcol], df[!, ycol]); kwargs...)
+kde(df::DataFrame, xcol::Symbol, ycol::Symbol, weightcol::Symbol; kwargs...) =
+    kde((df[!, xcol], df[!, ycol]); weights = df[!, weightcol], kwargs...)
 
 ccrs = pyimport("cartopy.crs")
 shpreader = pyimport("cartopy.io.shapereader")
 sgeom = pyimport("shapely.geometry")
 cfeature = pyimport("cartopy.feature")
 
-function project(lons, lats; datum=nad27, zone=13, north=true)
+function project(lons, lats; datum = nad27, zone = 13, north = true)
     # txutm = UTMZfromLLA(datum)
     txutm = UTMfromLLA(zone, north, datum)
     pts = txutm.(LLA.(lats, lons, 0))
@@ -25,24 +27,35 @@ function project(lons, lats; datum=nad27, zone=13, north=true)
     return [p.x for p in pts], [p.y for p in pts]
 end
 
-project(df::DataFrame, xcol::Symbol, ycol::Symbol; datum=nad27) = project(df[!, xcol], df[!, ycol], datum=datum)
+project(df::DataFrame, xcol::Symbol, ycol::Symbol; datum = nad27) =
+    project(df[!, xcol], df[!, ycol], datum = datum)
 
 
-function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, boundary=nothing, do_project=true)
+function kde_image(
+    df,
+    xcol,
+    ycol,
+    weightcol;
+    unnormalize = true,
+    extent = nothing,
+    boundary = nothing,
+    do_project = true,
+)
     xx, yy = do_project ? project(df, xcol, ycol) : (df[!, xcol], df[!, ycol])
 
     if isnothing(boundary)
-        boundary = isnothing(extent) ? (extrema(xx), extrema(yy)) : ((extent[1], extent[2]), (extent[3], extent[4])) 
+        boundary = isnothing(extent) ? (extrema(xx), extrema(yy)) :
+            ((extent[1], extent[2]), (extent[3], extent[4]))
     end
 
     # k = kde(df, xcol, ycol, weightcol; boundary=boundary)
     #
-    weights=df[!, weightcol]
-    k = kde((xx, yy), weights=weights; boundary=boundary)
+    weights = df[!, weightcol]
+    k = kde((xx, yy), weights = weights; boundary = boundary)
     # k = kde((yy, xx), weights=weights)
 
     xs, ys, img = k.x, k.y, permutedims(k.density)
-    
+
     # Note on units:
     # https://github.com/JuliaStats/KernelDensity.jl/blob/master/src/bivariate.jl#L58
     # library does `1 / (sum(weights)*(sx*sy)^2)` to make units of the pdf `probabilty/area`,
@@ -54,8 +67,8 @@ function kde_image(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, 
     # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [1, 0] + [ys[1], xs[1]])  # 111.31709969219834
     # julia> MapImages.latlon_to_dist((ys[1], xs[1]), [0, 1] + [ys[1], xs[1]])  # 96.42150149618836
     # julia> 111*96 10656
-    scale = do_project ? 1e6 : 1.0/10656
-    img .*=  scale
+    scale = do_project ? 1e6 : 1.0 / 10656
+    img .*= scale
 
     return img, xs, ys
 end
@@ -63,19 +76,41 @@ end
 # function kde_stack(df, years, xcol=:LatNAD27, ycol=:LatNAD27; kwargs...)
 # end 
 
-function plot_kde(df, xcol, ycol, weightcol; unnormalize=true, extent=nothing, 
-                  do_project=true, cmap="Reds", vmax=nothing)
-    img, xs, ys = kde_image(df, xcol, ycol, weightcol, unnormalize=unnormalize, 
-                            extent=extent, do_project=do_project)
+function plot_kde(
+    df,
+    xcol,
+    ycol,
+    weightcol;
+    unnormalize = true,
+    extent = nothing,
+    do_project = true,
+    cmap = "Reds",
+    vmax = nothing,
+)
+    img, xs, ys = kde_image(
+        df,
+        xcol,
+        ycol,
+        weightcol,
+        unnormalize = unnormalize,
+        extent = extent,
+        do_project = do_project,
+    )
 
     fig, ax = plt.subplots()
-    axim = ax.imshow(img, origin="lower", extent=Iterators.flatten(extent), cmap=cmap, vmax=vmax)
+    axim = ax.imshow(
+        img,
+        origin = "lower",
+        extent = Iterators.flatten(extent),
+        cmap = cmap,
+        vmax = vmax,
+    )
     cbar = fig.colorbar(axim)
-    cbar.set_label("Units/sq. km", rotation=270)
+    cbar.set_label("Units/sq. km", rotation = 270)
 end
 
 function plotstuff()
-    imgs = [kde_image(oil_prod, xc, yc, Symbol(y), do_project=false)[1] for y in 2014:2017]
+    imgs = [kde_image(oil_prod, xc, yc, Symbol(y), do_project = false)[1] for y = 2014:2017]
 end
 
 
@@ -84,21 +119,36 @@ end
 #
 oob(row, col, out) = row < 1 || row > size(out, 1) || col < 1 || col > size(out, 2)
 
-function bin_vals(demrsc, df; valcol=:sum15_17, loncol=:LongNAD27, latcol=:LatNAD27,
-                  smoothing::Union{Nothing, <:Real}=nothing)
+function bin_vals(
+    demrsc,
+    df;
+    valcol = :sum15_17,
+    loncol = :LongNAD27,
+    latcol = :LatNAD27,
+    smoothing::Union{Nothing,<:Real} = nothing,
+)
     out = zeros(size(demrsc))
     for (lon, lat, val) in eachrow(df[:, [loncol, latcol, valcol]])
         row, col = nearest_pixel(demrsc, lat, lon)
         oob(row, col, out) && continue
         out[row, col] += coalesce(val, 0)
     end
-    
-    return (!isnothing(smoothing) && smoothing > 0) ? imfilter(out, Kernel.gaussian(smoothing)) : out
+
+    return (!isnothing(smoothing) && smoothing > 0) ?
+           imfilter(out, Kernel.gaussian(smoothing)) : out
 end
 
-function coarse_bin_vals(demrsc, df; step_km=nothing, digits=nothing, 
-                         valcol=:sum15_17, loncol=:LongNAD27, latcol=:LatNAD27,
-                         samesize=true, sum_vals=true)
+function coarse_bin_vals(
+    demrsc,
+    df;
+    step_km = nothing,
+    digits = nothing,
+    valcol = :sum15_17,
+    loncol = :LongNAD27,
+    latcol = :LatNAD27,
+    samesize = true,
+    sum_vals = true,
+)
     if !isnothing(step_km)
         lons, lats = coarse_grid_km(demrsc, step_km)
     elseif !isnothing(digits)
@@ -120,29 +170,32 @@ end
 function resize_nearest(img, nrows, ncols)
     intp = interpolate(img, BSpline(Constant()))
     etpf = extrapolate(intp, Flat())
-    return etpf(range(.5, stop=size(img, 1)+.5, length=nrows), range(.5, stop=size(img, 2)+.5, length=ncols))
+    return etpf(
+        range(0.5, stop = size(img, 1) + 0.5, length = nrows),
+        range(0.5, stop = size(img, 2) + 0.5, length = ncols),
+    )
 end
 
 
 """Create a grid in DemRsc area with spacing `step_km`"""
-function coarse_grid_km(demrsc, step_km::Union{AbstractFloat, Nothing}=(10/0.62))
-    lons, lats = grid(demrsc, sparse=true)
+function coarse_grid_km(demrsc, step_km::Union{AbstractFloat,Nothing} = (10 / 0.62))
+    lons, lats = grid(demrsc, sparse = true)
     step = km_to_deg(step_km)
     return lons[1]:step:lons[end], lats[1]:(-step):lats[end]
 end
 
 """Create a grid from a DemRsc on the 10^(-`digits`) grid lines"""
-function coarse_grid_deg(demrsc, digits::Union{Int, Nothing}=2)
+function coarse_grid_deg(demrsc, digits::Union{Int,Nothing} = 2)
     step = 10.0^(-digits)
-    lons, lats = grid(demrsc, sparse=true)
-    lat1, lat2 = round.(extrema(lats), digits=digits)
-    lon1, lon2 = round.(extrema(lons), digits=digits)
+    lons, lats = grid(demrsc, sparse = true)
+    lat1, lat2 = round.(extrema(lats), digits = digits)
+    lon1, lon2 = round.(extrema(lons), digits = digits)
     return lon1:step:lon2, lat2:(-step):lat1
 end
 
 
 # Make a new column in `df` with the sum of columns `years`
-function sum_years(df, years...; outcol=:yearsum)
+function sum_years(df, years...; outcol = :yearsum)
     df_out = copy(df)
     yearsyms = [Symbol(y) for y in years]
     df_out[!, outcol] = zeros(size(df_out, 1))
@@ -153,31 +206,51 @@ function sum_years(df, years...; outcol=:yearsum)
     return df_out
 end
 
-funccols(df, f=sum) = [f(col) for col in eachcol(curdf)]
-funccols(df, cols, f=sum) = [f(df[!, col]) for col in cols]
+funccols(df, f = sum) = [f(col) for col in eachcol(curdf)]
+funccols(df, cols, f = sum) = [f(df[!, col]) for col in cols]
 
-function _levels_colors(maxlevel=100)
+function _levels_colors(maxlevel = 100)
     levels = [0, 1, 5, 10, 15, 25, 50, maxlevel]
-    colors = broadcast(t -> t./256, [ (69, 117, 199, 256), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    colors = broadcast(
+        t -> t ./ 256,
+        [
+            (69, 117, 199, 256),
+            (145, 191, 219, 256),
+            (224, 243, 248, 256),
+            (255, 255, 191, 255),
+            (254, 224, 144, 256),
+            (252, 141, 89, 256),
+            (215, 48, 39, 256),
+        ],
+    )
     return levels, colors
 end
 
 dfmt = dateformat"y-m-d H:M:S.s"
-readdf(fname) = coalesce.(CSV.read(fname, dateformat=dfmt), 0)
-function plot_wells_per_mi(demrsc; years=[2015, 2016, 2017], outname=nothing)
-    oil_prod = CSV.read("oil_production.csv");
+readdf(fname) = coalesce.(CSV.read(fname, dateformat = dfmt), 0)
+function plot_wells_per_mi(demrsc; years = [2015, 2016, 2017], outname = nothing)
+    oil_prod = CSV.read("oil_production.csv")
 
     outcol = :yearsum
-    df = sum_years(oil_prod, years...; outcol=outcol)
+    df = sum_years(oil_prod, years...; outcol = outcol)
 
-    oil_per_mi = coarse_bin_vals(demrsc, df, sum_vals=false, step_km=1/0.62, valcol=outcol);
+    oil_per_mi =
+        coarse_bin_vals(demrsc, df, sum_vals = false, step_km = 1 / 0.62, valcol = outcol)
 
     levels, colors = _levels_colors(maximum(oil_per_mi))
     fig, ax = plt.subplots()
-    axim = ax.contourf(oil_per_mi, colors=colors, levels=levels, origin="image", vmax=45, extend="max")
+    axim = ax.contourf(
+        oil_per_mi,
+        colors = colors,
+        levels = levels,
+        origin = "image",
+        vmax = 45,
+        extend = "max",
+    )
     fig.colorbar(axim)
-    
-    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+
+    cmap_, norm_ =
+        plt.matplotlib.colors.from_levels_and_colors(levels = levels, colors = colors)
     # ax.imshow(oil_per_mi, norm_(oil_per_mi))#, cmap=cmap_)
 
     if !isnothing(outname)
@@ -188,28 +261,29 @@ end
 
 function save_img_geotiff(outfile::AbstractString, img, demrsc, levels, colors)
     save_img_figure("tmp.png", img, levels, colors)
-    kml.create_geotiff(rsc_data=Dict(demrsc), img_filename="tmp.png", outfile=outfile)
+    kml.create_geotiff(rsc_data = Dict(demrsc), img_filename = "tmp.png", outfile = outfile)
 end
 
 function plot_oil_water_bar()
-    oil_prod = readdf("oil_production.csv");
-    water_inj = readdf("water_injection.csv");
+    oil_prod = readdf("oil_production.csv")
+    water_inj = readdf("water_injection.csv")
 
     xs = 2009:2017
     oilyears = funccols(oil_prod, [Symbol(y) for y in xs])
     wateryears = funccols(water_inj, [Symbol(y) for y in xs])
 
     fig, axes = plt.subplots(1, 2)
-    bg_color="b"
-    active_color="r"
-    colors = fill(bg_color, length(xs)); colors[end] = active_color
+    bg_color = "b"
+    active_color = "r"
+    colors = fill(bg_color, length(xs))
+    colors[end] = active_color
 
-    xticks=[2009, 2013, 2017]
+    xticks = [2009, 2013, 2017]
     # yticks=[0, 0.5, 1, 1.5, 2, 2.5]
 
     titles = ["oil", "water"]
     for (title, ax, values) in zip(titles, axes, [oilyears, wateryears])
-        ax.bar(xs, values, color=colors)
+        ax.bar(xs, values, color = colors)
         ax.set_xticks(xticks)
         # ax.set_yticks(yticks)
         ax.set_ylabel("Million bbl/day")
@@ -218,24 +292,49 @@ function plot_oil_water_bar()
     end
 end
 
-function plot_oil_volume_grid(demrsc; outname=nothing)
-    oil_prod = readdf("oil_production.csv");
+function plot_oil_volume_grid(demrsc; outname = nothing)
+    oil_prod = readdf("oil_production.csv")
     valcol = Symbol(2017)
-    oil_prod17 = @where(oil_prod, cols(valcol) .> 0);
+    oil_prod17 = @where(oil_prod, cols(valcol) .> 0)
 
     grid_size_mi = 10
-    oil_grid = coarse_bin_vals(demrsc, oil_prod17, sum_vals=true, 
-                               step_km=grid_size_mi/0.62, valcol=valcol);
+    oil_grid = coarse_bin_vals(
+        demrsc,
+        oil_prod17,
+        sum_vals = true,
+        step_km = grid_size_mi / 0.62,
+        valcol = valcol,
+    )
 
-    oil_grid[oil_grid .== 0] .= NaN
+    oil_grid[oil_grid.==0] .= NaN
 
-    levels = [0, .01, 1, 2, 4, 7, 10, 15, 20] .* 1e6
-    colors = broadcast(t -> t./256, [ (0, 0, 0, 0), (69, 117, 199, 200), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    levels = [0, 0.01, 1, 2, 4, 7, 10, 15, 20] .* 1e6
+    colors = broadcast(
+        t -> t ./ 256,
+        [
+            (0, 0, 0, 0),
+            (69, 117, 199, 200),
+            (145, 191, 219, 256),
+            (224, 243, 248, 256),
+            (255, 255, 191, 255),
+            (254, 224, 144, 256),
+            (252, 141, 89, 256),
+            (215, 48, 39, 256),
+        ],
+    )
     fig, ax = plt.subplots()
-    axim = ax.contourf(oil_grid, colors=colors, levels=levels, origin="image", vmax=maximum(levels), extend="max")
+    axim = ax.contourf(
+        oil_grid,
+        colors = colors,
+        levels = levels,
+        origin = "image",
+        vmax = maximum(levels),
+        extend = "max",
+    )
     fig.colorbar(axim)
-    
-    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+
+    cmap_, norm_ =
+        plt.matplotlib.colors.from_levels_and_colors(levels = levels, colors = colors)
 
     if !isnothing(outname)
         save_img_geotiff(outname, oil_grid, demrsc, levels, colors)
@@ -243,26 +342,51 @@ function plot_oil_volume_grid(demrsc; outname=nothing)
     return oil_grid, fig, ax
 end
 
-function plot_water_volume_grid(demrsc; outname=nothing, grid_size_mi = 5)
-    water_inj = readdf("water_injection.csv");
+function plot_water_volume_grid(demrsc; outname = nothing, grid_size_mi = 5)
+    water_inj = readdf("water_injection.csv")
     valcol = Symbol(2017)
-    water_inj17 = @where(water_inj, cols(valcol) .> 0);
+    water_inj17 = @where(water_inj, cols(valcol) .> 0)
 
-    water_grid = coarse_bin_vals(demrsc, water_inj17, sum_vals=true, 
-                               step_km=grid_size_mi/0.62, valcol=valcol);
+    water_grid = coarse_bin_vals(
+        demrsc,
+        water_inj17,
+        sum_vals = true,
+        step_km = grid_size_mi / 0.62,
+        valcol = valcol,
+    )
 
-    water_grid[water_grid .== 0] .= NaN
+    water_grid[water_grid.==0] .= NaN
 
     # levels = [0, .01, 1, 2, 4, 7, 10, 15, 20] .* 1e6  # For 10 mi grid
     # levels_adjust = 10 / grid_size_mi / 2
     # levels .*= levels_adjust
-    levels = [0, .01, 1, 5, 10, 20, 40, 80, 180] .* 1e6
-    colors = broadcast(t -> t./256, [ (0, 0, 0, 0), (69, 117, 199, 200), (145, 191, 219, 256), (224, 243, 248, 256), (255, 255, 191, 255), (254, 224, 144, 256), (252, 141, 89, 256), (215, 48, 39, 256), ])
+    levels = [0, 0.01, 1, 5, 10, 20, 40, 80, 180] .* 1e6
+    colors = broadcast(
+        t -> t ./ 256,
+        [
+            (0, 0, 0, 0),
+            (69, 117, 199, 200),
+            (145, 191, 219, 256),
+            (224, 243, 248, 256),
+            (255, 255, 191, 255),
+            (254, 224, 144, 256),
+            (252, 141, 89, 256),
+            (215, 48, 39, 256),
+        ],
+    )
     fig, ax = plt.subplots()
-    axim = ax.contourf(water_grid, colors=colors, levels=levels, origin="image", vmax=maximum(levels), extend="max")
+    axim = ax.contourf(
+        water_grid,
+        colors = colors,
+        levels = levels,
+        origin = "image",
+        vmax = maximum(levels),
+        extend = "max",
+    )
     fig.colorbar(axim)
-    
-    cmap_, norm_ = plt.matplotlib.colors.from_levels_and_colors(levels=levels, colors=colors)
+
+    cmap_, norm_ =
+        plt.matplotlib.colors.from_levels_and_colors(levels = levels, colors = colors)
 
     if !isnothing(outname)
         save_img_geotiff(outname, water_grid, demrsc, levels, colors)
@@ -276,19 +400,25 @@ macro name(arg)
         $x
     end
 end
-depth1(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .< lowdepth)
-depth2(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .> lowdepth, cols(depthcol) .< middepth)
-depth3(df, depthcol=:BotPerfDepth, lowdepth=3281, middepth=6562) = @where(df, cols(depthcol) .> middepth)
-function plot_water_bubbles_grouped(demrsc; outname=nothing)
-    loncol, latcol,depthcol = :LongNAD27, :LatNAD27, :BotPerfDepth
+depth1(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
+    @where(df, cols(depthcol) .< lowdepth)
+depth2(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
+    @where(df, cols(depthcol) .> lowdepth, cols(depthcol) .< middepth)
+depth3(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
+    @where(df, cols(depthcol) .> middepth)
+function plot_water_bubbles_grouped(demrsc; outname = nothing)
+    loncol, latcol, depthcol = :LongNAD27, :LatNAD27, :BotPerfDepth
 
-    delaware = sgeom.shape(JSON.parsefile("delaware_shape.geojson")["features"][1]["geometry"])
-    midland = sgeom.shape(JSON.parsefile("midland_shape.geojson")["features"][1]["geometry"])
-    central_basin = sgeom.shape(JSON.parsefile("central_basin_shape.geojson")["features"][1]["geometry"])
+    delaware =
+        sgeom.shape(JSON.parsefile("delaware_shape.geojson")["features"][1]["geometry"])
+    midland =
+        sgeom.shape(JSON.parsefile("midland_shape.geojson")["features"][1]["geometry"])
+    central_basin =
+        sgeom.shape(JSON.parsefile("central_basin_shape.geojson")["features"][1]["geometry"])
 
-    water_inj = readdf("water_injection.csv");
+    water_inj = readdf("water_injection.csv")
     valcol = Symbol(2017)
-    water_inj17 = @where(water_inj, cols(valcol) .> 0);
+    water_inj17 = @where(water_inj, cols(valcol) .> 0)
     pts = sgeom.Point.(collect(zip(water_inj17[!, loncol], water_inj17[!, latcol])))
 
     delaware_pts = water_inj17[delaware.contains.(pts), :]
@@ -311,11 +441,27 @@ end
 # E.g.
 # m = rand(5, 5);
 # stack = cat([m .+ .2i for i in 1:10]..., dims=3)
-function animate_stack(stack, date_list; plot_map=true, bigfont=true,
-                       loncol=:LongNAD27, latcol=:LatNAD27, xc=loncol, yc=latcol, sizecol=:mag,
-                       vm=maximum(stack), vmin=nothing, vmax=nothing, twoway=true,
-                       outname="test.gif", delay=500, cmap="seismic_wide_y", transparent=false,
-                       extent=nothing, titles=nothing)
+function animate_stack(
+    stack,
+    date_list;
+    plot_map = true,
+    bigfont = true,
+    loncol = :LongNAD27,
+    latcol = :LatNAD27,
+    xc = loncol,
+    yc = latcol,
+    sizecol = :mag,
+    vm = maximum(stack),
+    vmin = nothing,
+    vmax = nothing,
+    twoway = true,
+    outname = "test.gif",
+    delay = 500,
+    cmap = "seismic_wide_y",
+    transparent = false,
+    extent = nothing,
+    titles = nothing,
+)
 
     if bigfont
         rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
@@ -332,25 +478,33 @@ function animate_stack(stack, date_list; plot_map=true, bigfont=true,
     # titles = !isnothing(geolist) ? string(geolist) : [string(i) for i in 1:size(stack,3)]
     titles = isnothing(titles) ? string.(date_list) : titles
 
-    for i=1:size(stack, 3)
+    for i = 1:size(stack, 3)
         ax.clear()
 
         fig, ax = plot_map ? plot_states(extent, fig, ax) : (fig, ax)
 
         img = stack[:, :, i]
-        vmin, vmax = _get_vminmax(img, vm, vmin, vmax, twoway=twoway)
+        vmin, vmax = _get_vminmax(img, vm, vmin, vmax, twoway = twoway)
         img = transparent ? _cmap_transp(img, plt.cm.get_cmap(cmap), vmin, vmax) : img
 
         if plot_map
-            ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent, zorder=2.5, transform=ccrs.PlateCarree())
+            ax.imshow(
+                img,
+                vmax = vmax,
+                vmin = vmin,
+                cmap = cmap,
+                extent = extent,
+                zorder = 2.5,
+                transform = ccrs.PlateCarree(),
+            )
         else
-            ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap, extent=extent)
+            ax.imshow(img, vmax = vmax, vmin = vmin, cmap = cmap, extent = extent)
         end
 
         ax.set_title(titles[i])
-        fname = @sprintf("testgif_%04d",i)
+        fname = @sprintf("testgif_%04d", i)
         println("Saving $(titles[i]) as $fname")
-        fig.savefig(fname, bbox_inches="tight")
+        fig.savefig(fname, bbox_inches = "tight")
     end
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
     rm.(glob("testgif_*.png"))
@@ -367,23 +521,37 @@ end
 # TODO: do this instead to CMAP, and not to the image, so that we can still use a colorbar (that isn't 0 to 1)
 # https://stackoverflow.com/questions/25408393/getting-individual-colors-from-a-color-map-in-matplotlib
 Normalize = pyimport("matplotlib.colors").Normalize
-function _cmap_transp(img, cmap, vmin=0, vmax=maximum(img))
+function _cmap_transp(img, cmap, vmin = 0, vmax = maximum(img))
     # Any value whose absolute value is > .0001 will have zero transparency
     # alphas = Normalize(0, .3, clip=true)(abs.(img))
-    alphas = Normalize(0, vmax, clip=true)(abs.(img))
-    alphas = clamp.(alphas, .2, 1)  # alpha value clipped at the bottom at .2
+    alphas = Normalize(0, vmax, clip = true)(abs.(img))
+    alphas = clamp.(alphas, 0.2, 1)  # alpha value clipped at the bottom at .2
 
-    colors = Normalize(vmin, vmax, clip=true)(img);
+    colors = Normalize(vmin, vmax, clip = true)(img)
     colors = cmap(colors)
     colors[:, :, end] = alphas
     return colors
 end
 
-function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing;
-                          loncol=:lon, latcol=:lat, sizecol=:mag, datecol=:datetime,
-                          size_scale=4, outname="test.gif", alpha=.4, vm=6, c="r", 
-                          delay=200, cmap="seismic_wide_y", extent=nothing, titles=nothing,
-                          bigfont=true)
+function animate_imgs_pts(
+    df,
+    date_list,
+    stack::Union{MapImage,Nothing} = nothing;
+    loncol = :lon,
+    latcol = :lat,
+    sizecol = :mag,
+    datecol = :datetime,
+    size_scale = 4,
+    outname = "test.gif",
+    alpha = 0.4,
+    vm = 6,
+    c = "r",
+    delay = 200,
+    cmap = "seismic_wide_y",
+    extent = nothing,
+    titles = nothing,
+    bigfont = true,
+)
     # (-104.0, -103.001666673056, 30.901666673336, 31.90000000028)
     extent = isnothing(stack) ? extent : MapImages.grid_extent(stack)
     xmin, xmax, ymin, ymax = extent
@@ -400,12 +568,12 @@ function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing
     end
 
 
-    prevdate = Date(1,1,1)
+    prevdate = Date(1, 1, 1)
     # for i=1:size(stack, 3)
-    for i=1:length(date_list)
-    # for i=1:4
+    for i = 1:length(date_list)
+        # for i=1:4
         curdate = date_list[i]
-        df_sub = df[(df[:, datecol] .< curdate) .& (df[:, datecol] .> prevdate), :]
+        df_sub = df[(df[:, datecol].<curdate).&(df[:, datecol].>prevdate), :]
         prevdate = curdate
 
         (lons, lats, sizes) = (df_sub[:, loncol], df_sub[:, latcol], df_sub[:, sizecol])
@@ -414,12 +582,22 @@ function animate_imgs_pts(df, date_list, stack::Union{MapImage, Nothing}=nothing
         ax.clear()
         fig, ax = plot_states(extent, fig, ax)
 
-        ax.scatter(lons, lats, sizes, c=c, alpha=alpha, edgecolor="none", zorder=2.5, transform=ccrs.PlateCarree())
-        !isnothing(stack) && ax.imshow(stack[:,:,i], vmax=vm, vmin=-vm, cmap=cmap, extent=extent)
+        ax.scatter(
+            lons,
+            lats,
+            sizes,
+            c = c,
+            alpha = alpha,
+            edgecolor = "none",
+            zorder = 2.5,
+            transform = ccrs.PlateCarree(),
+        )
+        !isnothing(stack) &&
+        ax.imshow(stack[:, :, i], vmax = vm, vmin = -vm, cmap = cmap, extent = extent)
         ax.set_title(titles[i])
-        fname = @sprintf("testgif_%04d",i)
+        fname = @sprintf("testgif_%04d", i)
         println("Saving $(titles[i]) as $fname")
-        fig.savefig(fname, bbox_inches="tight")
+        fig.savefig(fname, bbox_inches = "tight")
     end
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
     rm.(glob("testgif_*.png"))
@@ -435,9 +613,16 @@ end
 
 # plt.figure(); plt.contourf(oil_per_mi, colors=colors, levels=[0, 1, 5, 10, 15, 25, 50, maximum(oil_per_mi)], origin="image", vmax=45, extend="max"); plt.colorbar()
 
-function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_basins=true)
+function plot_states(
+    extent,
+    fig = nothing,
+    ax = nothing;
+    add_counties = true,
+    add_basins = true,
+)
     fig = isnothing(fig) ? plt.figure() : fig
-    ax = isnothing(ax) ? fig.add_axes([0, 0, 1, 1], projection=ccrs.LambertConformal()) : ax
+    ax = isnothing(ax) ? fig.add_axes([0, 0, 1, 1], projection = ccrs.LambertConformal()) :
+        ax
 
     # extent = isnothing(stack) ? extent : MapImages.grid_extent(stack)
     ax.set_extent(extent, ccrs.Geodetic())
@@ -457,15 +642,17 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_bas
     # records = shpreader.Reader(states_shp).records()
     # states = shpreader.Reader(states_shp).geometries()
     # ff = shpreader.Reader("/Users/scott/.local/share/cartopy/shapefiles/natural_earth/cultural/ne_10m_admin_1_states_provinces_lakes_shp.shp")
-    ff = shpreader.Reader("/Users/scott/Downloads/cb_2018_us_state_5m/cb_2018_us_state_5m.shp")
+    ff =
+        shpreader.Reader("/Users/scott/Downloads/cb_2018_us_state_5m/cb_2018_us_state_5m.shp")
     records = ff.records()
     states = ff.geometries()
     # records = ff.records()
     for (record, state) in zip(records, states)
-    # for state in states
+        # for state in states
         # pick a default color for the land with a black outline,
         # this will change if the storm intersects with our track
-        facecolor = record.attributes["NAME"] == "Texas" ? [0.9375, 0.9375, 0.859375] : [1, 1, 1, 0]
+        facecolor =
+            record.attributes["NAME"] == "Texas" ? [0.9375, 0.9375, 0.859375] : [1, 1, 1, 0]
         # facecolor = [0.9375, 0.9375, 0.859375]
         edgecolor = "black"
 
@@ -475,26 +662,37 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_bas
         #     facecolor = "#FF7E00"
         # end
 
-        ax.add_geometries([state], ccrs.PlateCarree(),
-                          facecolor=facecolor, edgecolor=edgecolor)
+        ax.add_geometries(
+            [state],
+            ccrs.PlateCarree(),
+            facecolor = facecolor,
+            edgecolor = edgecolor,
+        )
     end
-    pecos =(-103.49283 ,  31.4243)
-    ax.plot(pecos..., "bo", ms=10, transform=ccrs.PlateCarree() ,zorder=3)
-    plt.text(((-.09, .09) .+ pecos)..., "Pecos", fontdict=Dict("size"=>14, "weight"=>"bold"), horizontalalignment="right", transform=ccrs.Geodetic())
+    pecos = (-103.49283, 31.4243)
+    ax.plot(pecos..., "bo", ms = 10, transform = ccrs.PlateCarree(), zorder = 3)
+    plt.text(
+        ((-.09, 0.09) .+ pecos)...,
+        "Pecos",
+        fontdict = Dict("size" => 14, "weight" => "bold"),
+        horizontalalignment = "right",
+        transform = ccrs.Geodetic(),
+    )
 
     if add_counties
         reader = shpreader.Reader("./countyl010g_shp_nt00964/countyl010g.shp")
         counties = collect(reader.geometries())
         COUNTIES = cfeature.ShapelyFeature(counties, ccrs.PlateCarree())
-        ax.add_feature(COUNTIES, facecolor="none", edgecolor="gray")
+        ax.add_feature(COUNTIES, facecolor = "none", edgecolor = "gray")
     end
 
     if add_basins
-        reader = shpreader.Reader("./repermianbasinshapefile/Permian_Boundary_2018_TORA_Dutton.shp")
-        basins = collect(reader.geometries())[[3,4,6]]
+        reader =
+            shpreader.Reader("./repermianbasinshapefile/Permian_Boundary_2018_TORA_Dutton.shp")
+        basins = collect(reader.geometries())[[3, 4, 6]]
         # ax.add_geometries(basins, ccrs.epsg(3665), facecolor="gray", edgecolor="gray")
         BASINS = cfeature.ShapelyFeature(basins, ccrs.epsg(3665))
-        ax.add_feature(BASINS, facecolor="none", edgecolor="black", linewidth=3)
+        ax.add_feature(BASINS, facecolor = "none", edgecolor = "black", linewidth = 3)
     end
 
 
@@ -502,8 +700,18 @@ function plot_states(extent, fig=nothing, ax=nothing; add_counties=true, add_bas
 end
 
 # oil_totals = CSV.read("PermianTotalByYear.csv"); oil_totals = oil_totals[1:end-1, :]
-function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active_color="r", titles=string.(xs),
-                    bigfont=true, xticks=[2000, 2009, 2018], yticks=[0, 0.5, 1, 1.5, 2, 2.5])
+function animate_bar(
+    xs,
+    ys;
+    outname = "test.gif",
+    delay = 200,
+    bg_color = "b",
+    active_color = "r",
+    titles = string.(xs),
+    bigfont = true,
+    xticks = [2000, 2009, 2018],
+    yticks = [0, 0.5, 1, 1.5, 2, 2.5],
+)
     # years, values = oil_totals[:, :year], oil_totals[:, :oil_bbl]
     fig, ax = plt.subplots()
     if bigfont
@@ -512,12 +720,13 @@ function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active
         rcParams["font.weight"] = "bold"
     end
 
-    for i=1:length(xs)
+    for i = 1:length(xs)
         ax.clear()
 
-        colors = fill(bg_color, length(xs)); colors[i] = active_color
+        colors = fill(bg_color, length(xs))
+        colors[i] = active_color
 
-        ax.bar(xs, values, color=colors)
+        ax.bar(xs, values, color = colors)
 
         ax.set_xticks(xticks)
         ax.set_yticks(yticks)
@@ -525,9 +734,9 @@ function animate_bar(xs, ys; outname="test.gif", delay=200, bg_color="b", active
 
 
         ax.set_title(titles[i])
-        fname = @sprintf("testgif_%04d",i)
+        fname = @sprintf("testgif_%04d", i)
         println("Saving $(titles[i]) as $fname")
-        fig.savefig(fname, bbox_inches="tight")
+        fig.savefig(fname, bbox_inches = "tight")
     end
     run(`magick -delay $(delay/10) -loop 0 testgif_\*.png $outname`)
     rm.(glob("testgif_*.png"))

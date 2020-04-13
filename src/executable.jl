@@ -6,4 +6,3 @@ Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
     main()
     return 0
 end
-
