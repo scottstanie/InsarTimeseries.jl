@@ -36,6 +36,8 @@ function run_stackavg(
     )
     filter!(.!isnothing, picked_igram_indices)
 
+
+    # TODO: fix loading all into mem
     # Load only these 
     # input_dset = STACK_DSET
     # input_dset = STACK_FLAT_DSET
