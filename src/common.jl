@@ -80,6 +80,12 @@ function names(fname::AbstractString, group::AbstractString)
     end
 end
 
+function get_chunk(fname::AbstractString, dset::AbstractString)
+    h5open(fname) do f
+        return HDF5.get_chunk(f[dset])
+    end
+end
+
 # From https://github.com/JuliaLang/julia/blob/master/base/broadcast.jl#L662
 # broadcastable(x::Union{AbstractArray,Number,Ref,Tuple,Broadcasted}) = x
 # # Default to collecting iterables — which will error for non-iterables

@@ -5,6 +5,7 @@ import Glob
 import Dierckx
 import SparseArrays: spdiagm
 
+include("./blocks.jl")
 
 """Helper to make a group path similar to `dset`, with new base"""
 _match_dset_path(dset, newgroup) = join([newgroup; split(dset, '/')[2:end]], '/')
@@ -24,6 +25,7 @@ function proc_pixel_linear(
     unw_stack_file,
     in_dset,
     valid_igram_indices,
+    unmasked_idx_set,
     outfile,
     outdset,
     geolist,
@@ -33,39 +35,68 @@ function proc_pixel_linear(
     prune_outliers = true,
     sigma = 4,
     prune_fast = false,
-    row = nothing,
-    col = nothing,
+    row_slice = nothing,
+    col_slice = nothing,
 )
-    unw_pixel_raw =
-        h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
-    if any(isnan.(unw_pixel_raw))
-        println("$row, $col: nan")
+    # in_buf = zeros(Float32, (length(col_slice), length(row_slice), length(valid_igram_indices)))
+    in_buf = zeros(Float32, (length(row_slice), length(col_slice), length(valid_igram_indices)))
+    try
+        # in_buf .= h5read(unw_stack_file, in_dset, (col_slice, row_slice, :))[:, :, valid_igram_indices]
+        in_buf .= h5read(unw_stack_file, in_dset, (row_slice, col_slice, :))[:, :, valid_igram_indices]
+    catch e
+        println(e, " ", "fail ", row_slice, " ", col_slice)
         return
     end
+    # out_buf = Array{Float32, 2}(undef, (length(row_slice), length(col_slice)))
+    # out_buf = Array{Float32, 2}(undef, (length(col_slice), length(row_slice)))
+    # out_buf = zeros(Float32, (length(col_slice), length(row_slice)))
+    out_buf = zeros(Float32, (length(row_slice), length(col_slice)))
+    # println(row_slice, col_slice, length(row_slice), length(col_slice))
 
-    # Also load correlations for cutoff
-    # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
-    # cor_thresh = 0.05
-    # cor_pixel, cor_thresh = nothing, 0.0
+    for (i,row) in enumerate(row_slice), (j,col) in enumerate(col_slice)
+    # seems to be transposed
+    # for (i,row) in enumerate(col_slice), (j,col) in enumerate(row_slice)
+        !((row, col) in unmasked_idx_set) && continue
 
-    linear = true
-    soln_phase, igram_count, geo_clean, unw_clean = calc_soln(
-        unw_pixel_raw,
-        geolist,
-        intlist,
-        alpha,
-        linear;
-        L1 = L1,
-        prune_outliers = prune_outliers,
-        sigma = sigma,
-        prune_fast = prune_fast,
-    )
+        unw_pixel_raw = in_buf[i, j, :]
+        # unw_pixel_raw = h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
+        if any(isnan.(unw_pixel_raw))
+            println("$row, $col: nan")
+            return
+        end
+
+        # Also load correlations for cutoff
+        # cor_pixel = h5read(CC_FILENAME, "stack", (row, col, :))[1, 1, valid_igram_indices]
+        # cor_thresh = 0.05
+        # cor_pixel, cor_thresh = nothing, 0.0
+
+        linear = true
+        soln_phase, igram_count, geo_clean, unw_clean = calc_soln(
+            unw_pixel_raw,
+            geolist,
+            intlist,
+            alpha,
+            linear;
+            L1 = L1,
+            prune_outliers = prune_outliers,
+            sigma = sigma,
+            prune_fast = prune_fast,
+        )
+
+        # println(size(soln_phase), size(out_buf))
+        # println(soln_phase, " $i $j")
+        out_buf[i, j] = soln_phase[1] * P2MM
+    end
+    # println(row_slice, " ", col_slice)
+    # println(out_buf)
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        f[outdset][row, col] = P2MM * soln_phase
-        f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
+        f[outdset][row_slice, col_slice] = out_buf
+        # f[outdset][col_slice, row_slice] = out_buf
+        # f[outdset][row, col] = P2MM * soln_phase
+        # f[_count_dset(outdset)][row, col] = igram_count
+        # f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end
@@ -76,6 +107,7 @@ function proc_pixel_daily(
     unw_stack_file,
     in_dset,
     valid_igram_indices,
+    unmasked_idx_set,
     outfile,
     outdset,
     geolist,
@@ -234,12 +266,20 @@ function run_sbas(
         end
     end
 
-    @time @sync @distributed for (row, col) in get_unmasked_idxs(geolist)
+    # Get blocks to load and process
+    unmasked_idx_set = Set(get_unmasked_idxs(geolist))  # Set of tuples
+    # windows returns (row_slice, col_slice)
+    w = collect(windows(unw_stack_file, dset))
+    # print(w[1:10])
+
+    @time @sync @distributed for (row_slice, col_slice) in w
+    # @time @sync @distributed for (row_slice, col_slice) in w[1:3]
         # @time @sync @distributed for (row, col) in collect(Iterators.product(300:400, 300:400))
         proc_func(
             unw_stack_file,
             dset,
             valid_igram_indices,
+            unmasked_idx_set,
             outfile,
             outdset,
             geolist,
@@ -249,12 +289,13 @@ function run_sbas(
             prune_outliers = prune_outliers,
             sigma = sigma,
             prune_fast = prune_fast,
-            row = row,
-            col = col,
+            row_slice = row_slice,
+            col_slice = col_slice,
         )
     end
     println("Merging files into $outfile")
     @time merge_partial_files(outfile, outdset, _count_dset(outdset), _excl_dset(outdset))
+    # @time merge_partial_files(outfile, outdset)
     # _stddev_dset(outdset), _stddev_raw_dset(outdset))
 
     # _save_std_attrs(outfile, outdset)
