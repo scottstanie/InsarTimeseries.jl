@@ -86,8 +86,6 @@ function create_mask_stacks(
     end
 
     row_looks, col_looks = find_looks_taken(igram_path, geo_path = geo_path)
-    dem_rsc = Sario.load(Sario.find_rsc_file(directory = igram_path))
-
     loop_over_files(
         _get_geo_mask,
         geo_path,
@@ -104,7 +102,7 @@ function create_mask_stacks(
     save_masks(igram_path, geo_path, overwrite = overwrite)
 
     # Finall, add the aux. information
-    dem_rsc = Sario.load(Sario.find_rsc_file(directory = igram_path))
+    dem_rsc = Sario.load(joinpath(igram_path, "dem.rsc"))
     Sario.save_dem_to_h5(mask_filename, dem_rsc, DEM_RSC_DSET, overwrite = overwrite)
 
     geo_date_list = Sario.find_geos(directory = geo_path, parse = true)
@@ -209,7 +207,7 @@ function zero_masked_areas(directory; input_exts = [".int", ".cc"])
         wp = _get_workerpool(8)
         println("Starting zeroing areas for $input_ext")
         @time pmap(
-            (name_in, name_out, mask_idx) -> _load_and_run(
+            (name_in, name_out, mask_idx)->_load_and_run(
                 zero_file,
                 name_in,
                 name_out,
@@ -231,14 +229,14 @@ function zero_file(
     arr3d::AbstractArray{T,3},
     mask_idx;
     do_permute = false,
-) where {T<:Number}
+) where {T <: Number}
     mask = _read_mask(mask_idx, do_permute)
     data = @view arr3d[:, :, 2]
     data[mask] .= 0
     return arr3d
 end
 
-function zero_file(arr::AbstractArray{T,2}, mask_idx; do_permute = false) where {T<:Number}
+function zero_file(arr::AbstractArray{T,2}, mask_idx; do_permute = false) where {T <: Number}
     mask = _read_mask(mask_idx, do_permute)
     arr[mask] .= 0
     return arr
@@ -282,7 +280,7 @@ function deramp_unws(
     # else
     println("Starting stack deramp ")
     pmap(
-        (name_in, name_out, mask_idx) -> _load_and_run(
+        (name_in, name_out, mask_idx)->_load_and_run(
             remove_ramp,
             name_in,
             name_out,
@@ -421,7 +419,7 @@ function create_hdf5_stack(
 
     file_list = find_files(file_ext, directory)
 
-    testf = Sario.load(file_list[1])
+    testf = Sario.load(file_list[1], rsc_file = "dem.rsc")
     rows, cols = size(testf)
     # Note: since we're just loading/saving, don't permute on way in or way out
     shape = (cols, rows, length(file_list))
@@ -459,7 +457,7 @@ function create_hdf5_stack(
     if do_repack
         repack(filename, dset_name)
     end
-
+    
     return filename
 end
 
@@ -477,7 +475,7 @@ function repack(filename, dset_name)
 end
 function _make_tmp_name(filename)
     fparts = splitpath(filename)
-    return joinpath(fparts[1:end-1]..., "tmp_" * fparts[end])
+    return joinpath(fparts[1:end - 1]..., "tmp_" * fparts[end])
 end
 
 
@@ -595,7 +593,7 @@ function shift_stack(stack_in, ref_row::Int, ref_col::Int; window::Int = 5)
 end
 
 function _shift_layer(layer, patch, ref_row, ref_col, half_win)
-    patch .= layer[ref_row-half_win:ref_row+half_win, ref_col-half_win:ref_col+half_win]
+    patch .= layer[ref_row - half_win:ref_row + half_win, ref_col - half_win:ref_col + half_win]
 
     # Adding the `view` to eliminate extra singleton dimension from HDF5
     return view(layer .- mean(patch), :, :)
@@ -667,8 +665,7 @@ function loop_over_files(
 
     wp = _get_workerpool(max_procs)
     pmap(
-        (name_in, name_out) ->
-            _load_and_run(f, name_in, name_out, looks = looks, do_permute = do_permute),
+        (name_in, name_out)->_load_and_run(f, name_in, name_out, looks = looks, do_permute = do_permute),
         wp,
         in_todo,
         out_todo,
@@ -688,8 +685,7 @@ function loop_over_files(
 )
     wp = _get_workerpool(max_procs)
     pmap(
-        (name_in, name_out) ->
-            _load_and_run(f, name_in, name_out, looks = looks, do_permute = do_permute),
+        (name_in, name_out)->_load_and_run(f, name_in, name_out, looks = looks, do_permute = do_permute),
         wp,
         in_files,
         out_files,

@@ -53,9 +53,9 @@ function huber_fit(
         # Stopping check
         r_norm = norm(A * x - z - b)
 
-        # equivalent to vv below,  but faster
-        # s_norm  = norm(-rho * A' * (z - zold))
         s_norm = norm(BLAS.gemv('T', -rho, A, (z - zold)))
+        # ^^ equivalent to this below,  but faster
+        # s_norm  = norm(-rho * A' * (z - zold))
 
         eps_pri = sqrt(n) * abstol + reltol * maximum([norm(A * x), norm(-z), norm(b)])
         eps_dual = sqrt(n) * abstol + reltol * norm(rho * u)
@@ -135,11 +135,11 @@ function irls(
     W = zeros(Float64, (size(A, 1), size(A, 1)))
 
     ep = sqrt(eps(eltype(x)))
-    W .= diagm(0 => (abs.(b - A * x) .+ ep) .^ (p - 2))
+    W .= diagm(0 => (abs.(b - A * x) .+ ep).^(p - 2))
 
     for ii = 1:iters
         x .= (A' * W * A) \ (A' * W * b)
-        W .= diagm(0 => (abs.(b - A * x) .+ ep) .^ (p - 2))
+        W .= diagm(0 => (abs.(b - A * x) .+ ep).^(p - 2))
     end
     # println("objective: ", l1_objective(A, x, b))
     return Float32.(x)

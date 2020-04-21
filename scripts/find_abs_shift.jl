@@ -6,7 +6,10 @@ import Glob
 using HDF5
 using PyCall
 using Printf: @printf
-using MapImages
+try
+    using MapImages
+catch
+end
 
 # gps = InsarTimeseries.gps
 latlon = pyimport("apertools.latlon")
@@ -41,7 +44,7 @@ station_name_list85 = ["TXKM", "TXMH", "TXFS", "NMHB", "TXAD", "TXS3"]
 all_stations = sort(unique([station_name_list78; station_name_list85]))
 
 # Functions for error evaluation
-rms(arr::AbstractArray{T,1}) where {T<:Any} = sqrt(mean(filter(!isnan, arr .^ 2)))
+rms(arr::AbstractArray{T,1}) where {T <: Any} = sqrt(mean(filter(!isnan, arr.^2)))
 # rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
 maxabs(x) = maximum(abs.(filter(!isnan, x)))
 
@@ -93,7 +96,7 @@ _get_date_range(fname::AbstractString, dset::AbstractString) =
 
 function _get_station_rowcol(station_name, directory = ".")
     demrsc = Sario.load(joinpath(directory, "dem.rsc"))
-    return map(x -> convert(Int, x), MapImages.station_rowcol(station_name, demrsc))
+    return map(x->convert(Int, x), MapImages.station_rowcol(station_name, demrsc))
 end
 
 
@@ -110,7 +113,7 @@ function _get_val_at_station(
     halfwin = div(window, 2)
     try
         patch =
-            h5read(insar_fname, dset, (col-halfwin:col+halfwin, row-halfwin:row+halfwin))
+            h5read(insar_fname, dset, (col - halfwin:col + halfwin, row - halfwin:row + halfwin))
         return mean(patch)
     catch e
         println(e)
@@ -270,7 +273,7 @@ end
 
 function shift_from(src::HDF5Dataset, shift::Real)
     tmp = src .+ shift
-    tmp[src.==0] .= 0
+    tmp[src .== 0] .= 0
     return tmp
 end
 
@@ -287,7 +290,7 @@ function get_shift(fname, src::String = "velos/1", dest = "velos_shifted/1")
     h5open(fname, "r+") do f
         return f[dest][div(end, 2), div(end, 2)] - f[src][div(end, 2), div(end, 2)]
     end
-end
+    end
 
 function save_as_unw(fname, dset = "velos/1")
     amp = abs.(Sario.load(Glob.glob("*.int")[1]))
