@@ -16,7 +16,7 @@ function solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
             A = hcat(asc_eu, desc_eu)'
             b = [asc_img[ii, jj]; desc_img[ii, jj]]
 
-            b = asc_eu[2] < 0 ? -b : b
+            # b = asc_eu[2] < 0 ? -b : b
 
             x = A \ b
             east[ii, jj] = x[1]
@@ -83,7 +83,7 @@ function demo_east_up(
 )
     if full
         # asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked/", "/data4/scott/path85/stitched/igrams_looked/")
-        asc_fname, desc_fname = map(x -> joinpath(x, fn), (asc_path, desc_path))
+        asc_fname, desc_fname = map(x->joinpath(x, fn), (asc_path, desc_path))
         asc_img, desc_img = MapImages.find_overlaps(asc_fname, desc_fname, dset)
 
         asc_los_map = MapImage(joinpath(asc_path, LOS_MAP), dset_name = "stack")
@@ -99,10 +99,8 @@ function demo_east_up(
             desc_los_map[desc_idxs..., :],
         )
     else
-        asc_path, desc_path = (
-            "/data3/scott/pecos/zoom_pecos_full_78/igrams_looked/",
-            "/data3/scott/pecos/zoom_pecos_full_85/igrams_looked/",
-        )
+        asc_path, desc_path = ("/data3/scott/pecos/zoom_pecos_full_78/igrams_looked/",
+            "/data3/scott/pecos/zoom_pecos_full_85/igrams_looked/",)
         east, up = solve_east_up(asc_path, desc_path, fn, fn, dset)
     end
     if show
