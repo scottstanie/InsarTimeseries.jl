@@ -1,3 +1,5 @@
+import MapImages
+
 """Threaded version: If we can load all stack file into memory, might be much quicker"""
 function run_sbas(
     unw_stack::AbstractArray{<:AbstractFloat},
@@ -129,7 +131,7 @@ function invert_sbas(
                 @inbounds for i = 1:row_c
                     if L1
                         # vstack[row+i-1, col+j-1, :] .= invert_pixel(chunk[i, j, :], B, v)
-                        vstack[row+i-1, col+j-1, :] .= invert_pixel(
+                        vstack[row + i - 1, col + j - 1, :] .= invert_pixel(
                             chunk[i, j, :],
                             B,
                             rho = rho,
@@ -138,7 +140,7 @@ function invert_sbas(
                             abstol = abstol,
                         )
                     else
-                        vstack[row+i-1, col+j-1, :] .=
+                        vstack[row + i - 1, col + j - 1, :] .=
                             invert_pixel(chunk[i, j, :], pB, extra_zeros)
                     end
                     pix_count += 1

@@ -13,9 +13,7 @@ _stack_size_mb(filename, dset) =
     prod(size(filename, dset)) * sizeof(eltype(filename, dset)) / 1e6
 _strnothing(aa) = isnothing(aa) ? "nothing" : aa   # Since we can't string(nothing)
 
-"""Runs SBAS inversion on all unwrapped igrams
 
-"""
 function run_inversion(config_file::Dict{AbstractString,Any})
     conf_dict = TOML.parsefile(config_file)
     # Convert to symbols so it works to pass as kwargs
@@ -242,12 +240,12 @@ function find_valid_indices(
 
     # This is just for logging purposes:
     too_long_igrams =
-        filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
+        filter(ig->temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
     println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
 
     ### Remove long time baseline igrams ###
     valid_igrams =
-        filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+        filter(ig->temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
 
 
     ### Collect remaining geo dates and igrams
@@ -267,7 +265,7 @@ function _get_pairs(dates, gap = 1)
     isempty(dates) && return (nothing, nothing)
     length(dates) < gap && error("Need at least $gap dates if gap=$gap")
     dates_pad = [nothing; dates; nothing]
-    return collect(zip(dates_pad[1:end-gap], dates_pad[(gap+1):end]))
+    return collect(zip(dates_pad[1:end - gap], dates_pad[(gap + 1):end]))
 end
 
 

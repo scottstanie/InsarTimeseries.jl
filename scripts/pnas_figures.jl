@@ -1,5 +1,7 @@
 import CSV
 using DataFramesMeta
+import StatsBase: countmap
+import Images: label_components
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
 
 include("./plotting.jl")
@@ -31,7 +33,7 @@ function plot_rrc_oil_water()
     bg_color = "b"
     active_color = "r"
     colors = fill(bg_color, length(xs))
-    colors[end-1] = active_color
+    colors[end - 1] = active_color
 
     xticks = [2007, 2011, 2015, 2018]
     # yticks=[0, 0.5, 1, 1.5, 2, 2.5]
@@ -76,10 +78,10 @@ function pnas_outlier_figure(
     geolist = Sario.load_geolist_from_h5("gps_pixels_78.h5")
     intlist = Sario.load_intlist_from_h5("gps_pixels_78.h5")
     end_date = Date(2018, 1, 1)
-    geolist18 = geolist[geolist.>end_date]
+    geolist18 = geolist[geolist .> end_date]
     idxs = InsarTimeseries._good_idxs(geolist18, intlist)
     intlist17 = intlist[idxs]
-    geolist17 = geolist[geolist.<end_date]
+    geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
     unw_vals17_cm = p2c .* unw_vals17
     vm = maximum(abs.(unw_vals17_cm))
@@ -130,9 +132,7 @@ function pnas_outlier_figure(
 
 
     stds78_cm =
-        Float64.(std.(
-            p2c .* [h5read("gps_pixels_78.h5", name) for name in station_name_list78],
-        ))
+        Float64.(std.(p2c .* [h5read("gps_pixels_78.h5", name) for name in station_name_list78],))
     dists78 = [
         MapImages.latlon_to_dist(
             MapImages.station_latlon("TXKM"),
@@ -141,9 +141,7 @@ function pnas_outlier_figure(
     ]
 
     stds85_cm =
-        Float64.(std.(
-            p2c .* [h5read("gps_pixels_85.h5", name) for name in station_name_list85],
-        ))
+        Float64.(std.(p2c .* [h5read("gps_pixels_85.h5", name) for name in station_name_list85],))
     dists85 = [
         MapImages.latlon_to_dist(
             MapImages.station_latlon("TXKM"),
@@ -153,9 +151,9 @@ function pnas_outlier_figure(
     stations_all = vcat(station_name_list78, station_name_list85)
     dists_all = vcat(dists78, dists85)
     stds_all = vcat(stds78_cm, stds85_cm)
-    dists_all = dists_all[stations_all.!="TXKM"]
-    stds_all = stds_all[stations_all.!="TXKM"]
-    stations_all = stations_all[stations_all.!="TXKM"]
+    dists_all = dists_all[stations_all .!= "TXKM"]
+    stds_all = stds_all[stations_all .!= "TXKM"]
+    stations_all = stations_all[stations_all .!= "TXKM"]
 
 
     df_dists = DataFrame(dists = dists_all, stds = stds_all, names = stations_all)
@@ -230,11 +228,9 @@ function pnas_outlier_figure(
 end
 
 
-import StatsBase: countmap
-import Images: label_components
 _max_label(labels) = sort(
     [tup for tup in countmap(vec(labels)) if tup[1] != 0],
-    by = x -> x[2],
+    by = x->x[2],
     rev = true,
 )[1][1]
 
@@ -267,13 +263,13 @@ function save_pnas_images(;
         @show days
 
         m1 = MapImage(f, dset)
-        m1[m1.==0] .= NaN
+        m1[m1 .== 0] .= NaN
 
         if !isnothing(dem_mask_height)
             dem = Sario.load("elevation_looked.dem")
             labels = label_components(dem .< 1200)
             maxl = _max_label(labels)
-            m1[labels.!=maxl] .= NaN
+            m1[labels .!= maxl] .= NaN
         end
 
         m1 = m1[latbounds, (-110.0, -90.0)] # no lon bounds really
@@ -366,8 +362,7 @@ function get_gps_errors(; outfile = "gps_errors.csv", to_cm = false)
         @show fname
         push!(
             errors,
-            round.(
-                get_gps_error(
+            round.(get_gps_error(
                     fname,
                     all_stations,
                     dset = "velos_shifted/1",
@@ -375,15 +370,13 @@ function get_gps_errors(; outfile = "gps_errors.csv", to_cm = false)
                     window = 7,
                     shift = -0.0,
                 ),
-                digits = 2,
-            ),
+                digits = 2,),
         )
         fname = p78 * f
         @show fname
         push!(
             errors,
-            round.(
-                get_gps_error(
+            round.(get_gps_error(
                     fname,
                     all_stations,
                     dset = "velos_shifted/1",
@@ -391,8 +384,7 @@ function get_gps_errors(; outfile = "gps_errors.csv", to_cm = false)
                     window = 7,
                     shift = -0.0,
                 ),
-                digits = 2,
-            ),
+                digits = 2,),
         )
     end
     columns = [
@@ -455,11 +447,11 @@ function pnas_outlier_figure_old(
     intlist = Sario.load_intlist_from_h5("gps_pixels_78.h5")
 
     end_date = Date(2018, 1, 1)
-    geolist18 = geolist[geolist.>end_date]
+    geolist18 = geolist[geolist .> end_date]
     idxs = InsarTimeseries._good_idxs(geolist18, intlist)
     intlist17 = intlist[idxs]
 
-    geolist17 = geolist[geolist.<end_date]
+    geolist17 = geolist[geolist .< end_date]
     unw_vals17 = unw_vals[idxs]
     geolist17, intlist17, unw_vals17 = (geolist, intlist, unw_vals)
 
@@ -530,7 +522,7 @@ function pnas_outlier_figure_old(
     _set_figsize(fig, h, 2.3w)
     fig.savefig("outliers3.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
-    println("Before: $before mm/yr, $(before * (dts[end] - dts[1]).value /3650) total defo")
+    println("Before: $before mm/yr, $(before * (dts[end] - dts[1]).value / 3650) total defo")
     println("After: $(after * 3650) mm/yr, $full_defo total defo")
 
     # 4. histogram before/after outlier
@@ -636,8 +628,8 @@ function hunjoo_figures()
 
     # Reservoir properties
     RD = variables["Reservoir"][:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
-    RR_R_D1 = (variables["Reservoir"][:, 3] / (5 * 3280.84) * 55) .^ 2      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
-    RR_R_D2 = (variables["Reservoir"][:, 3] / (1 * 3280.84) * 35) .^ 2      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
+    RR_R_D1 = (variables["Reservoir"][:, 3] / (5 * 3280.84) * 55).^2      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
+    RR_R_D2 = (variables["Reservoir"][:, 3] / (1 * 3280.84) * 35).^2      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
 
     # Cities
     Pecos = [-103.4932, 31.4229]             # (degrees)
@@ -686,7 +678,7 @@ function hunjoo_figures()
         vmax = vm,
         vmin = -vm,
         extent = (XD_min, XD_max, YD_min, YD_max),
-    )  #,"EdgeColor","none")   # InSAR data
+    )  # ,"EdgeColor","none")   # InSAR data
     # fig.colorbar(axim)
     ax.plot(variables["BB_XD"][[1, end]], variables["BB_YD"][[1, end]], lw = 1.5)
     ax.plot(Pecos[1], Pecos[2], "ko")
@@ -736,4 +728,128 @@ function hunjoo_figures()
     _set_figsize(fig, 1.3 .* [3, 3.5]...)
     # _set_figsize(fig)
     fig.savefig("hunjoo4.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+end
+
+
+# Functions for weighting by covariance
+
+import ImageFiltering: imfilter, Kernel
+function get_aps(stack_in)
+    return imfilter(stack_in .- imfilter(stack_in, (Kernel.gaussian((0, 0, 1)), Kernel.Laplacian((false, false, true)))),  Kernel.gaussian((2, 2, 0)))
+end
+
+function try_weight()
+    test_sub = get_aps(defo_stack_unreg);
+    var_by_day = dropdims(var((defo_stack_unreg .- test_sub); dims = (1, 2)), dims = (1, 2));
+    var_by_day2 = abs.(test_sub[400, 400, :])
+    Qddfull2 = build_Q(abs.(var_by_day2), geolist, intlist);
+    Qinv2 = inv(Qddfull2);
+    W = inv(A' * Qinv * A) * A' * Qinv2;
+end
+
+function build_Q(var_dates, geolist, intlist, diag_val = 0.5)
+    N = length(intlist);
+    Q = zeros((N, N));
+    for (jdx, ig2) in enumerate(intlist)
+        for (idx, ig1) in enumerate(intlist)
+            if jdx > idx
+            # if Q[jdx, idx] != 0 
+                Q[idx, jdx] = Q[jdx, idx]
+                continue  # dont need to redo, symmetric
+            end
+            # @show idx, jdx
+            if idx == jdx
+                v1 = var_dates[findfirst(isequal(ig1[1]), geolist)]
+                v2 = var_dates[findfirst(isequal(ig1[2]), geolist)]
+                Q[idx, jdx] = v1 + v2
+            else
+                cm = countmap([ig1..., ig2...])
+                if length(Set([ig1..., ig2...])) == 4
+                    Q[idx, jdx] = 0
+                    continue
+                end
+                repeated_date = sort(collect(countmap([ig1..., ig2...])), by = x->x[2], rev = true)[1][1]
+                # @show repeated_date
+                # @show findfirst(isequal(repeated_date), geolist)
+                sigma_repeat = var_dates[findfirst(isequal(repeated_date), geolist)]
+                # if jdx in (1, 2) && idx == 28
+                    # @show idx, jdx, repeated_date, sigma_repeat
+                if (repeated_date == ig1[1] && repeated_date == ig2[1]) || (repeated_date == ig1[2] && repeated_date == ig2[2])
+                    Q[idx, jdx] = sigma_repeat
+                else
+                    Q[idx, jdx] = -sigma_repeat
+                end
+            end
+        end
+    end
+    return Q + diag_val * I
+end
+
+
+_intlsubset(geolist, intlist, N) = intlist[[(intl[1] in geolist[1:N] && intl[2] in geolist[1:N]) for intl in intlist]]
+function _intlsubset(geolist, intlist, vallist::AbstractArray, N)
+    idxs = [(intl[1] in geolist[1:N] && intl[2] in geolist[1:N]) for intl in intlist]
+    intlist[idxs], vallist[idxs]
+end
+
+function Qsubset(var_by_day, geolist, intlist, N)
+    g = geolist[1:N]
+    v = var_by_day[1:N]
+    igl = _intlsubset(geolist, intlist, N)
+    return build_Q(v, g, igl)
+end
+
+function build_Q_diag(var_dates, geolist, intlist)
+    N = length(intlist);
+    Q1 = zeros((N,));
+    for (idx, ig) in enumerate(intlist)
+        v1 = var_dates[findfirst(isequal(ig[1]), geolist)]
+        v2 = var_dates[findfirst(isequal(ig[2]), geolist)]
+        Q1[idx] = v1 + v2
+    end
+    return diagm(Q1)
+end
+
+import Combinatorics
+function demo_weighted(bad_var = 100)
+    geolist1 = Date(2020, 1, 1) .+ Dates.Day(12) .* (0:3)
+    # 4-element Array{Date,1}:
+    #  2020-01-01
+    #  2020-01-13
+    #  2020-01-25
+    #  2020-02-06
+    intlist1 = [tuple(p...) for p in Combinatorics.combinations(geolist1, 2)]
+    # 6-element Array{Tuple{Date,Date},1}:
+    #  (2020-01-01, 2020-01-13)
+    #  (2020-01-01, 2020-01-25)
+    #  (2020-01-01, 2020-02-06)
+    #  (2020-01-13, 2020-01-25)
+    #  (2020-01-13, 2020-02-06)
+    #  (2020-01-25, 2020-02-06)
+
+    # Real phase is 0, 1, 2, 3
+    phi_true = [0, 1, 2, 3] 
+    A = InsarTimeseries.build_A_matrix(geolist1, intlist1)
+    @show meas_nonoise = A * phi_true[2:end]
+    @show A \ meas_nonoise
+
+    # But with noisy second day, looks like it uplifted 10
+    phi_noise = [0, 10, 2, 3] 
+    @show meas_noise = A * phi_noise[2:end]
+    println("No weighting:")
+    @show A \ meas_noise
+
+    variances = [1, bad_var, 1, 1]
+    a, b, c, d = variances
+    # Q = [a + b a -b; a a + c c; -b c b + c] + 0.1 * I
+    Q = build_Q(variances, geolist1, intlist1, .1)
+    print("Weight LS:")
+    @show inv(A' * inv(Q) * A) * A' * inv(Q) * meas_noise
+
+    println("or just diagonal?")
+    Q2 = build_Q_diag(variances, geolist1, intlist1)
+    println(Q2)
+    print("Weight LS:")
+    @show inv(A' * inv(Q2) * A) * A' * inv(Q2) * meas_noise
+
 end
