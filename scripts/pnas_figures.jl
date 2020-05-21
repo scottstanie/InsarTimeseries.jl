@@ -3,6 +3,7 @@ using DataFramesMeta
 import StatsBase: countmap
 import Images: label_components
 rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+mdates = pyimport("matplotlib.dates")
 
 include("./plotting.jl")
 # Formatting functions:
@@ -851,5 +852,81 @@ function demo_weighted(bad_var = 100)
     println(Q2)
     print("Weight LS:")
     @show inv(A' * inv(Q2) * A) * A' * inv(Q2) * meas_noise
+
+end
+
+
+function plot_l1_vs_stack(;offset=true, alpha=1000, h=3, w=4.5, year=2018, unwfile="unw_stack_shiftedonly.h5")
+    rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
+    # https://matplotlib.org/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file
+    # so obscure
+    rcParams["pdf.fonttype"] = 42
+    rcParams["ps.fonttype"] = 42
+    rcParams["font.family"] = "Helvetica"
+    rcParams["font.size"] = 16
+    rcParams["font.weight"] = "bold"
+    years = mdates.YearLocator()   # every year
+    months = mdates.MonthLocator()  # every month
+    years_fmt = mdates.DateFormatter("%Y")
+    # yrs = (Date(2015), Date(2016), Date(2017), Date(2018))
+
+    geolist, intlist, igram_idxs =load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(year,1,1))
+    Blin = sum(InsarTimeseries.prepB(geolist, intlist), dims = 2)
+    s = "TXOZ"
+    # TODO get defitions here
+    timediffs = InsarTimeseries.day_diffs(geolist)
+    unw_vals = get_stack_vals(unwfile, gps.station_rowcol(s, Dict(demrsc))..., 1, input_dset, igram_idxs)
+
+    # Timeseries: regularized, but with all outliers
+    Ba = InsarTimeseries.prepB(geolist, intlist, false, alpha)
+    unw_vals_a = InsarTimeseries.augment_zeros(Ba, unw_vals)
+    regged = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(Ba \ unw_vals_a, timediffs)
+
+
+    # No outlier removal linear cases
+    stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink = false)
+
+    # Plot all with-outlier cases
+    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), 
+                             insar_mm_list=[stack, l1], offset=offset, 
+                             labels=["stack", "L1"])
+
+    ax.plot(geolist, regged, "-x", lw=3)
+    ax.format_xdata = years_fmt
+    ax.xaxis.set_major_locator(years)
+    ax.xaxis.set_major_formatter(years_fmt)
+    # ax.tick_params(axis="x", labelrotation=45)
+    y0 = ceil(maximum(abs.(regged)))
+    ax.set_ylim((-y0, y0))
+    ax.set_yticks(-y0:2:y0)
+    _set_figsize(fig, h, w)
+    fig.savefig("compare_$(year)_with_outliers.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+
+    ###### Outlier remove cases ################
+    # timeseries: regularized with outliers removed
+    geo_clean, intlist_clean, unw_clean = remove_outliers(geolist, intlist, unw_vals, mean_sigma_cutoff = 4)
+    td_clean = InsarTimeseries.day_diffs(geo_clean)
+    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), offset=offset)
+    Ba2 = InsarTimeseries.prepB(geo_clean, intlist_clean, false, alpha)
+    unw_vals_a2 = InsarTimeseries.augment_zeros(Ba2, unw_clean)
+    regged2 = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(Ba2 \ unw_vals_a2, td_clean)
+
+    # linear solves with outlier removal
+    stack2, l22, l12 = prunesolve(geolist, intlist, unw_vals, Blin, 4, shrink = false)
+
+    # PLOT:
+    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1),
+                             insar_mm_list=[stack2, l12], offset=offset, 
+                             labels=["stack", "L1"])
+    ax.plot(geo_clean, regged2, "-x", lw=3)
+    # y0 = ceil(maximum(abs.(regged2)))
+    ax.set_ylim((-y0, y0))
+    ax.set_yticks(-y0:2:y0)
+    ax.format_xdata = years_fmt
+    ax.xaxis.set_major_locator(years)
+    ax.xaxis.set_major_formatter(years_fmt)
+    _set_figsize(fig, h, w)
+    fig.savefig("compare_$(year)_removed.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+
 
 end
