@@ -110,13 +110,13 @@ function top_n(values, keys, n, rev = true)
     return collect(zip(sorted_top...))
 end
 
-function solve_without_largest(geolist, intlist, unw_vals, B, n = 1; in_mm_yr = true)  #, direction=:high, method=:mean)
+function solve_without_largest(geolist, intlist, unw_vals, B, n = 1; in_mm_yr = true)  # , direction=:high, method=:mean)
     bad_days = largest_n_dates(geolist, intlist, unw_vals, n)
     println("Removing $(length(bad_days)) days out of $(length(geolist)): $bad_days")
     return solve_without(bad_days, geolist, intlist, unw_vals, in_mm_yr = in_mm_yr)
 end
 
-function solve_after_cutoff(geolist, intlist, unw_vals, B, nsigma = 3; in_mm_yr = true)  #, direction=:high, method=:mean)
+function solve_after_cutoff(geolist, intlist, unw_vals, B, nsigma = 3; in_mm_yr = true)  # , direction=:high, method=:mean)
     bad_days = find_mean_outliers(geolist, intlist, unw_vals, nsigma)
 
 
@@ -145,7 +145,11 @@ import Base.-
 
 function phase_triplets(intlist, unw_vals)
     # triplets = Array{Tuple{Igram, eltype(unw_vals)}}(undef, ())
+    et = eltype(unw_vals)
     triplets = Array{Tuple{Igram,Igram,Igram},1}()
+    # closures = Array{et,1}()
+    phases = Array{Tuple{et,et,et},1}()
+    # Note the longest one to avoid searching for ifgs that dont exist
     max_temp = maximum(temporal_baseline(intlist))
     for ii = 1:length(intlist)
         # val1 = unw_vals[ii]
@@ -156,11 +160,21 @@ function phase_triplets(intlist, unw_vals)
             if (ig1[2] != ig2[1]) || temporal_baseline(third) > max_temp
                 continue
             end
+            kk = findfirst(isequal(third), intlist)
+            val_tup = (unw_vals[ii], unw_vals[jj], -unw_vals[kk])
+            any(v == zero(eltype(et)) for v in val_tup) && continue
             # push!(triplets, third, vals)
             push!(triplets, (ig1, ig2, third))
+            push!(phases, val_tup)
+            # push!(closures, unw_vals[ii] + unw_vals[jj] - unw_vals[kk])
         end
     end
-    return triplets
+    phase_arr = zeros(et, (length(triplets), 3))
+    for (idx, val) in enumerate(phases)
+        phase_arr[idx, :] .= val
+    end
+    closures = sum(phase_arr, dims = 2)
+    return triplets, phase_arr, closures
 end
 
 

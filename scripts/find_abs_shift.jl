@@ -207,7 +207,6 @@ function get_gps_los(
     end_date = Date(2019, 1, 1),
 )
     dts, gps_los_data = gps.load_gps_los_data(
-        geo_path = geo_path,
         los_map_file = los_map_file,
         station_name = station_name,
         start_date = start_date,

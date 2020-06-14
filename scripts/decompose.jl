@@ -15,6 +15,7 @@ function solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
 
             A = hcat(asc_eu, desc_eu)'
             b = [asc_img[ii, jj]; desc_img[ii, jj]]
+            @show b
 
             # b = asc_eu[2] < 0 ? -b : b
 
@@ -23,6 +24,7 @@ function solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
             up[ii, jj] = x[2]
         end
     end
+    @show east[1:3]
     return east, up
 end
 
