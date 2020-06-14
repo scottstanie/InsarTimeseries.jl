@@ -14,9 +14,12 @@ shrink_baseline = InsarTimeseries.shrink_baseline
 invert(B::AbstractArray{T,2}, u::AbstractArray{T,1}) where {T<:Number} =
     InsarTimeseries.invert_pixel_l1(u, B)
 # invt(B, v) = [p2mm * (B \ v) ; p2mm * invert(B, v) ]
-invt(B, v) = [p2mm * (sum(v) / sum(B)); p2mm * (B \ v); p2mm * invert(B, v)]
+# gives the stacked version, sbas version, and L1 version
+invt(B, v) = [p2mm * (sum(v) / sum(B));
+              p2mm * (B \ v);
+              p2mm * invert(B, v) ]
 
-function prune_igrams(g, i, u, ns = 3, ct = nothing, cp = nothing, shrink = true)
+function prune_igrams(g, i, u, ns = 3, ct = nothing, cp = nothing, shrink = false)
     g, i, u = remove_outliers(g, i, u, mean_sigma_cutoff = ns)
     # i, u = prune_cor(i, u, cor_pixel=cp, cor_thresh=ct)
     i, u = shrink ? shrink_baseline(g, i, u) : (i, u)
@@ -30,7 +33,7 @@ function prunesolve(
     nsigma = 3;
     cor_thresh = nothing,
     cor_pixel = nothing,
-    shrink = true,
+    shrink = false,
 )
     constant = true
     geo, ints, unws = prune_igrams(g, i, u, nsigma, cor_thresh, cor_pixel, shrink)
@@ -42,7 +45,7 @@ end
 
 function demo_point(
     rowcol;
-    sigma = 3,
+    sigma = 4,
     max_temp = 800,
     show = true,
     refpoint = nothing,

@@ -2,6 +2,13 @@ cb = pyimport("palettable.colorbrewer.diverging")
 cmgood = cb.RdYlBu_11_r.mpl_colormap
 rdylbl = cb.RdYlBu_11_r.mpl_colormap
 
+
+matlab_colors(n=4) = [[0, 0.4470, 0.7410, 1],
+                   [0.8500, 0.3250, 0.0980, 1],
+                   [0.9290, 0.6940, 0.1250, 1],
+                   [0.4940, 0.1840, 0.5560, 1]][1:n]
+
+
 SEISMIC_WIDE = plt.matplotlib.colors.LinearSegmentedColormap.from_list(
     "seismic_wide",
     [

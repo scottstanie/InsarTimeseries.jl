@@ -619,17 +619,22 @@ function plot_image_line(img::MapImage, rowcol1, rowcol2; plotkwargs...)
 end
 
 function plot_gps_los(
-    name,
-    insar_mm = nothing;
+    name;
+    insar_mm_list = [],
+    labels = repeat([nothing], length(insar_mm_list)),
+    insar_colors = repeat([nothing], length(insar_mm_list)),
     ref = "TXKM",
     start_date = Date(2014, 11, 1),
-    end_date = (2019, 2, 1),
+    end_date = Date(2019, 2, 1),
     ylim = (-3, 3),
+    yticks = [-2, 0, 2],
     title = "",
     bigfont = false,
     offset = true,
     lw = 5,
+    rasterized=true,
     gps_color = "#86b251",
+    ms=7,
 )
     fig, ax = plt.subplots()
     dts, los = get_gps_los(
@@ -646,19 +651,20 @@ function plot_gps_los(
         rcParams["font.weight"] = "bold"
     end
 
-    ax.plot(dts, los, ".", color = gps_color, markersize = 7, label = "GPS")
+    ax.plot(dts, los, ".", color = gps_color, markersize = ms, label = "GPS", rasterized=rasterized)
 
-    if !isnothing(insar_mm)
+    for (label, insar_mm, c) in zip(labels, insar_mm_list, insar_colors)
         insar_cm_day = insar_mm / 365 / 10
         full_defo = insar_cm_day * (dts[end] - dts[1]).value
         bias = offset ? -full_defo / 2 : 0
-        ax.plot(dts, bias .+ day_nums .* insar_cm_day, "r", lw = lw, label = "Insar")
+        ax.plot(dts, bias .+ day_nums .* insar_cm_day, "-", c=c, lw = lw, label=label)
     end
 
     # Or if you want different settings for the grids:
     ax.grid(which = "major", alpha = 0.5)
     ax.set_xticks(dts[1]:Dates.Day(365):dts[end])
-    ax.set_yticks([-2, 0, 2])
+    ax.set_yticks(yticks)
+    ax.set_ylabel("[cm]")
 
     ax.set_ylim(ylim)
     #     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +

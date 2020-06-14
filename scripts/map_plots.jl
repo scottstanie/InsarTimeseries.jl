@@ -6,7 +6,7 @@ import Interpolations: interpolate, extrapolate, BSpline, Constant, Flat
 import ImageFiltering: imfilter, Kernel
 
 import MapImages: nearest_pixel, nearest, grid, km_to_deg
-import Geodesy: LLA, nad27, wgs84, UTMZfromLLA
+import Geodesy: LLA, nad27, wgs84, UTMZfromLLA, UTMfromLLA
 import KernelDensity.kde
 
 kde(df::DataFrame, xcol::Symbol, ycol::Symbol; kwargs...) =
@@ -20,8 +20,8 @@ sgeom = pyimport("shapely.geometry")
 cfeature = pyimport("cartopy.feature")
 
 function project(lons, lats; datum = nad27, zone = 13, north = true)
-    # txutm = UTMZfromLLA(datum)
-    txutm = UTMfromLLA(zone, north, datum)
+    txutm = UTMZfromLLA(datum)
+    # txutm = UTMfromLLA(zone, north, datum)
     pts = txutm.(LLA.(lats, lons, 0))
     # Note: these will have units of meters
     return [p.x for p in pts], [p.y for p in pts]
@@ -400,12 +400,14 @@ macro name(arg)
         $x
     end
 end
+
 depth1(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
     @where(df, cols(depthcol) .< lowdepth)
 depth2(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
     @where(df, cols(depthcol) .> lowdepth, cols(depthcol) .< middepth)
 depth3(df, depthcol = :BotPerfDepth, lowdepth = 3281, middepth = 6562) =
     @where(df, cols(depthcol) .> middepth)
+
 function plot_water_bubbles_grouped(demrsc; outname = nothing)
     loncol, latcol, depthcol = :LongNAD27, :LatNAD27, :BotPerfDepth
 

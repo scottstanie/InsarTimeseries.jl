@@ -70,12 +70,14 @@ gps = pyimport("apertools.gps")
 # println("Defo filename $DEFO_FILENAME, defo linear: $DEFO_FILENAME_LINEAR")
 
 const ignore_geo_file = "geolist_ignore.txt"
-max_temporal_baseline = 500
+# max_temporal_baseline = 500
+max_temporal_baseline = 800
 # max_temporal_baseline = 1200
+unw_filename = "unw_stack_shiftedonly.h5"
 
 # NOTE: not using the ignore file for now- using all .geos
 GEOLIST, INTLIST, VALID_IGRAM_INDICES =
-    InsarTimeseries.load_geolist_intlist(UNW_FILENAME, "", max_temporal_baseline);
+    InsarTimeseries.load_geolist_intlist(unw_filename, "", max_temporal_baseline);
 timediffs = InsarTimeseries.day_diffs(GEOLIST)
 
 

@@ -442,7 +442,6 @@ function build_A_matrix(geolist::Array{Date,1}, intlist::Array{Igram,1})
 end
 
 
-
 _D(n) = spdiagm(0 => -ones(n - 1), 1 => ones(n - 1))[1:end-1, :]
 
 """For Tikhonov regularization, pad the B matrix with alpha*D"""

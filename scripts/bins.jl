@@ -6,10 +6,13 @@ import PyPlot;
 plt = PyPlot;
 using ImageFiltering
 import Images: imresize
+using DataFramesMeta
 using PyCall;
 gps = pyimport("apertools.gps");
 include("./map_plots.jl")
 
+yrsymbols = Symbol.(collect(2009:2017))
+rename_years(df) = rename(df, Dict(yr => Symbol(:y, yr) for yr in yrsymbols) )
 
 barrel2gal = 42.0
 gal2barrel = 1.0 / barrel2gal
@@ -20,9 +23,12 @@ readdf(fname) = coalesce.(CSV.read(fname, dateformat = dfmt), 0)
 demrsc = Sario.load("dem_all.rsc")
 water_prod = readdf("water_production.csv")
 oil_prod = readdf("oil_production.csv")
-gas_prod = readdf("gas_production.csv");
+gas_prod = rename_years(readdf("gas_production.csv"));
 gas_inj = readdf("gas_injection.csv");
 water_inj = readdf("water_injection.csv")
+
+#### Clean known sketchy values
+gas_prod = @where(gas_prod, (:y2015 .< 10000000) .| (:y2017 .< 40000000))
 
 waterinjbins = bin_vals(demrsc, water_inj)
 

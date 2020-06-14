@@ -614,7 +614,9 @@ function hunjoo_figures()
     rcParams["font.weight"] = "medium"
 
     # variables = MAT.matread("/Users/scott/Documents/Learning/PNAS-git-overleaf/data/PNAS_Geomechanics3.mat")
-    variables = MAT.matread("/Users/scott/Desktop/figures/hunjoo/PNAS_Geomechanics7.mat")
+    # variables = MAT.matread("/Users/scott/Desktop/figures/hunjoo/PNAS_Geomechanics7.mat")
+    variables = MAT.matread("/Users/scott/Documents/Learning/GRL-git-overleaf-resubmit/hunjoo-revision-0526/GRL_rev1_Final_b0.01_Scott.mat")
+
     # dict_to_vars(variables)  # Fails cuz of some namespace thing
     # for key in keys(variables)
     #     @eval $(Symbol(key)) = variables[$(QuoteNode(key))]
@@ -627,14 +629,15 @@ function hunjoo_figures()
     YD_min = 31.32
     YD_max = 31.47
 
-    # Reservoir properties
-    RD = variables["Reservoir"][:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
-    RR_R_D1 = (variables["Reservoir"][:, 3] / (5 * 3280.84) * 55).^2      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
-    RR_R_D2 = (variables["Reservoir"][:, 3] / (1 * 3280.84) * 35).^2      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
+    # #  Reservoir properties
+    # RD = variables["Reservoir"][:, 1:2]   # RD = Reservoir(:,1),Reservoir(:,2)];
+    # RR_R_D1 = (variables["Reservoir"][:, 3] / (5 * 3280.84) * 55).^2      # Reservoir radius to scatter plot (55^2 = 5 km = 5*3280.84 ft)
+    # RR_R_D2 = (variables["Reservoir"][:, 3] / (1 * 3280.84) * 35).^2      # Reservoir radius to scatter plot (35^2 = 1 km = 3280.84 ft)
 
     # Cities
     Pecos = [-103.4932, 31.4229]             # (degrees)
 
+    # Figure Scale
     ZD_min = -15.0
     ZD_max = 15.0
     c_min = -10.0
@@ -642,37 +645,48 @@ function hunjoo_figures()
     FZ_min = -4.0
     FZ_max = 2.0
 
-    # Fig 1 Figures
-    # Pecos Area (InSAR + Producing Wells)
-    # fig, ax = plt.subplots()
-    # ax.imshow(Z_Disp_I18, cmap="seismic_wide_y", vmax=7, vmin=-7)  #,"EdgeColor","none")   # InSAR data
-    # _remove_ticks(ax)
-    # _set_figsize(fig)
-    # fig.savefig("hunjoo1.pdf", bbox_inches="tight", transparent=true, dpi=100)
-
-
+    demrsc = MapImages.from_grid(variables["XD"], variables["YD"])
+    
+    # Vertical Deformation
     cmap = "seismic_narrow_y"
     vm = 10
-    # Vertical Deformation in Area of Interest
-    # fig, ax = plt.subplots()
-    # # hold on
-    # # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
-    # axim = ax.imshow(variables[ "Z_Disp_VV18" ], cmap=cmap, vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
-    # fig.colorbar(axim)
-    # ax.plot(variables[ "BB_XD" ][[1, end]], variables[ "BB_YD" ][[1, end]], lw=1.5)
-    # ax.plot(Pecos[1],Pecos[2], "ko");
 
-    # # _remove_ticks(ax)
-    # # _set_figsize(fig)
-    # fig.savefig("hunjoo2.pdf", bbox_inches="tight", transparent=true, dpi=100)
-    demrsc = MapImages.from_grid(variables["XD_VV18"], variables["YD_VV18"])
-    # save_img_geotiff("hunjoo2.tif", MapImage(Z_Disp_VV18, demrsc), cmap=cmap, vm=vm)
+    # Pecos Area InSAR 2,3,1
+    # TODO: DRAW TRANSECT FROM B B''
+    fig, ax = plt.subplots()
+    ax.imshow(variables["Z_Disp_VV18"], cmap=cmap, vmax=vm, vmin=-vm)
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("hunjoo1.pdf", bbox_inches="tight", transparent=true, dpi=100)
 
 
-    # Reservoir + Fault Model
+    # Fault model: 2,3,2
+    fig, ax = plt.subplots()
+    # hold on
+    # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
+    axim = ax.imshow(variables[ "Z_Disp_F3" ], cmap=cmap, vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    fig.colorbar(axim)
+    ax.plot(variables[ "BB_XD" ][[1, end]], variables[ "BB_YD" ][[1, end]], lw=1.5)
+    ax.plot(Pecos[1],Pecos[2], "ko");
+    save_img_geotiff("hunjoo2.tif", MapImage(variables[ "Z_Disp_F3" ], demrsc), cmap = cmap, vm = vm)
+
+
+    # reservoir model: 2,3,3
+    fig, ax = plt.subplots()
+    # hold on
+    # surf(XD_VV18,YD_VV18,Z_Disp_VV18,"EdgeColor","none")
+    cur_im = variables[ "Z_Disp_R3" ][:, :, 3]
+    axim = ax.imshow(cur_im, cmap=cmap, vmax=vm, vmin=-vm, extent=(XD_min, XD_max,YD_min,YD_max))  #,"EdgeColor","none")   # InSAR data
+    fig.colorbar(axim)
+    ax.plot(variables[ "BB_XD" ][[1, end]], variables[ "BB_YD" ][[1, end]], lw=1.5)
+    ax.plot(Pecos[1],Pecos[2], "ko")
+    save_img_geotiff("hunjoo3.tif", MapImage(cur_im, demrsc), cmap = cmap, vm = vm)
+    
+
+    # Fault + reservoir model: 2,3,4
     fig, ax = plt.subplots()
     # surf(XD,YD,Z_Disp_T(:,:,3),"EdgeColor","none")
-    im_mod = variables["Z_Disp_T"][:, :, 3]
+    im_mod = variables["Z_Disp_T3"][:, :, 3]
     axim = ax.imshow(
         im_mod,
         cmap = cmap,
@@ -686,49 +700,89 @@ function hunjoo_figures()
 
     _remove_ticks(ax)
     _set_figsize(fig)
-    fig.savefig("hunjoo3.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
-    save_img_geotiff("hunjoo3.tif", MapImage(im_mod, demrsc), cmap = cmap, vm = vm)
-
-    # B-B' cross-section
-    fig, ax1 = plt.subplots()
-    ax1.plot(BB_L', BB_Z_Disp_I18, "bs", label = "2018 InSAR")
-    ax1.plot(BB_L', BB_Z_Disp_R18, "r-.", lw = 1.5, label = "Reservoir")
-    ax1.plot(BB_L', BB_Z_Disp_F18, "r:", lw = 1.5, label = "Fault")
-    ax1.plot(BB_L', BB_Z_Disp_T18, "r-", lw = 1.5, label = "Res. + Fault")
-    ax1.set_xlim((0, maximum(BB_L)))
-    ax1.set_ylim((2 * FZ_min, 2 * FZ_max))
-    ax1.set_xlabel("B-B' (km)")
-    ax1.set_ylabel("Surface Deformation (cm)")
-
-    # yyaxis right
-    ax2 = ax1.twinx()
-    ax2.plot(BB_FC[:, 1, 1], BB_FC[:, 2, 1], "g-", lw = 2.0)
-    ax2.plot(BB_FC[:, 1, 2], BB_FC[:, 2, 2], "g-", lw = 2.0)
-    ax2.plot(BB_FC[:, 1, 3], BB_FC[:, 2, 3], "g-", lw = 2.0)
-    ax2.plot(BB_FC[:, 1, 4], BB_FC[:, 2, 4], "g-", lw = 2.0)
-    # text(BB_FC(2,1,1),BB_FC(2,2,1),"F1",lw=2.0)  #,"VerticalAlignment","top")
-    # text(BB_FC(2,1,2),BB_FC(2,2,2),"F2",lw=2.0)  #,"VerticalAlignment","top")
-    # text(BB_FC(2,1,3),BB_FC(2,2,3),"F3",lw=2.0)  #,"VerticalAlignment","top")
-    # text(BB_FC(2,1,4),BB_FC(2,2,4),"F4",lw=2.0)  #,"VerticalAlignment","top")
-    ax2.set_ylabel("Fault Depth (km)")
-    ax2.set_xlim((0, maximum(BB_L)))
-    ax2.set_ylim((0.5 * FZ_min, 0.5 * FZ_max))
-    # ax2.legend(["2018 InSAR","Reservoir Model","Fault Model","Res.+Fault Model","Location","northeast"])
-    # set(findobj(gcf,"type","axes"),"FontSize",12,"TickDir","out")
-    #
-    xticks = [0, 7, 14]
-    y1ticks = [-8, -4, 0, 4]
-    y2ticks = [-2, -1, 0, 1]
-
-    ax1.set_xticks(xticks)
-    ax1.set_yticks(y1ticks)
-    ax2.set_yticks(y2ticks)
-    ax1.grid()
-    fig.legend(frameon = false, fontsize = "small", ncol = 2)
-
-    _set_figsize(fig, 1.3 .* [3, 3.5]...)
-    # _set_figsize(fig)
     fig.savefig("hunjoo4.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    save_img_geotiff("hunjoo4.tif", MapImage(im_mod, demrsc), cmap = cmap, vm = vm)
+
+
+    # Residual map: 2,3,5
+    fig, ax = plt.subplots()
+    # surf(XD,YD,Z_Disp_T(:,:,3),"EdgeColor","none")
+    im_mod = variables["Res_Z_VV18"]
+    axim = ax.imshow(
+        im_mod,
+        cmap = cmap,
+        vmax = vm,
+        vmin = -vm,
+        extent = (XD_min, XD_max, YD_min, YD_max),
+    )  # ,"EdgeColor","none")   # InSAR data
+    # fig.colorbar(axim)
+    ax.plot(variables["BB_XD"][[1, end]], variables["BB_YD"][[1, end]], lw = 1.5)
+    ax.plot(Pecos[1], Pecos[2], "ko")
+
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    fig.savefig("hunjoo5.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    save_img_geotiff("hunjoo5.tif", MapImage(im_mod, demrsc), cmap = cmap, vm = vm)
+
+
+    # Supplement: figure reservoir figure with circles
+    fig, ax = plt.subplots()
+    # surf(XD,YD,Z_Disp_T(:,:,3),"EdgeColor","none")
+    im_mod = variables["UZ"]
+    axim = ax.imshow(
+        im_mod,
+        cmap = cmap,
+        vmax = vm,
+        vmin = -vm,
+        extent = (XD_min, XD_max, YD_min, YD_max),
+    )
+    _remove_ticks(ax)
+    _set_figsize(fig)
+    # fig.savefig("hunjoo-supp1.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    save_img_geotiff("hunjoo-supp1.tif", MapImage(im_mod, demrsc), cmap = cmap, vm = vm)
+
+
+    
+    # # B-B' cross-section
+    # fig, ax1 = plt.subplots()
+    # ax1.plot(BB_L', BB_Z_Disp_I18, "bs", label = "2018 InSAR")
+    # ax1.plot(BB_L', BB_Z_Disp_R18, "r-.", lw = 1.5, label = "Reservoir")
+    # ax1.plot(BB_L', BB_Z_Disp_F18, "r:", lw = 1.5, label = "Fault")
+    # ax1.plot(BB_L', BB_Z_Disp_T18, "r-", lw = 1.5, label = "Res. + Fault")
+    # ax1.set_xlim((0, maximum(BB_L)))
+    # ax1.set_ylim((2 * FZ_min, 2 * FZ_max))
+    # ax1.set_xlabel("B-B' (km)")
+    # ax1.set_ylabel("Surface Deformation (cm)")
+
+    # # yyaxis right
+    # ax2 = ax1.twinx()
+    # ax2.plot(BB_FC[:, 1, 1], BB_FC[:, 2, 1], "g-", lw = 2.0)
+    # ax2.plot(BB_FC[:, 1, 2], BB_FC[:, 2, 2], "g-", lw = 2.0)
+    # ax2.plot(BB_FC[:, 1, 3], BB_FC[:, 2, 3], "g-", lw = 2.0)
+    # ax2.plot(BB_FC[:, 1, 4], BB_FC[:, 2, 4], "g-", lw = 2.0)
+    # # text(BB_FC(2,1,1),BB_FC(2,2,1),"F1",lw=2.0)  #,"VerticalAlignment","top")
+    # # text(BB_FC(2,1,2),BB_FC(2,2,2),"F2",lw=2.0)  #,"VerticalAlignment","top")
+    # # text(BB_FC(2,1,3),BB_FC(2,2,3),"F3",lw=2.0)  #,"VerticalAlignment","top")
+    # # text(BB_FC(2,1,4),BB_FC(2,2,4),"F4",lw=2.0)  #,"VerticalAlignment","top")
+    # ax2.set_ylabel("Fault Depth (km)")
+    # ax2.set_xlim((0, maximum(BB_L)))
+    # ax2.set_ylim((0.5 * FZ_min, 0.5 * FZ_max))
+    # # ax2.legend(["2018 InSAR","Reservoir Model","Fault Model","Res.+Fault Model","Location","northeast"])
+    # # set(findobj(gcf,"type","axes"),"FontSize",12,"TickDir","out")
+    # #
+    # xticks = [0, 7, 14]
+    # y1ticks = [-8, -4, 0, 4]
+    # y2ticks = [-2, -1, 0, 1]
+
+    # ax1.set_xticks(xticks)
+    # ax1.set_yticks(y1ticks)
+    # ax2.set_yticks(y2ticks)
+    # ax1.grid()
+    # fig.legend(frameon = false, fontsize = "small", ncol = 2)
+
+    # _set_figsize(fig, 1.3 .* [3, 3.5]...)
+    # # _set_figsize(fig)
+    # fig.savefig("hunjoo4.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 end
 
 
@@ -856,7 +910,7 @@ function demo_weighted(bad_var = 100)
 end
 
 
-function plot_l1_vs_stack(;offset=true, alpha=1000, h=3, w=4.5, year=2018, unwfile="unw_stack_shiftedonly.h5")
+function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfile="unw_stack_shiftedonly.h5")
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     # https://matplotlib.org/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file
     # so obscure
@@ -873,43 +927,70 @@ function plot_l1_vs_stack(;offset=true, alpha=1000, h=3, w=4.5, year=2018, unwfi
     geolist, intlist, igram_idxs =load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(year,1,1))
     Blin = sum(InsarTimeseries.prepB(geolist, intlist), dims = 2)
     s = "TXOZ"
+    ms = 4
     # TODO get defitions here
     timediffs = InsarTimeseries.day_diffs(geolist)
     unw_vals = get_stack_vals(unwfile, gps.station_rowcol(s, Dict(demrsc))..., 1, input_dset, igram_idxs)
+
+    # Timeseries: unregularized, with all outliers (noisiest)
+    B = InsarTimeseries.prepB(geolist, intlist, false, 0)
+    unregged = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(B \ unw_vals, timediffs)
 
     # Timeseries: regularized, but with all outliers
     Ba = InsarTimeseries.prepB(geolist, intlist, false, alpha)
     unw_vals_a = InsarTimeseries.augment_zeros(Ba, unw_vals)
     regged = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(Ba \ unw_vals_a, timediffs)
 
+    # 
+    # Plot timeseries with-outlier cases: 
+    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), offset=offset, 
+                           gps_color=matlab_colors()[4], ms=ms)
 
-    # No outlier removal linear cases
-    stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink = false)
-
-    # Plot all with-outlier cases
-    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), 
-                             insar_mm_list=[stack, l1], offset=offset, 
-                             labels=["stack", "L1"])
-
-    ax.plot(geolist, regged, "-x", lw=3)
+    ax.plot(geolist, unregged, "-x", lw=3, label="Regularized")
+    ax.plot(geolist, regged, "-x", lw=3, label="Unregularized")
     ax.format_xdata = years_fmt
     ax.xaxis.set_major_locator(years)
     ax.xaxis.set_major_formatter(years_fmt)
     # ax.tick_params(axis="x", labelrotation=45)
-    y0 = ceil(maximum(abs.(regged)))
+    y0 = ceil(maximum(abs.(unregged)))
     ax.set_ylim((-y0, y0))
     ax.set_yticks(-y0:2:y0)
     _set_figsize(fig, h, w)
-    fig.savefig("compare_$(year)_with_outliers.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    fig.legend()
+    fig.savefig("compare_$(year)_timeseries.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+
+    # No outlier removal linear cases
+    stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink = false)
+    println("No outlier, linear: $(stack), $(l1)")
+
+
+    # Plot linear with-outlier cases
+    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), 
+                             insar_mm_list=[stack, l1], offset=offset, 
+                             labels=["Stack", "L1"], gps_color=matlab_colors()[4],
+                             ms=ms)
+
+    # ax.plot(geolist, regged, "-x", lw=3, label="reg")
+    ax.format_xdata = years_fmt
+    ax.xaxis.set_major_locator(years)
+    ax.xaxis.set_major_formatter(years_fmt)
+    # ax.tick_params(axis="x", labelrotation=45)
+    # y0 = ceil(maximum(abs.(regged)))
+    y0 = 3
+    ax.set_ylim((-y0, y0))
+    ax.set_yticks(-y0:2:y0)
+    _set_figsize(fig, h, w)
+    fig.legend()
+    fig.savefig("compare_$(year)_linear.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
     ###### Outlier remove cases ################
     # timeseries: regularized with outliers removed
     geo_clean, intlist_clean, unw_clean = remove_outliers(geolist, intlist, unw_vals, mean_sigma_cutoff = 4)
     td_clean = InsarTimeseries.day_diffs(geo_clean)
-    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), offset=offset)
     Ba2 = InsarTimeseries.prepB(geo_clean, intlist_clean, false, alpha)
     unw_vals_a2 = InsarTimeseries.augment_zeros(Ba2, unw_clean)
     regged2 = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(Ba2 \ unw_vals_a2, td_clean)
+
 
     # linear solves with outlier removal
     stack2, l22, l12 = prunesolve(geolist, intlist, unw_vals, Blin, 4, shrink = false)
@@ -917,8 +998,10 @@ function plot_l1_vs_stack(;offset=true, alpha=1000, h=3, w=4.5, year=2018, unwfi
     # PLOT:
     fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1),
                              insar_mm_list=[stack2, l12], offset=offset, 
-                             labels=["stack", "L1"])
-    ax.plot(geo_clean, regged2, "-x", lw=3)
+                             labels=["Stack", "L1"],
+                             gps_color=matlab_colors()[4],
+                             ms=ms)
+    # ax.plot(geo_clean, regged2, "-x", lw=3, label="reg")
     # y0 = ceil(maximum(abs.(regged2)))
     ax.set_ylim((-y0, y0))
     ax.set_yticks(-y0:2:y0)
@@ -926,6 +1009,7 @@ function plot_l1_vs_stack(;offset=true, alpha=1000, h=3, w=4.5, year=2018, unwfi
     ax.xaxis.set_major_locator(years)
     ax.xaxis.set_major_formatter(years_fmt)
     _set_figsize(fig, h, w)
+    fig.legend()
     fig.savefig("compare_$(year)_removed.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
 
