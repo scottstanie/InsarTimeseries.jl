@@ -117,35 +117,50 @@ function proc_pixel_daily(
     prune_outliers = true,
     sigma = 4,
     prune_fast = false,
-    row = nothing,
-    col = nothing,
+    row_slice = nothing,
+    col_slice = nothing,
 )
-    unw_pixel_raw =
-        h5read(unw_stack_file, in_dset, (row, col, :))[1, 1, valid_igram_indices]
-    if any(isnan.(unw_pixel_raw))
+    in_buf = zeros(Float32, (length(row_slice), length(col_slice), length(valid_igram_indices)))
+    try
+        # in_buf .= h5read(unw_stack_file, in_dset, (col_slice, row_slice, :))[:, :, valid_igram_indices]
+        in_buf .= h5read(unw_stack_file, in_dset, (row_slice, col_slice, :))[:, :, valid_igram_indices]
+    catch e
+        println(e, " ", "fail ", row_slice, " ", col_slice)
         return
     end
+    out_buf = zeros(Float32, (length(row_slice), length(col_slice), length(geolist)))
 
-    linear = false
-    soln_velos, igram_count, geo_clean, unw_clean = calc_soln(
-        unw_pixel_raw,
-        geolist,
-        intlist,
-        alpha,
-        linear;
-        L1 = L1,
-        prune_outliers = prune_outliers,
-        sigma = sigma,
-        prune_fast = prune_fast,
-    )
+    for (i,row) in enumerate(row_slice), (j,col) in enumerate(col_slice)
+        !((row, col) in unmasked_idx_set) && continue
 
-    phi_arr = _unreg_to_cm(soln_velos, geo_clean, geolist)
+        unw_pixel_raw = in_buf[i, j, :]
+        if any(isnan.(unw_pixel_raw))
+            println("$row, $col: nan")
+            return
+        end
+        linear = false
+        soln_velos, igram_count, geo_clean, unw_clean = calc_soln(
+            unw_pixel_raw,
+            geolist,
+            intlist,
+            alpha,
+            linear;
+            L1 = L1,
+            prune_outliers = prune_outliers,
+            sigma = sigma,
+            prune_fast = prune_fast,
+        )
+        timeseries_cm = _unreg_to_cm(soln_velos, geo_clean, geolist)
+        out_buf[i, j, :] = timeseries_cm
+    end
+
 
     dist_outfile = string(Distributed.myid()) * outfile
     h5open(dist_outfile, "r+") do f
-        f[outdset][row, col, :] = phi_arr
-        f[_count_dset(outdset)][row, col] = igram_count
-        f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
+        f[outdset][row_slice, col_slice, :] = out_buf
+        # f[outdset][row, col, :] = phi_arr
+        # f[_count_dset(outdset)][row, col] = igram_count
+        # f[_excl_dset(outdset)][row, col] = encode_missing(geolist, geo_clean)
         # f[_stddev_dset(outdset)][row, col] = std(unw_clean) .* abs(PHASE_TO_CM)
         # f[_stddev_raw_dset(outdset)][row, col] = std(unw_pixel_raw) .* abs(PHASE_TO_CM)
     end

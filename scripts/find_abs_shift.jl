@@ -48,7 +48,7 @@ rms(arr::AbstractArray{T,1}) where {T <: Any} = sqrt(mean(filter(!isnan, arr.^2)
 # rms(arr::AbstractArray{T, 2}) where {T <: Any} = [rms(arr[i, :]) for i in 1:size(arr, 1)]
 maxabs(x) = maximum(abs.(filter(!isnan, x)))
 
-"""Function to take a velocity file and calculate the GPS errors at one station"""
+# Function to take a velocity file and calculate the GPS errors at one station
 function get_gps_error(
     insar_fname::String,
     station_name::String;
@@ -57,14 +57,17 @@ function get_gps_error(
     ref_station = nothing,
     verbose = false,
     shift = 0.0,
+    negate=false,
 )
+    # If it's a file with LOS flipped:
+    flip_sign = negate ? -1 : 1
 
     # insar derived solution in a small patch
     slope_insar_mm_yr =
-        _get_val_at_station(insar_fname, station_name, dset = dset, window = window) + shift
+        flip_sign*_get_val_at_station(insar_fname, station_name, dset = dset, window = window) + shift
     slope_insar_mm_yr -= isnothing(ref_station) ? 0 :
         (
-        _get_val_at_station(insar_fname, ref_station, dset = dset, window = window) + shift
+        flip_sign*_get_val_at_station(insar_fname, ref_station, dset = dset, window = window) + shift
     )
 
     start_date, end_date = _get_date_range(insar_fname, dset)
@@ -282,6 +285,17 @@ function shift_dset(shift, fname, src::String = "velos/1", dest = "velos_shifted
         f[dest] = out
     end
     h5writeattr(fname, dest, h5readattr(fname, src))
+    return
+end
+
+function scale_dset!(scale, fname, src::String = "velos/1")
+    a = h5readattr(fname, src)
+    h5open(fname, "cw") do f
+        tmp = scale * read(f, src)
+        o_delete(f, src)
+        f[src] = tmp
+    end
+    h5writeattr(fname, src, a)
     return
 end
 

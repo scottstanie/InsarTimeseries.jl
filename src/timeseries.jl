@@ -118,8 +118,8 @@ function run_inversion(;
 
 
     if stack_average
-        # Dont need shift for avg
-        input_dset = STACK_FLAT_DSET
+        # # Dont need shift for avg
+        # input_dset = STACK_FLAT_DSET
         println("Averaging stack for solution")
         velo_file_out = run_stackavg(
             unw_stack_file,

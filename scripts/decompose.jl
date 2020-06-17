@@ -7,6 +7,8 @@ function solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
 
     east = similar(asc_img)
     up = similar(asc_img)
+    # TEST: IF ONE IS FLIPPED
+    # desc_img *= -1;
 
     for jj = 1:size(asc_los_map, 2)
         for ii = 1:size(asc_los_map, 1)
@@ -15,7 +17,7 @@ function solve_east_up(asc_img, desc_img, asc_los_map, desc_los_map)
 
             A = hcat(asc_eu, desc_eu)'
             b = [asc_img[ii, jj]; desc_img[ii, jj]]
-            @show b
+            # @show b
 
             # b = asc_eu[2] < 0 ? -b : b
 
@@ -58,7 +60,7 @@ function plot_east_up(
 )
     fig, axes = plt.subplots(1, 2, sharex = true, sharey = true)
     axim1 = axes[1].imshow(up, cmap = cmap, vmin = -vm, vmax = vm)
-    # fig.colorbar(axim1, ax=axes[1])
+    show_cbar && fig.colorbar(axim1, ax=axes[1])
 
     vmeast = east_scale * vm
     axim2 = axes[2].imshow(east, cmap = cmap, vmin = -vmeast, vmax = vmeast)
@@ -81,7 +83,9 @@ function demo_east_up(
     asc_path = "/data1/scott/pecos/path78-bbox2/igrams_looked_18/",
     desc_path = "/data4/scott/path85/stitched/igrams_looked_18/",
     cmap = "seismic_wide_y",
+    title = nothing,
     show = true,
+    show_cbar = true,
 )
     if full
         # asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked/", "/data4/scott/path85/stitched/igrams_looked/")
@@ -106,19 +110,33 @@ function demo_east_up(
         east, up = solve_east_up(asc_path, desc_path, fn, fn, dset)
     end
     if show
+        title = isnothing(title) ? "$fn: $dset" : title
         fig, axes = plot_east_up(
-            east,
-            up;
+            -east,
+            -up;
             cmap = cmap,
             vm = vm,
-            title = "$fn: $dset",
+            title = title,
             east_scale = east_scale,
+            show_cbar = show_cbar,
         )
     end
     # return east, up, fig, axes
     return east, up
 end
 
+function save_east_up_tifs(images, demrsc; basename="_2018.h5", namelist=["east", "up"], geolist=nothing)
+    for (img, name) in zip(images, namelist)
+        if !isnothing(geolist)
+            days = (geolist[end] - geolist[1]).value
+            @show days
+            img = img .* (days / 3650)
+        end
+        fname = name*basename
+        h5write(fname, name, permutedims(img))
+        Sario.save_dem_to_h5(fname, demrsc)
+    end
+end
 
 function eastup_insar(stations, east, up)
     easts, ups = [], []
