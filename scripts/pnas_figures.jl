@@ -924,11 +924,12 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
     years_fmt = mdates.DateFormatter("%Y")
     # yrs = (Date(2015), Date(2016), Date(2017), Date(2018))
 
-    geolist, intlist, igram_idxs =load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(year,1,1))
+    demrsc = Sario.load("dem.rsc")
+    input_dset = "stack_flat_shifted"
+    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(year,1,1))
     Blin = sum(InsarTimeseries.prepB(geolist, intlist), dims = 2)
     s = "TXOZ"
     ms = 4
-    # TODO get defitions here
     timediffs = InsarTimeseries.day_diffs(geolist)
     unw_vals = get_stack_vals(unwfile, gps.station_rowcol(s, Dict(demrsc))..., 1, input_dset, igram_idxs)
 
@@ -962,6 +963,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
     # No outlier removal linear cases
     stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink = false)
     println("No outlier, linear: $(stack), $(l1)")
+    println("Difference: $(abs(stack - l1))")
 
 
     # Plot linear with-outlier cases

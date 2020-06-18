@@ -201,7 +201,6 @@ end
 function get_gps_los(
     station_name;
     los_map_file = "los_map.h5",
-    geo_path = "../",
     reference_station = nothing,
     start_date = Date(2014, 11, 1),
     end_date = Date(2019, 1, 1),
