@@ -910,7 +910,8 @@ function demo_weighted(bad_var = 100)
 end
 
 
-function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfile="unw_stack_shiftedonly.h5")
+function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018, 
+                          unwfile="unw_stack_shiftedonly.h5", station="TXOE", s=station)
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     # https://matplotlib.org/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file
     # so obscure
@@ -926,9 +927,8 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
 
     demrsc = Sario.load("dem.rsc")
     input_dset = "stack_flat_shifted"
-    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(year,1,1))
+    geolist, intlist, igram_idxs = load_geolist_intlist(unwfile, "geolist_ignore.txt", 800, max_date = Date(yy,1,1))
     Blin = sum(InsarTimeseries.prepB(geolist, intlist), dims = 2)
-    s = "TXOZ"
     ms = 4
     timediffs = InsarTimeseries.day_diffs(geolist)
     unw_vals = get_stack_vals(unwfile, gps.station_rowcol(s, Dict(demrsc))..., 1, input_dset, igram_idxs)
@@ -944,7 +944,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
 
     # 
     # Plot timeseries with-outlier cases: 
-    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), offset=offset, 
+    fig, ax = plot_gps_los(s; end_date = Date(yy, 1, 1), offset=offset, 
                            gps_color=matlab_colors()[4], ms=ms)
 
     ax.plot(geolist, unregged, "-x", lw=3, label="Regularized")
@@ -958,7 +958,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
     ax.set_yticks(-y0:2:y0)
     _set_figsize(fig, h, w)
     fig.legend()
-    fig.savefig("compare_$(year)_timeseries.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    fig.savefig("compare_$(yy)_timeseries.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
     # No outlier removal linear cases
     stack, l2, l1 = prunesolve(geolist, intlist, unw_vals, Blin, 1000, shrink = false)
@@ -967,28 +967,34 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
 
 
     # Plot linear with-outlier cases
-    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1), 
-                             insar_mm_list=[stack, l1], offset=offset, 
-                             labels=["Stack", "L1"], gps_color=matlab_colors()[4],
+    fig, ax = plot_gps_los(s; end_date = Date(yy, 1, 1), 
+                             insar_mm_list=[l1, l2], offset=offset, 
+                             labels=["L1 linear", "L2 linear"], 
+                             gps_color=matlab_colors()[3],
+                             insar_colors=matlab_colors()[1:2],
                              ms=ms)
 
     # ax.plot(geolist, regged, "-x", lw=3, label="reg")
+    ax.plot(geolist, unregged, "-x", lw=3, c=matlab_colors()[4], label="Unregularized")
+    ax.plot(geolist, regged, "-x", lw=3, c=matlab_colors()[5], label="Regularized")
     ax.format_xdata = years_fmt
     ax.xaxis.set_major_locator(years)
     ax.xaxis.set_major_formatter(years_fmt)
     # ax.tick_params(axis="x", labelrotation=45)
     # y0 = ceil(maximum(abs.(regged)))
-    y0 = 3
+    y0 = 6
     ax.set_ylim((-y0, y0))
     ax.set_yticks(-y0:2:y0)
     _set_figsize(fig, h, w)
     fig.legend()
-    fig.savefig("compare_$(year)_linear.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    fig.savefig("compare_$(yy)_linear.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
     ###### Outlier remove cases ################
     # timeseries: regularized with outliers removed
     geo_clean, intlist_clean, unw_clean = remove_outliers(geolist, intlist, unw_vals, mean_sigma_cutoff = 4)
+    B2 = InsarTimeseries.prepB(geo_clean, intlist_clean, false, 0)
     td_clean = InsarTimeseries.day_diffs(geo_clean)
+    unregged2 = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(B2 \ unw_clean, td_clean)
     Ba2 = InsarTimeseries.prepB(geo_clean, intlist_clean, false, alpha)
     unw_vals_a2 = InsarTimeseries.augment_zeros(Ba2, unw_clean)
     regged2 = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(Ba2 \ unw_vals_a2, td_clean)
@@ -998,13 +1004,17 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
     stack2, l22, l12 = prunesolve(geolist, intlist, unw_vals, Blin, 4, shrink = false)
 
     # PLOT:
-    fig, ax = plot_gps_los(s; end_date = Date(year, 1, 1),
-                             insar_mm_list=[stack2, l12], offset=offset, 
-                             labels=["Stack", "L1"],
-                             gps_color=matlab_colors()[4],
+    fig, ax = plot_gps_los(s; end_date = Date(yy, 1, 1),
+                             insar_mm_list=[l12, l22], offset=offset, 
+                             labels=["L1 linear", "L2 linear"], 
+                             gps_color=matlab_colors()[3],
+                             insar_colors=matlab_colors()[1:2],
                              ms=ms)
     # ax.plot(geo_clean, regged2, "-x", lw=3, label="reg")
+    ax.plot(geo_clean, unregged2, "-x", c=matlab_colors()[4], lw=3, label="Unregularized")
+    ax.plot(geo_clean, regged2, "-x", lw=3, c=matlab_colors()[5], label="Regularized")
     # y0 = ceil(maximum(abs.(regged2)))
+    y0 = 4
     ax.set_ylim((-y0, y0))
     ax.set_yticks(-y0:2:y0)
     ax.format_xdata = years_fmt
@@ -1012,7 +1022,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, year=2018, unwfil
     ax.xaxis.set_major_formatter(years_fmt)
     _set_figsize(fig, h, w)
     fig.legend()
-    fig.savefig("compare_$(year)_removed.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
+    fig.savefig("compare_$(yy)_removed.pdf", bbox_inches = "tight", transparent = true, dpi = 100)
 
 
 end
