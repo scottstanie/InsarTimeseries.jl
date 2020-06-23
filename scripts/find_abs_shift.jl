@@ -207,6 +207,7 @@ function get_gps_los(
     reference_station = nothing,
     start_date = Date(2014, 11, 1),
     end_date = Date(2019, 1, 1),
+    days_smooth = 0,
 )
     dts, gps_los_data = gps.load_gps_los_data(
         los_map_file = los_map_file,
@@ -215,6 +216,7 @@ function get_gps_los(
         end_date = end_date,
         zero_mean = true,
         reference_station = reference_station,
+        days_smooth = days_smooth,
     )
 
     return [convert(Date, d) for d in dts], gps_los_data
