@@ -911,7 +911,8 @@ end
 
 
 function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018, 
-                          unwfile="unw_stack_shiftedonly.h5", station="TXOE", s=station)
+                          unwfile="unw_stack_shiftedonly.h5", station="TXOE", s=station,
+                          days_smooth=10)
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     # https://matplotlib.org/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file
     # so obscure
@@ -945,6 +946,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018,
     # 
     # Plot timeseries with-outlier cases: 
     fig, ax = plot_gps_los(s; end_date = Date(yy, 1, 1), offset=offset, 
+                           days_smooth = days_smooth,
                            gps_color=matlab_colors()[4], ms=ms)
 
     ax.plot(geolist, unregged, "-x", lw=3, label="Regularized")
@@ -972,6 +974,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018,
                              labels=["L1 linear", "L2 linear"], 
                              gps_color=matlab_colors()[3],
                              insar_colors=matlab_colors()[1:2],
+                             days_smooth = days_smooth,
                              ms=ms)
 
     # ax.plot(geolist, regged, "-x", lw=3, label="reg")
@@ -1009,6 +1012,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018,
                              labels=["L1 linear", "L2 linear"], 
                              gps_color=matlab_colors()[3],
                              insar_colors=matlab_colors()[1:2],
+                             days_smooth = days_smooth,
                              ms=ms)
     # ax.plot(geo_clean, regged2, "-x", lw=3, label="reg")
     ax.plot(geo_clean, unregged2, "-x", c=matlab_colors()[4], lw=3, label="Unregularized")

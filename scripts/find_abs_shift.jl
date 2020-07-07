@@ -210,13 +210,13 @@ function get_gps_los(
     days_smooth = 0,
 )
     dts, gps_los_data = gps.load_gps_los_data(
+        days_smooth = days_smooth,
         los_map_file = los_map_file,
         station_name = station_name,
         start_date = start_date,
         end_date = end_date,
         zero_mean = true,
         reference_station = reference_station,
-        days_smooth = days_smooth,
     )
 
     return [convert(Date, d) for d in dts], gps_los_data
@@ -237,7 +237,6 @@ function get_gps_enu(station_name)
     up = [r for r in enu_df.up]
     return dts, east, north, up
 end
-
 
 
 """Find the linear fit of MM per year of the gps station"""
