@@ -912,7 +912,7 @@ end
 
 function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018, 
                           unwfile="unw_stack_shiftedonly.h5", station="TXOE", s=station,
-                          days_smooth=10)
+                          days_smooth=1)
     rcParams = PyPlot.PyDict(PyPlot.matplotlib."rcParams")
     # https://matplotlib.org/tutorials/introductory/customizing.html#a-sample-matplotlibrc-file
     # so obscure
@@ -1018,7 +1018,7 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018,
     ax.plot(geo_clean, unregged2, "-x", c=matlab_colors()[4], lw=3, label="Unregularized")
     ax.plot(geo_clean, regged2, "-x", lw=3, c=matlab_colors()[5], label="Regularized")
     # y0 = ceil(maximum(abs.(regged2)))
-    y0 = 4
+    # y0 = 4
     ax.set_ylim((-y0, y0))
     ax.set_yticks(-y0:2:y0)
     ax.format_xdata = years_fmt
