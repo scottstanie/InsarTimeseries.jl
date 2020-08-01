@@ -42,9 +42,15 @@ oilprodbins .*= (sum(bin_vals(demrsc, oil_prod)) / sum(oilprodbins))
 
 netbins = waterinjbins .- waterprodbins .- oilprodbins
 
-eqs = readdf("texnet_events.csv")
+eqs = readdf("texnet_events_latest.csv")
 eq_bins =
     bin_vals(demrsc, eqs, loncol = :Longitude, latcol = :Latitude, valcol = :Magnitude)
+
+eqs[:, :MagnitudeExp] = exp.(eqs[:, :Magnitude])
+eqs[:, :Date] = eqs[:, Symbol("Origin Date")]
+eqs19 = @where(eqs, :Date .< Date(2020,1,1))
+eq_bins_logexp = log.(bin_vals(demrsc, eqs19, loncol = :Longitude, latcol = :Latitude, valcol = :MagnitudeExp, smoothing=2))
+eq_bins_logexp[eq_bins_logexp .== -Inf] .= NaN;
 
 fracs_all = readdf("FracDetails_Dates_TotalVolume.csv")
 # frac_bins = bin_vals(demrsc, fracs, loncol=:mid_longitude, latcol=:mid_latitude, valcol=:total_volume_gals)

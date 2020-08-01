@@ -178,7 +178,7 @@ end
 
 
 """Create a grid in DemRsc area with spacing `step_km`"""
-function coarse_grid_km(demrsc, step_km::Union{AbstractFloat,Nothing} = (10 / 0.62))
+function coarse_grid_km(demrsc, step_km::Union{Number, Nothing} = (10 / 0.62))
     lons, lats = grid(demrsc, sparse = true)
     step = km_to_deg(step_km)
     return lons[1]:step:lons[end], lats[1]:(-step):lats[end]
