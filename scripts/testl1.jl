@@ -73,7 +73,7 @@ const ignore_geo_file = "geolist_ignore.txt"
 # max_temporal_baseline = 500
 max_temporal_baseline = 800
 # max_temporal_baseline = 1200
-unw_filename = "unw_stack_shiftedonly.h5"
+unw_filename = "unw_stack.h5"
 
 # NOTE: not using the ignore file for now- using all .geos
 GEOLIST, INTLIST, VALID_IGRAM_INDICES =
