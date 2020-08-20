@@ -75,7 +75,6 @@ end
 function demo_east_up(
     fn = "velocities_prune_l1.h5";
     dset = "velos/1",
-    full = true,
     vm = 20,
     east_scale = 1.0,
     shifta = 0.0,
@@ -86,34 +85,30 @@ function demo_east_up(
     title = nothing,
     show = true,
     show_cbar = true,
+    output_basename=nothing,
 )
-    if full
-        # asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked/", "/data4/scott/path85/stitched/igrams_looked/")
-        asc_fname, desc_fname = map(x->joinpath(x, fn), (asc_path, desc_path))
-        asc_img, desc_img = MapImages.find_overlaps(asc_fname, desc_fname, dset)
+    # asc_path, desc_path = ("/data1/scott/pecos/path78-bbox2/igrams_looked/", "/data4/scott/path85/stitched/igrams_looked/")
+    asc_fname, desc_fname = map(x->joinpath(x, fn), (asc_path, desc_path))
+    asc_img, desc_img = MapImages.find_overlaps(asc_fname, desc_fname, dset)
 
-        asc_los_map = MapImage(joinpath(asc_path, LOS_MAP), dset_name = "stack")
-        desc_los_map = MapImage(joinpath(desc_path, LOS_MAP), dset_name = "stack")
-        #
-        asc_idxs, desc_idxs = MapImages.find_overlap_idxs(asc_los_map, desc_los_map)
-        # @show size(asc_los_map[asc_idxs..., :]), size(desc_los_map[desc_idxs..., :])
+    asc_los_map = MapImage(joinpath(asc_path, LOS_MAP), dset_name = "stack")
+    desc_los_map = MapImage(joinpath(desc_path, LOS_MAP), dset_name = "stack")
+    #
+    asc_idxs, desc_idxs = MapImages.find_overlap_idxs(asc_los_map, desc_los_map)
+    # @show size(asc_los_map[asc_idxs..., :]), size(desc_los_map[desc_idxs..., :])
 
-        east, up = solve_east_up(
-            asc_img .+ shifta,
-            desc_img .+ shiftd,
-            asc_los_map[asc_idxs..., :],
-            desc_los_map[desc_idxs..., :],
-        )
-    else
-        asc_path, desc_path = ("/data3/scott/pecos/zoom_pecos_full_78/igrams_looked/",
-            "/data3/scott/pecos/zoom_pecos_full_85/igrams_looked/",)
-        east, up = solve_east_up(asc_path, desc_path, fn, fn, dset)
-    end
+    east, up = solve_east_up(
+        asc_img .+ shifta,
+        desc_img .+ shiftd,
+        asc_los_map[asc_idxs..., :],
+        desc_los_map[desc_idxs..., :],
+    )
+
     if show
         title = isnothing(title) ? "$fn: $dset" : title
         fig, axes = plot_east_up(
-            -east,
-            -up;
+            east,
+            up;
             cmap = cmap,
             vm = vm,
             title = title,
@@ -121,20 +116,33 @@ function demo_east_up(
             show_cbar = show_cbar,
         )
     end
+    # TODO: merge the geolists here...
+    geolist = Sario.load_geolist_from_h5(asc_fname, dset)
+    if !isnothing(output_basename)
+        save_east_up_tifs(east.image, up.image, output_basename, east.demrsc, geolist=geolist)
+    end
+
     # return east, up, fig, axes
     return east, up
 end
 
-function save_east_up_tifs(images, demrsc; basename="_2018.h5", namelist=["east", "up"], geolist=nothing)
-    for (img, name) in zip(images, namelist)
+function save_east_up_tifs(east_img, up_img, basename, demrsc; namelist=["east", "up"], geolist=nothing)
+    for (img, name) in zip((east_img, up_img), namelist)
         if !isnothing(geolist)
             days = (geolist[end] - geolist[1]).value
             @show days
             img = img .* (days / 3650)
         end
         fname = name*basename
+        if !endswith(fname, ".h5")
+            fname *= ".h5"
+        end
+
+        println("Saving image to $fname")
         h5write(fname, name, permutedims(img))
         Sario.save_dem_to_h5(fname, demrsc)
+        println("Running `aper hdf5-gtiff $fname`")
+        run(`aper hdf5-gtiff $fname`)
     end
 end
 
