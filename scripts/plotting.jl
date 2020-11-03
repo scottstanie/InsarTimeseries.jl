@@ -239,7 +239,7 @@ function plot_grouped_by_day(geo, int, vals, nsigma = 0, min_spread = 2)
     if nsigma > 0
         low, high = InsarTimeseries.two_way_cutoff(means, nsigma)
         ax.plot(geo, ones(length(geo)) * median(means), label = "median")
-        ax.plot(geo, ones(length(geo)) * high, label = "$nsigma sigma MAD cutoff")
+        ax.plot(geo, ones(length(geo)) * high, label = "med + $nsigma sigma MAD")
         ax.plot(
             geo,
             ones(length(geo)) * (median(means) + min_spread),
@@ -247,8 +247,8 @@ function plot_grouped_by_day(geo, int, vals, nsigma = 0, min_spread = 2)
         )
         ax.plot(
             geo,
-            ones(length(geo)) * nsigma * std(means),
-            label = "$nsigma sigma stddev cutoff",
+            ones(length(geo)) * (median(means) + nsigma * std(means)),
+            label = "med + $nsigma sigma stddev",
         )
     end
     fig.legend()

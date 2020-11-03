@@ -18,6 +18,8 @@ gps = pyimport("apertools.gps")
 reloadpython(modname) = pyimport("importlib")."reload"(modname)
 reloadpython(gps)
 
+LOS_MAP_FILE = "los_enu.tif"
+
 # PATH 78 
 station_name_list78 = [
     "NMHB",
@@ -52,11 +54,11 @@ maxabs(x) = maximum(abs.(filter(!isnan, x)))
 function get_gps_error(
     insar_fname::String,
     station_name::String;
-    dset = "velos",
-    window = 5,
-    ref_station = nothing,
-    verbose = false,
-    shift = 0.0,
+    dset="velos",
+    window=5,
+    ref_station=nothing,
+    verbose=false,
+    shift=0.0,
     negate=false,
 )
     # If it's a file with LOS flipped:
@@ -64,19 +66,19 @@ function get_gps_error(
 
     # insar derived solution in a small patch
     slope_insar_mm_yr =
-        flip_sign*_get_val_at_station(insar_fname, station_name, dset = dset, window = window) + shift
+        flip_sign * _get_val_at_station(insar_fname, station_name, dset=dset, window=window) + shift
     slope_insar_mm_yr -= isnothing(ref_station) ? 0 :
         (
-        flip_sign*_get_val_at_station(insar_fname, ref_station, dset = dset, window = window) + shift
+        flip_sign * _get_val_at_station(insar_fname, ref_station, dset=dset, window=window) + shift
     )
 
     start_date, end_date = _get_date_range(insar_fname, dset)
     slope_gps_mm_yr = solve_gps_ts(
         station_name,
         ref_station,
-        start_date = start_date,
-        end_date = end_date,
-        los_map_file = joinpath(dirname(insar_fname), "los_map.h5"),
+        start_date=start_date,
+        end_date=end_date,
+        los_map_file=joinpath(dirname(insar_fname), LOS_MAP_FILE),
     )
 
     if verbose
@@ -97,9 +99,9 @@ _get_date_range(fname::AbstractString) = extrema(Sario.load_geolist_from_h5(fnam
 _get_date_range(fname::AbstractString, dset::AbstractString) =
     extrema(Sario.load_geolist_from_h5(fname, dset))
 
-function _get_station_rowcol(station_name, directory = ".")
+function _get_station_rowcol(station_name, directory=".")
     demrsc = Sario.load(joinpath(directory, "dem.rsc"))
-    return map(x->convert(Int, x), MapImages.station_rowcol(station_name, demrsc))
+    return map(x -> convert(Int, x), MapImages.station_rowcol(station_name, demrsc))
 end
 
 
@@ -107,8 +109,8 @@ end
 function _get_val_at_station(
     insar_fname,
     station_name;
-    dset = "velos",
-    window = 5,
+    dset="velos",
+    window=5,
     kwargs...,
 )
     # Note: swapping row and col due to julia/hdf5 transposes
@@ -130,7 +132,7 @@ get_station_values(fname, station_list::Array{String}; kwargs...) =
 """Given a list of errors from insar-gps, find the const to add
 to the insar solution image to minimize these errors
 (converts the gps from relative to absolute)"""
-function minimize_errors(error_list, search_range = -5:0.1:5)
+function minimize_errors(error_list, search_range=-5:0.1:5)
     best_rms, best_maxabs = 100, 100
     c_rms, c_maxabs = 0, 0
     for c in search_range
@@ -172,8 +174,8 @@ function print_errors(
 end
 
 
-function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, linear = true)
-    B = prepB(geolist, intlist, constant_velocity = linear)
+function compare_solutions_with_gps(geolist, intlist, unw_vals, station_name, linear=true)
+    B = prepB(geolist, intlist, constant_velocity=linear)
 
     l1_diffs = Array{Float32,1}(undef, length(geolist))
     lstsq_diffs = similar(l1_diffs)
@@ -203,20 +205,20 @@ end
 ############################
 function get_gps_los(
     station_name;
-    los_map_file = "los_map.h5",
-    reference_station = nothing,
-    start_date = Date(2014, 11, 1),
-    end_date = Date(2019, 1, 1),
-    days_smooth = 0,
+    los_map_file=LOS_MAP_FILE,
+    reference_station=nothing,
+    start_date=Date(2014, 11, 1),
+    end_date=Date(2019, 1, 1),
+    days_smooth=0,
 )
     dts, gps_los_data = gps.load_gps_los_data(
-        days_smooth = days_smooth,
-        los_map_file = los_map_file,
-        station_name = station_name,
-        start_date = start_date,
-        end_date = end_date,
-        zero_mean = true,
-        reference_station = reference_station,
+        days_smooth=days_smooth,
+        los_map_file=los_map_file,
+        station_name=station_name,
+        start_date=start_date,
+        end_date=end_date,
+        zero_mean=true,
+        reference_station=reference_station,
     )
 
     return [convert(Date, d) for d in dts], gps_los_data
@@ -225,9 +227,9 @@ end
 function get_gps_enu(station_name)
     dts, enu_df = gps.load_station_enu(
         station_name,
-        start_date = Date(2014, 11, 1),
-        end_date = Date(2019, 1, 1),
-        zero_mean = true,
+        start_date=Date(2014, 11, 1),
+        end_date=Date(2019, 1, 1),
+        zero_mean=true,
     )
 
     # Convert from PyObjects to Arrays
@@ -242,17 +244,17 @@ end
 """Find the linear fit of MM per year of the gps station"""
 function solve_gps_ts(
     station_name,
-    reference_station = nothing;
-    start_date = Date(2014, 11, 1),
-    end_date = Date(2019, 1, 1),
-    los_map_file = "los_map.h5",
+    reference_station=nothing;
+    start_date=Date(2014, 11, 1),
+    end_date=Date(2019, 1, 1),
+    los_map_file=LOS_MAP_FILE,
 )
     dts, gps_los_data = get_gps_los(
         station_name,
-        reference_station = reference_station,
-        start_date = start_date,
-        end_date = end_date,
-        los_map_file = los_map_file,
+        reference_station=reference_station,
+        start_date=start_date,
+        end_date=end_date,
+        los_map_file=los_map_file,
     )
     # If we wanna compare with GPS subtracted too, do this:
     # dts, gps_los_data = get_gps_los(station_name, reference_station=reference_station)
@@ -279,7 +281,7 @@ function shift_from(src::HDF5Dataset, shift::Real)
     return tmp
 end
 
-function shift_dset(shift, fname, src::String = "velos/1", dest = "velos_shifted/1")
+function shift_dset(shift, fname, src::String="velos/1", dest="velos_shifted/1")
     h5open(fname, "r+") do f
         out = shift_from(f[src], shift)
         f[dest] = out
@@ -288,7 +290,7 @@ function shift_dset(shift, fname, src::String = "velos/1", dest = "velos_shifted
     return
 end
 
-function scale_dset!(scale, fname, src::String = "velos/1")
+function scale_dset!(scale, fname, src::String="velos/1")
     a = h5readattr(fname, src)
     h5open(fname, "cw") do f
         tmp = scale * read(f, src)
@@ -299,15 +301,15 @@ function scale_dset!(scale, fname, src::String = "velos/1")
     return
 end
 
-function get_shift(fname, src::String = "velos/1", dest = "velos_shifted/1")
+function get_shift(fname, src::String="velos/1", dest="velos_shifted/1")
     h5open(fname, "r+") do f
         return f[dest][div(end, 2), div(end, 2)] - f[src][div(end, 2), div(end, 2)]
     end
     end
 
-function save_as_unw(fname, dset = "velos/1")
+function save_as_unw(fname, dset="velos/1")
     amp = abs.(Sario.load(Glob.glob("*.int")[1]))
-    img = Sario.load(fname, dset_name = dset)
+    img = Sario.load(fname, dset_name=dset)
     outname = replace(fname, ".h5" => ".unw")
-    Sario.save(outname, cat(amp, Float32.(img ./ 10), dims = 3))
+    Sario.save(outname, cat(amp, Float32.(img ./ 10), dims=3))
 end

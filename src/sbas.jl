@@ -691,6 +691,9 @@ function two_way_cutoff(arr, nsigma, min_spread = 0)
     # min_spread = abs(2 * median(arr))
     # spread = 1.5 * iqr(arr)
     spread = max(min_spread, mednsigma(arr, nsigma))
+    #@show spread
+    # spread = max(min_spread, std(arr)*nsigma)
+    #@show std(arr)*nsigma
 
     # Make we dont cut off very low var points
     low = min(0, median(arr) - spread)

@@ -24,28 +24,26 @@ end
 
 # overwrites in the dset fail now... is that fine? force user to delete?
 function run_inversion(;
-    unw_stack_file::String = UNW_FILENAME,
-    input_dset::String = STACK_FLAT_SHIFTED_DSET,
-    outfile::String = "",
+    unw_stack_file::String=UNW_FILENAME,
+    input_dset::String=STACK_FLAT_SHIFTED_DSET,
+    outfile::String="",
     # outgroup::String="velos",
-    stack_average::Bool = false,
-    constant_velocity::Bool = true,
-    ignore_geo_file::String = "",
-    max_temporal_baseline::Int = 500,
-    prune_outliers = true,
-    sigma = 4,
-    prune_fast = false,
-    split_dates = [],
-    gap = 1,
-    split_count = 0,
-    min_date::DateOrNone = nothing,
-    max_date::DateOrNone = nothing,
-    alpha::Real = 0.0,
-    L1::Bool = false,
-    reference_station = nothing, # Note: these only work for stackavg...
-    ref_row = nothing,
-    ref_col = nothing,
-    use_distributed = true,
+    stack_average::Bool=false,
+    constant_velocity::Bool=true,
+    ignore_geo_file::String="",
+    max_temporal_baseline::Int=500,
+    prune_outliers=true,
+    sigma=4,
+    prune_fast=false,
+    gap=1,
+    min_date::DateOrNone=nothing,
+    max_date::DateOrNone=nothing,
+    alpha::Real=0.0,
+    L1::Bool=false,
+    reference_station=nothing, # Note: these only work for stackavg...
+    ref_row=nothing,
+    ref_col=nothing,
+    use_distributed=true,
 )
     if isempty(outfile)
         outfile = _default_outfile()
@@ -53,57 +51,24 @@ function run_inversion(;
 
     # averaging or linear means output will is 3D array (not just map of velocities)
     is_3d = !(stack_average || constant_velocity)
-    outgroup = is_3d ? "stack" : "velos"
-
-    # Now for each split date, run this function on a section
-    if !isempty(split_dates)
-        for (d1, d2) in _get_pairs(split_dates, gap)
-            println("Running inversion on date split: ($(_strnothing(d1)), $(_strnothing(d2))) ")
-            split_count += 1
-            odf, ods = run_inversion(
-                split_dates = [],
-                split_count = split_count,
-                min_date = d1,
-                max_date = d2,
-                unw_stack_file = unw_stack_file,
-                input_dset = input_dset,
-                outfile = outfile,
-                stack_average = stack_average,
-                constant_velocity = constant_velocity,
-                ignore_geo_file = ignore_geo_file,
-                max_temporal_baseline = max_temporal_baseline,
-                alpha = alpha,
-                L1 = L1,
-                use_distributed = use_distributed,
-            )
-        end
-        return outfile, outgroup
-    else
-        if split_count == 0
-            split_count += 1
-        end
-    end
+    outdset = is_3d ? "stack" : "velos"
 
     # Check if this file/dset already exists
     isfile(outfile) &&
-    outgroup in names(outfile) &&
-    string(split_count) in names(outfile, outgroup) &&
-    error("$outgroup/$split_count already exists in $outfile")
-
-    # Make the dset one within the group, numbered by which split this is
-    cur_outdset = "$outgroup/$split_count"
+    outdset in names(outfile) &&
+    error("$outdset already exists in $outfile")
 
     # the valid igram indices is out of all possible layers in the stack
     geolist, intlist, valid_igram_indices = load_geolist_intlist(
         unw_stack_file,
         ignore_geo_file,
         max_temporal_baseline,
-        min_date = min_date,
-        max_date = max_date,
+        min_date=min_date,
+        max_date=max_date,
     )
 
 
-    println("$cur_outdset geolist range: : $(extrema(geolist))")
+    println("$outdset geolist range: : $(extrema(geolist))")
     println("Using $input_dset as input")
     # Now: can we load the input stack into memory? or do we need distributed?
     stack_file_size = _stack_size_mb(unw_stack_file, input_dset)
@@ -115,8 +80,6 @@ function run_inversion(;
     println("Stack size: $stack_file_size, avail RAM: $(getmemavail()), fitting in ram: $can_fit_mem")
     println("Using Distributed to solve: $use_distributed")
 
-
-
     if stack_average
         # # Dont need shift for avg
         # input_dset = STACK_FLAT_DSET
@@ -125,12 +88,12 @@ function run_inversion(;
             unw_stack_file,
             input_dset,
             outfile,
-            cur_outdset,
+            outdset,
             geolist,
             intlist;
-            reference_station = reference_station,
-            ref_row = ref_row,
-            ref_col = ref_col,
+            reference_station=reference_station,
+            ref_row=ref_row,
+            ref_col=ref_col,
         )
     else
         println("Running SBAS for solution")
@@ -139,7 +102,7 @@ function run_inversion(;
             unw_stack_file,
             input_dset,
             outfile,
-            cur_outdset,
+            outdset,
             geolist,
             intlist,
             valid_igram_indices,
@@ -154,7 +117,7 @@ function run_inversion(;
         # else
         #     # If we want to read the whole stack in at once:
         #     @time unw_stack = h5read(unw_stack_file, input_dset)[:, :, valid_igram_indices]
-        #     velo_file_out = run_sbas(unw_stack, outfile, cur_outdset, geolist, intlist, 
+        #     velo_file_out = run_sbas(unw_stack, outfile, outdset, geolist, intlist, 
         #                              constant_velocity, alpha, L1, prune)
         # end
 
@@ -163,11 +126,11 @@ function run_inversion(;
     ####################
 
     dem_rsc = Sario.load_dem_from_h5(unw_stack_file)
-    Sario.save_dem_to_h5(outfile, dem_rsc, overwrite = true)
-    Sario.save_geolist_to_h5(outfile, cur_outdset, geolist, overwrite = true)
-    save_reference(outfile, unw_stack_file, cur_outdset, input_dset)
+    Sario.save_dem_to_h5(outfile, dem_rsc, overwrite=true)
+    Sario.save_geolist_to_h5(outfile, outdset, geolist, overwrite=true)
+    save_reference(outfile, unw_stack_file, outdset, input_dset)
 
-    return outfile, cur_outdset
+    return outfile, outdset
 end
 
 
@@ -175,8 +138,8 @@ function load_geolist_intlist(
     unw_stack_file,
     ignore_geo_file,
     max_temporal_baseline;
-    min_date::DateOrNone = nothing,
-    max_date::DateOrNone = nothing,
+    min_date::DateOrNone=nothing,
+    max_date::DateOrNone=nothing,
 )
     @show unw_stack_file
     geolist = Sario.load_geolist_from_h5(unw_stack_file)
@@ -203,10 +166,10 @@ end
 function find_valid_indices(
     geo_date_list::Array{Date,1},
     igram_date_list::Array{Igram,1},
-    min_date::DateOrNone = nothing,
-    max_date = DateOrNone = nothing,
-    ignore_geo_file::String = "",
-    max_temporal_baseline::Int = 500,
+    min_date::DateOrNone=nothing,
+    max_date=DateOrNone = nothing,
+    ignore_geo_file::String="",
+    max_temporal_baseline::Int=500,
 )
 
     ig1 = length(igram_date_list)  # For logging purposes, what do we start with
@@ -214,7 +177,7 @@ function find_valid_indices(
         println("Not ignoring any .geo dates")
         ignore_geos = []
     else
-        ignore_geos = sort(Sario.find_geos(filename = ignore_geo_file, parse = true))
+        ignore_geos = sort(Sario.find_geos(filename=ignore_geo_file, parse=true))
         println("Ignoring the following .geo dates:")
         println(ignore_geos)
     end
@@ -240,12 +203,12 @@ function find_valid_indices(
 
     # This is just for logging purposes:
     too_long_igrams =
-        filter(ig->temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
+        filter(ig -> temporal_baseline(ig) > max_temporal_baseline, valid_igrams)
     println("Ignoring $(length(too_long_igrams)) igrams with longer baseline than $max_temporal_baseline days")
 
     ### Remove long time baseline igrams ###
     valid_igrams =
-        filter(ig->temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
+        filter(ig -> temporal_baseline(ig) <= max_temporal_baseline, valid_igrams)
 
 
     ### Collect remaining geo dates and igrams
@@ -261,7 +224,7 @@ end
 gap=1 means form adjacent pairs
 gap=2 skips a date in between, makes overlapping pairs to get larger, redundant estimates
 """
-function _get_pairs(dates, gap = 1)
+function _get_pairs(dates, gap=1)
     isempty(dates) && return (nothing, nothing)
     length(dates) < gap && error("Need at least $gap dates if gap=$gap")
     dates_pad = [nothing; dates; nothing]
@@ -275,7 +238,7 @@ function save_reference(
     unw_stack_file,
     dset_name,
     stack_flat_shifted_dset,
-    overwrite = true,
+    overwrite=true,
 )
     # Delete if exists
     if overwrite
