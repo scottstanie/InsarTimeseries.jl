@@ -34,7 +34,6 @@ function run_inversion(;
     max_temporal_baseline::Int=500,
     prune_outliers=true,
     sigma=4,
-    prune_fast=false,
     gap=1,
     min_date::DateOrNone=nothing,
     max_date::DateOrNone=nothing,
@@ -111,7 +110,6 @@ function run_inversion(;
             L1,
             prune_outliers,
             sigma,
-            prune_fast,
         )
         # if use_distributed
         # else
