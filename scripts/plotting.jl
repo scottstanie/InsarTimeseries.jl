@@ -10,8 +10,11 @@ using Glob
 using GLM
 using DataFrames
 
-import MapImages
-import MapImages: MapImage
+try
+    import MapImages
+    import MapImages: MapImage
+catch
+end
 import ImageFiltering: Kernel, imfilter
 
 plt = PyPlot

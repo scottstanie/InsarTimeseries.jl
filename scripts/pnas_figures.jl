@@ -932,10 +932,12 @@ function plot_l1_vs_stack(;offset=true, alpha=300, h=3, w=4.5, yy=2018,
     Blin = sum(InsarTimeseries.prepB(geolist, intlist), dims = 2)
     ms = 4
     timediffs = InsarTimeseries.day_diffs(geolist)
+    println("s = $(s)")
     unw_vals = get_stack_vals(unwfile, gps.station_rowcol(s, Dict(demrsc))..., 1, input_dset, igram_idxs)
 
     # Timeseries: unregularized, with all outliers (noisiest)
     B = InsarTimeseries.prepB(geolist, intlist, false, 0)
+    println("Loaded $(length(unw_vals)) unw_vals, B: $(size(B))")
     unregged = InsarTimeseries.PHASE_TO_CM .* InsarTimeseries.integrate_velocities(B \ unw_vals, timediffs)
 
     # Timeseries: regularized, but with all outliers
